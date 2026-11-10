@@ -20,26 +20,75 @@ lake build
 The project uses Lean **4.35.0** and AlgoLib's **v4.35.0** release. The committed
 `lake-manifest.json` records the resolved dependency commits. For subsequent
 builds using that manifest, run `lake exe cache get` followed by `lake build`.
-Open the repository folder in VS Code to work on `Challenge.lean`.
+Open the repository folder in VS Code to work on `Solution.lean`.
+
+## Project layout
+
+```text
+Challenge.lean                 Independent reference statement (intentional sorry)
+Challenge/
+  Definitions.lean             Shared definitions using AlgoLib
+Solution.lean                  Completed theorem and explicit bound
+Solution/
+  TreeFacts.lean               Structural induction facts for AlgoLib trees/BSTs
+  DirectProof.lean             Full proof directly over the shared definitions
+CheckSolution.lean             Axiom audit of the completed theorem
+comparator.json                Comparator modules, theorem, and allowed axioms
+```
+
+`Challenge` and `Solution` are separate environments with the same theorem name,
+`deque_ordinal_omega_ackermann_bound`. They both use `Challenge.Definitions`;
+the solution never imports the reference theorem. Import **`Solution`** when
+using the proved result. Do not import both root modules in one Lean file,
+because they intentionally declare the same name.
+
+## Comparator check
+
+Run from the repository root. On this Mac, for this trusted local project:
+
+```sh
+lake comparator --inadvisably-no-sandbox
+```
+
+The flag disables Comparator's Linux-only `bubblewrap` sandbox. Use it only for
+code you trust. On Linux with `bubblewrap` installed and configured, use the
+sandboxed command:
+
+```sh
+lake comparator
+```
+
+Both commands read `comparator.json` and build the required modules. Comparator
+compares the theorem statements and their referenced definitions, rejects
+solution axioms outside `propext`, `Quot.sound`, and `Classical.choice`, and
+rechecks the exported proof with Lean's kernel. Exit code **0** means accepted.
+See Lean's [proof validation documentation](https://lean-lang.org/doc/reference/latest/ValidatingProofs/).
+
+The `sorry` warning from `Challenge.lean` is intentional: it is the reference
+proof hole, not part of the solution. `sorryAx` is **not** permitted in the
+solution. A successful `lake build` alone is not a comparator verdict.
+
+For additional checking with all external kernels bundled with Lean, add
+`--paranoid` to the applicable command above; this can take longer.
 
 ## Solution
 
-`Challenge.lean` retains the supplied target theorem statement and obtains its
-proof from `Solution.lean`. The solution gives the explicit constant **5757**
-using the AlgoLib-based definitions.
+`Challenge.lean` retains the supplied target theorem statement as an independent
+reference. `Solution.lean` proves that same statement and gives the explicit
+constant **5757** using the AlgoLib-based definitions.
 
-The supplied long proof is preserved in `Solution/LegacyProof.lean`, under the
-`SplayDeque.Legacy` namespace. Its original tree model is kept in
-`Solution/LegacyDefinitions.lean`. `Solution/Bridge.lean` proves that converting
-AlgoLib trees to that model preserves the BST invariant, deque operations,
-sequence validity, rotation costs, and the inverse-Ackermann function. The public
-theorem is therefore about AlgoLib's types and operations.
+`Solution/DirectProof.lean` carries out the combinatorial argument directly on
+AlgoLib's `BinaryTree`, `BST`, splay operation and rotation cost, using the shared
+deque and inverse-Ackermann definitions from `Challenge/Definitions.lean`.
+It introduces no replacement tree datatype and does not convert the input tree
+to a legacy model. The proof retains the reductions to core operation sequences,
+the cascade estimates, and the ordinal-ω contraction argument.
 
-The legacy proof explicitly qualifies its `BinaryTree` references to avoid a
-name collision with Mathlib. It also enables Lean's backward compatibility
-options for elaboration and simplification; the proof terms are still checked
-by Lean's kernel. Its `dsimp` steps tolerate already-normalized goals, and a few
-rewrites now explicitly unfold definitions or normalize successor expressions.
+`Solution/TreeFacts.lean` supplies structural induction lemmas for AlgoLib's
+bounded BST invariant and an auxiliary `ForallTree` predicate equivalent to
+quantification over tree membership. All these facts concern the existing tree
+type. The proof uses Lean's backward compatibility options for tactic
+elaboration; the resulting proof terms are checked by Lean's kernel.
 
 After building, check the theorem's full axiom dependency closure with:
 
@@ -47,15 +96,15 @@ After building, check the theorem's full axiom dependency closure with:
 lake env lean CheckSolution.lean
 ```
 
-This check rejects `sorryAx` and any axiom other than Lean's standard
-`propext`, `Classical.choice`, and `Quot.sound`.
+This check rejects legacy proof/conversion imports, `sorryAx`, and any axiom
+other than Lean's standard `propext`, `Classical.choice`, and `Quot.sound`.
 
 ## Reused definitions
 
 `Challenge/Definitions.lean` imports `AlgoLib.DataStructures.SplayTree.Complexity`, which
 provides the existing binary tree, BST invariant, bottom-up splay operation and
-rotation cost. It keeps the challenge's deque operations, operation sequences,
-Ackermann hierarchy and theorem statement.
+rotation cost. It defines the challenge's deque operations, operation sequences,
+and Ackermann hierarchy.
 
 The adaptation uses AlgoLib's `.nil` empty constructor and `.node key left right`
 argument order. Deque insertion preconditions use `∀ k ∈ t, ...` over AlgoLib's

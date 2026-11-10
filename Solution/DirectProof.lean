@@ -1,6 +1,6 @@
 module
 
-public import Solution.LegacyDefinitions
+public import Solution.TreeFacts
 
 set_option maxHeartbeats 4000000
 set_option synthInstance.maxHeartbeats 200000
@@ -14,45 +14,45 @@ set_option backward.dsimp.proofs true
 set_option backward.dsimp.instances true
 
 /-!
-The supplied proof, retained over its original model. The only changes to the
-proof body are explicit qualification of the legacy `BinaryTree` name and any
-Lean 4.35 compatibility fixes documented in the migration notes.
-`Solution.Bridge` proves the connection to the AlgoLib-based challenge.
+Direct proof of the deque bound using AlgoLib's `BinaryTree`, BST invariant,
+splay operations, and the shared challenge definitions. The combinatorial
+argument is expressed entirely on those types, without a legacy tree model
+or any conversion of the input tree.
 -/
 
 @[expose] public section
-namespace SplayDeque.Legacy
-open SplayDeque.Legacy.SplayTree
-open SplayDeque.Legacy.SplayTree.BinaryTree
+namespace SplayDeque.Direct
+open _root_.SplayTree
+open _root_.BinaryTree
 
 -- === BEGIN SolPart1 ===
-def leftSpineLen : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → ℕ
-  | .empty => 0
-  | .node l _ _ => 1 + leftSpineLen l
+def leftSpineLen : _root_.BinaryTree Unit → ℕ
+  | .nil => 0
+  | .node _ l _ => 1 + leftSpineLen l
 
-def rightSpineLen : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → ℕ
-  | .empty => 0
+def rightSpineLen : _root_.BinaryTree Unit → ℕ
+  | .nil => 0
   | .node _ _ r => 1 + rightSpineLen r
 
-def descendLeft : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) →
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit × List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit)
-  | .empty, acc => (.empty, acc)
-  | .node .empty _ r, acc => (r, acc)
-  | .node l@(.node _ _ _) _ r, acc => descendLeft l (r :: acc)
+def descendLeft : _root_.BinaryTree Unit → List (_root_.BinaryTree Unit) →
+    _root_.BinaryTree Unit × List (_root_.BinaryTree Unit)
+  | .nil, acc => (.nil, acc)
+  | .node _ .nil r, acc => (r, acc)
+  | .node _ l@(.node _ _ _) r, acc => descendLeft l (r :: acc)
 
-def splayLeftSpine : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
+def splayLeftSpine : _root_.BinaryTree Unit → List (_root_.BinaryTree Unit) → _root_.BinaryTree Unit
   | c, [] => c
-  | c, [r1] => .node c () r1
-  | c, r1 :: r2 :: rest => splayLeftSpine (.node c () (.node r1 () r2)) rest
+  | c, [r1] => .node () c r1
+  | c, r1 :: r2 :: rest => splayLeftSpine (.node () c (.node () r1 r2)) rest
 
-def popUnlabeled (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit :=
+def popUnlabeled (t : _root_.BinaryTree Unit) : _root_.BinaryTree Unit :=
   let (c, path) := descendLeft t []
   splayLeftSpine c path
 
-def rotateLeftAtRightDepth : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
-  | t, 0 => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft t
-  | .empty, _ + 1 => .empty
-  | .node l u r, d + 1 => .node l u (rotateLeftAtRightDepth r d)
+def rotateLeftAtRightDepth : _root_.BinaryTree Unit → ℕ → _root_.BinaryTree Unit
+  | t, 0 => _root_.BinaryTree.rotateLeft t
+  | .nil, _ + 1 => .nil
+  | .node u l r, d + 1 => .node u l (rotateLeftAtRightDepth r d)
 
 inductive CoreOp where
   | push : CoreOp
@@ -60,22 +60,22 @@ inductive CoreOp where
   | rslr (d : ℕ) : CoreOp
   deriving DecidableEq, Repr
 
-def execCoreOp (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) : CoreOp → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
-  | .push => .node .empty () t
+def execCoreOp (t : _root_.BinaryTree Unit) : CoreOp → _root_.BinaryTree Unit
+  | .push => .node () .nil t
   | .pop => popUnlabeled t
   | .rslr d => rotateLeftAtRightDepth t d
 
-def coreCascadeStepCost (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) : CoreOp → ℕ
+def coreCascadeStepCost (t : _root_.BinaryTree Unit) : CoreOp → ℕ
   | .pop => (leftSpineLen t - 1) / 2
   | .push => 0
   | .rslr _ => 0
 
-def coreCascadeCostAux : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List CoreOp → ℕ
+def coreCascadeCostAux : _root_.BinaryTree Unit → List CoreOp → ℕ
   | _, [] => 0
   | t, op :: rest => coreCascadeStepCost t op + coreCascadeCostAux (execCoreOp t op) rest
 
 def coreCascadeCost (ops : List CoreOp) : ℕ :=
-  coreCascadeCostAux .empty ops
+  coreCascadeCostAux .nil ops
 
 def countCorePush : List CoreOp → ℕ
   | [] => 0
@@ -87,69 +87,69 @@ def countCorePop : List CoreOp → ℕ
   | .pop :: rest => 1 + countCorePop rest
   | _ :: rest => countCorePop rest
 
-def ValidCoreSeqAux : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List CoreOp → Prop
-  | t, [] => t = .empty
-  | t, .push :: rest => ValidCoreSeqAux (.node .empty () t) rest
-  | t, .pop :: rest => t ≠ .empty ∧ ValidCoreSeqAux (popUnlabeled t) rest
+def ValidCoreSeqAux : _root_.BinaryTree Unit → List CoreOp → Prop
+  | t, [] => t = .nil
+  | t, .push :: rest => ValidCoreSeqAux (.node () .nil t) rest
+  | t, .pop :: rest => t ≠ .nil ∧ ValidCoreSeqAux (popUnlabeled t) rest
   | t, .rslr d :: rest =>
       d + 2 ≤ rightSpineLen t ∧ ValidCoreSeqAux (rotateLeftAtRightDepth t d) rest
 
 def ValidCoreSeq (P : ℕ) (ops : List CoreOp) : Prop :=
-  countCorePush ops = P ∧ countCorePop ops = P ∧ ValidCoreSeqAux .empty ops
+  countCorePush ops = P ∧ countCorePop ops = P ∧ ValidCoreSeqAux .nil ops
 
-def subtreeAtLeftDepth : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
+def subtreeAtLeftDepth : _root_.BinaryTree Unit → ℕ → _root_.BinaryTree Unit
   | t, 0 => t
-  | .empty, _ + 1 => .empty
-  | .node l _ _, d + 1 => subtreeAtLeftDepth l d
+  | .nil, _ + 1 => .nil
+  | .node _ l _, d + 1 => subtreeAtLeftDepth l d
 
-def applyAtLeftDepth (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) :
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
+def applyAtLeftDepth (f : _root_.BinaryTree Unit → _root_.BinaryTree Unit) :
+    _root_.BinaryTree Unit → ℕ → _root_.BinaryTree Unit
   | t, 0 => f t
-  | .empty, _ + 1 => .empty
-  | .node l u r, d + 1 => .node (applyAtLeftDepth f l d) u r
+  | .nil, _ + 1 => .nil
+  | .node u l r, d + 1 => .node u (applyAtLeftDepth f l d) r
 
-def validGappedCascadeAtRoot (Δ' : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List ℕ → Prop
+def validGappedCascadeAtRoot (Δ' : ℕ) : _root_.BinaryTree Unit → List ℕ → Prop
   | t, [] => 2 ≤ leftSpineLen t
-  | .node (.node a _ _) _ _, g :: rest =>
+  | .node _ (.node _ a _) _, g :: rest =>
       g ≤ Δ' ∧ validGappedCascadeAtRoot Δ' (subtreeAtLeftDepth a g) rest
   | _, _ :: _ => False
 
-def execGappedCascadeAtRoot : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
-  | t, [] => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight t
-  | .node (.node a u1 b) u2 c, g :: rest =>
+def execGappedCascadeAtRoot : _root_.BinaryTree Unit → List ℕ → _root_.BinaryTree Unit
+  | t, [] => _root_.BinaryTree.rotateRight t
+  | .node u2 (.node u1 a b) c, g :: rest =>
       let a' := applyAtLeftDepth (fun s => execGappedCascadeAtRoot s rest) a g
-      .node a' u1 (.node b u2 c)
+      .node u1 a' (.node u2 b c)
   | t, _ :: _ => t
 
-def subtreeAtPos : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List Dir → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
+def subtreeAtPos : _root_.BinaryTree Unit → List Dir → _root_.BinaryTree Unit
   | t, [] => t
-  | .empty, _ :: _ => .empty
-  | .node l _ _, .L :: rest => subtreeAtPos l rest
+  | .nil, _ :: _ => .nil
+  | .node _ l _, .L :: rest => subtreeAtPos l rest
   | .node _ _ r, .R :: rest => subtreeAtPos r rest
 
-def applyAtPos (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) :
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List Dir → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
+def applyAtPos (f : _root_.BinaryTree Unit → _root_.BinaryTree Unit) :
+    _root_.BinaryTree Unit → List Dir → _root_.BinaryTree Unit
   | t, [] => f t
-  | .empty, _ :: _ => .empty
-  | .node l u r, .L :: rest => .node (applyAtPos f l rest) u r
-  | .node l u r, .R :: rest => .node l u (applyAtPos f r rest)
+  | .nil, _ :: _ => .nil
+  | .node u l r, .L :: rest => .node u (applyAtPos f l rest) r
+  | .node u l r, .R :: rest => .node u l (applyAtPos f r rest)
 
 inductive RightRotOp where
   | single (pos : List Dir) : RightRotOp
   | cascade (pos : List Dir) (gaps : List ℕ) : RightRotOp
   deriving DecidableEq, Repr
 
-def validRightRotOp (Δ' k : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) : RightRotOp → Prop
+def validRightRotOp (Δ' k : ℕ) (t : _root_.BinaryTree Unit) : RightRotOp → Prop
   | .single pos => 2 ≤ leftSpineLen (subtreeAtPos t pos)
   | .cascade pos gaps =>
       gaps.length + 1 = k ∧ validGappedCascadeAtRoot Δ' (subtreeAtPos t pos) gaps
 
-def execRightRotOp (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) : RightRotOp → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
-  | .single pos => applyAtPos _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight t pos
+def execRightRotOp (t : _root_.BinaryTree Unit) : RightRotOp → _root_.BinaryTree Unit
+  | .single pos => applyAtPos _root_.BinaryTree.rotateRight t pos
   | .cascade pos gaps =>
       applyAtPos (fun s => execGappedCascadeAtRoot s gaps) t pos
 
-def ValidRightRotSeq (Δ' k : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List RightRotOp → Prop
+def ValidRightRotSeq (Δ' k : ℕ) : _root_.BinaryTree Unit → List RightRotOp → Prop
   | _, [] => True
   | t, op :: rest =>
       validRightRotOp Δ' k t op ∧ ValidRightRotSeq Δ' k (execRightRotOp t op) rest
@@ -160,7 +160,7 @@ def countGappedCascades : List RightRotOp → ℕ
   | .cascade _ _ :: rest => 1 + countGappedCascades rest
 
 def GappedCascadeBoundProp : Prop :=
-  ∀ (i Δ' N : ℕ) (init : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (seq : List RightRotOp),
+  ∀ (i Δ' N : ℕ) (init : _root_.BinaryTree Unit) (seq : List RightRotOp),
     2 ≤ i →
     1 ≤ N →
     N ≤ ackermann i 1 →
@@ -174,45 +174,45 @@ noncomputable def scaleSize (P : ℕ) : ℕ → ℕ
 
 noncomputable def contractionBound (P : ℕ) : ℕ :=
   max (2 ^ 42) (12000000 * (iteratedInvAckermann P + 7) ^ 6)
-def eraseNatKeys : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
-  | .empty => .empty
-  | .node l _ r => .node (eraseNatKeys l) () (eraseNatKeys r)
+def eraseNatKeys : _root_.BinaryTree ℕ → _root_.BinaryTree Unit
+  | .nil => .nil
+  | .node _ l r => .node () (eraseNatKeys l) (eraseNatKeys r)
 
-def inorderNat : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List ℕ
-  | .empty => []
-  | .node l k r => inorderNat l ++ [k] ++ inorderNat r
+def inorderNat : _root_.BinaryTree ℕ → List ℕ
+  | .nil => []
+  | .node k l r => inorderNat l ++ [k] ++ inorderNat r
 
-def leftSpineBottomUpAux : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List ℕ → List ℕ
-  | .empty, acc => acc
-  | .node l k _, acc => leftSpineBottomUpAux l (k :: acc)
+def leftSpineBottomUpAux : _root_.BinaryTree ℕ → List ℕ → List ℕ
+  | .nil, acc => acc
+  | .node k l _, acc => leftSpineBottomUpAux l (k :: acc)
 
-def leftSpineBottomUpNat (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) : List ℕ :=
+def leftSpineBottomUpNat (t : _root_.BinaryTree ℕ) : List ℕ :=
   leftSpineBottomUpAux t []
 
-def rightSpineTopDownNat : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List ℕ
-  | .empty => []
-  | .node _ k r => k :: rightSpineTopDownNat r
+def rightSpineTopDownNat : _root_.BinaryTree ℕ → List ℕ
+  | .nil => []
+  | .node k _ r => k :: rightSpineTopDownNat r
 
-def descendLeftNat : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) →
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ × List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)
-  | .empty, acc => (.empty, acc)
-  | .node .empty _ r, acc => (r, acc)
-  | .node l@(.node _ _ _) k r, acc => descendLeftNat l ((k, r) :: acc)
+def descendLeftNat : _root_.BinaryTree ℕ → List (ℕ × _root_.BinaryTree ℕ) →
+    _root_.BinaryTree ℕ × List (ℕ × _root_.BinaryTree ℕ)
+  | .nil, acc => (.nil, acc)
+  | .node _ .nil r, acc => (r, acc)
+  | .node k l@(.node _ _ _) r, acc => descendLeftNat l ((k, r) :: acc)
 
-def splayLeftSpineNat : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
+def splayLeftSpineNat : _root_.BinaryTree ℕ → List (ℕ × _root_.BinaryTree ℕ) → _root_.BinaryTree ℕ
   | c, [] => c
-  | c, [(k1, r1)] => .node c k1 r1
+  | c, [(k1, r1)] => .node k1 c r1
   | c, (k1, r1) :: (k2, r2) :: rest =>
-      splayLeftSpineNat (.node c k1 (.node r1 k2 r2)) rest
+      splayLeftSpineNat (.node k1 c (.node k2 r1 r2)) rest
 
-def popNat (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ :=
+def popNat (t : _root_.BinaryTree ℕ) : _root_.BinaryTree ℕ :=
   let (c, path) := descendLeftNat t []
   splayLeftSpineNat c path
 
-def rotateLeftAtRightDepthNat : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
-  | t, 0 => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft t
-  | .empty, _ + 1 => .empty
-  | .node l k r, d + 1 => .node l k (rotateLeftAtRightDepthNat r d)
+def rotateLeftAtRightDepthNat : _root_.BinaryTree ℕ → ℕ → _root_.BinaryTree ℕ
+  | t, 0 => _root_.BinaryTree.rotateLeft t
+  | .nil, _ + 1 => .nil
+  | .node k l r, d + 1 => .node k l (rotateLeftAtRightDepthNat r d)
 
 inductive KeyedCoreOp where
   | push (w : ℕ) : KeyedCoreOp
@@ -225,17 +225,17 @@ def eraseKeyedOp : KeyedCoreOp → CoreOp
   | .pop _ => .pop
   | .rslr d => .rslr d
 
-def execKeyedOp (H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) : KeyedCoreOp → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
-  | .push w => .node .empty w H
+def execKeyedOp (H : _root_.BinaryTree ℕ) : KeyedCoreOp → _root_.BinaryTree ℕ
+  | .push w => .node w .nil H
   | .pop _ => popNat H
   | .rslr d => rotateLeftAtRightDepthNat H d
 
-def execKeyedList : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List KeyedCoreOp → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
+def execKeyedList : _root_.BinaryTree ℕ → List KeyedCoreOp → _root_.BinaryTree ℕ
   | H, [] => H
   | H, op :: rest => execKeyedList (execKeyedOp H op) rest
 
-def keyedState (kops : List KeyedCoreOp) (t : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ :=
-  execKeyedList .empty (kops.take t)
+def keyedState (kops : List KeyedCoreOp) (t : ℕ) : _root_.BinaryTree ℕ :=
+  execKeyedList .nil (kops.take t)
 
 def countKeyedRslr : List KeyedCoreOp → ℕ
   | [] => 0
@@ -266,7 +266,7 @@ def popStep (kops : List KeyedCoreOp) (w : ℕ) : ℕ :=
   kops.findIdx (fun op => op == .pop w)
 
 structure ValidKeyedCoreSeq (P : ℕ) (kops : List KeyedCoreOp) : Prop where
-  end_empty : keyedState kops kops.length = .empty
+  end_empty : keyedState kops kops.length = .nil
   push_perm : (pushKeys kops).Perm (List.range P)
   pop_eq : popKeys kops = List.range P
   birth_lt_pop : ∀ w < P, birthStep kops w < popStep kops w ∧ popStep kops w < kops.length
@@ -279,54 +279,54 @@ structure ValidKeyedCoreSeq (P : ℕ) (kops : List KeyedCoreOp) : Prop where
   popIdx_after_popStep : ∀ s < P, popIdx kops (popStep kops s + 1) = s + 1
   popIdx_bound : ∀ t ≤ kops.length, ∀ w ∈ inorderNat (keyedState kops t),
     popIdx kops t ≤ w ∧ w < P
-  isBST_state : ∀ t ≤ kops.length, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (keyedState kops t)
+  isBST_state : ∀ t ≤ kops.length, _root_.BinaryTree.IsBST (keyedState kops t)
   inorder_strictMono : ∀ t ≤ kops.length,
     List.Pairwise (· < ·) (inorderNat (keyedState kops t))
   step_valid : ∀ t (ht : t < kops.length),
     match kops[t] with
     | .push w =>
         w < P ∧ birthStep kops w = t ∧
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => w < k) (keyedState kops t)
+          _root_.SplayDeque.Direct.ForallTree (fun k => w < k) (keyedState kops t)
     | .pop s =>
         s < P ∧ popStep kops s = t ∧ s = popIdx kops t ∧
-          keyedState kops t ≠ .empty ∧
+          keyedState kops t ≠ .nil ∧
           (leftSpineBottomUpNat (keyedState kops t)).head? = some s
     | .rslr d =>
         d + 2 ≤ (rightSpineTopDownNat (keyedState kops t)).length
 
-def foldRightSpine (acc : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
-  | .empty => .node acc k .empty
-  | .node l2 k2 r2 => foldRightSpine (.node acc k l2) k2 r2
+def foldRightSpine (acc : _root_.BinaryTree ℕ) (k : ℕ) : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ
+  | .nil => .node k acc .nil
+  | .node k2 l2 r2 => foldRightSpine (.node k acc l2) k2 r2
 
-def foldBST (P : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ × ℕ
-  | .empty => (.empty, P)
-  | .node l0 b0 r0 => (foldRightSpine l0 b0 r0, b0)
+def foldBST (P : ℕ) : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ × ℕ
+  | .nil => (.nil, P)
+  | .node b0 l0 r0 => (foldRightSpine l0 b0 r0, b0)
 
-def insertPushFolded (b0 w : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
-  | .empty => .node .empty w .empty
-  | .node l k r =>
-      if k = b0 then .node (.node .empty w l) k r
-      else .node (insertPushFolded b0 w l) k r
+def insertPushFolded (b0 w : ℕ) : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ
+  | .nil => .node w .nil .nil
+  | .node k l r =>
+      if k = b0 then .node k (.node w .nil l) r
+      else .node k (insertPushFolded b0 w l) r
 
-def rotateRightOnLeftSpine (u : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
-  | .node (.node a x b) y c =>
-      if x = u then .node a x (.node b y c)
-      else .node (rotateRightOnLeftSpine u (.node a x b)) y c
+def rotateRightOnLeftSpine (u : ℕ) : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ
+  | .node y (.node x a b) c =>
+      if x = u then .node x a (.node y b c)
+      else .node y (rotateRightOnLeftSpine u (.node x a b)) c
   | t => t
 
-def spliceMinNat : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
-  | .empty => .empty
-  | .node .empty _ r => r
-  | .node l@(.node _ _ _) k r => .node (spliceMinNat l) k r
+def spliceMinNat : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ
+  | .nil => .nil
+  | .node _ .nil r => r
+  | .node k l@(.node _ _ _) r => .node k (spliceMinNat l) r
 
-def lcrsParentAux (P curP v : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → ℕ
-  | .empty => P
-  | .node l k r =>
+def lcrsParentAux (P curP v : ℕ) : _root_.BinaryTree ℕ → ℕ
+  | .nil => P
+  | .node k l r =>
       if v < k then lcrsParentAux P k v l
       else if k < v then lcrsParentAux P curP v r
       else curP
 
-def lcrsParent (P : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (v : ℕ) : ℕ :=
+def lcrsParent (P : ℕ) (t : _root_.BinaryTree ℕ) (v : ℕ) : ℕ :=
   lcrsParentAux P P v t
 
 structure JumpRecord where
@@ -352,7 +352,7 @@ def popJumpsAt (nextId step s : ℕ) (ls : List ℕ) : List JumpRecord :=
       y := ls.getD (2 * j + 2) 0
       z := ls.getD (2 * j + 3) 0 })
 
-def jumpsAux : ℕ → ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List KeyedCoreOp → List JumpRecord
+def jumpsAux : ℕ → ℕ → _root_.BinaryTree ℕ → List KeyedCoreOp → List JumpRecord
   | _, _, _, [] => []
   | nextId, step, H, op :: rest =>
       match op with
@@ -363,7 +363,7 @@ def jumpsAux : ℕ → ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
           jumpsAux nextId (step + 1) (execKeyedOp H op) rest
 
 def jumps (kops : List KeyedCoreOp) : List JumpRecord :=
-  jumpsAux 0 0 .empty kops
+  jumpsAux 0 0 .nil kops
 
 def prevWinOpt (kops : List KeyedCoreOp) (id : ℕ) : Option JumpRecord :=
   match (jumps kops)[id]? with
@@ -399,11 +399,11 @@ def MBaseSet (kops : List KeyedCoreOp) : Finset ℕ :=
 
 structure FoldedCoreLaws (P : ℕ) (kops : List KeyedCoreOp) : Prop where
   fold_bst_inorder : ∀ t ≤ kops.length,
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (foldBST P (keyedState kops t)).1 ∧
+    _root_.BinaryTree.IsBST (foldBST P (keyedState kops t)).1 ∧
       inorderNat (foldBST P (keyedState kops t)).1 = inorderNat (keyedState kops t)
   fold_cursor : ∀ t ≤ kops.length,
-    (keyedState kops t = .empty ∧ (foldBST P (keyedState kops t)).2 = P) ∨
-      (keyedState kops t ≠ .empty ∧
+    (keyedState kops t = .nil ∧ (foldBST P (keyedState kops t)).2 = P) ∨
+      (keyedState kops t ≠ .nil ∧
         (rightSpineTopDownNat (keyedState kops t)).head? =
           some (foldBST P (keyedState kops t)).2 ∧
         (leftSpineBottomUpNat (keyedState kops t)).getLast? =
@@ -698,56 +698,56 @@ def totalMMovCount (S : ℕ → ℕ) (P L : ℕ) (kops : List KeyedCoreOp) : ℕ
       (Finset.range (KX - 1)).sum (fun p =>
         (MMovSet S P L kops ℓ Xi p).card)))
 
-def restrictRangeNat (lo hi : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
-  | .empty => .empty
-  | .node l k r =>
+def restrictRangeNat (lo hi : ℕ) : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ
+  | .nil => .nil
+  | .node k l r =>
       if k < lo then restrictRangeNat lo hi r
       else if hi ≤ k then restrictRangeNat lo hi l
-      else .node (restrictRangeNat lo hi l) k (restrictRangeNat lo hi r)
+      else .node k (restrictRangeNat lo hi l) (restrictRangeNat lo hi r)
 
 def minBirthKey (birth : ℕ → ℕ) (lo hi : ℕ) : ℕ :=
   (List.Ico (lo + 1) hi).foldl
     (fun best k => if birth k < birth best then k else best) lo
 
-def cartesianRangeAux (birth : ℕ → ℕ) : ℕ → ℕ → ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
-  | 0, _, _ => .empty
+def cartesianRangeAux (birth : ℕ → ℕ) : ℕ → ℕ → ℕ → _root_.BinaryTree ℕ
+  | 0, _, _ => .nil
   | fuel + 1, lo, hi =>
       if lo < hi then
         let w := min (max lo (minBirthKey birth lo hi)) (hi - 1)
-        .node (cartesianRangeAux birth fuel lo w) w (cartesianRangeAux birth fuel (w + 1) hi)
+        .node w (cartesianRangeAux birth fuel lo w) (cartesianRangeAux birth fuel (w + 1) hi)
       else
-        .empty
+        .nil
 
-def cartesianRangeNat (birth : ℕ → ℕ) (lo hi : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ :=
+def cartesianRangeNat (birth : ℕ → ℕ) (lo hi : ℕ) : _root_.BinaryTree ℕ :=
   cartesianRangeAux birth (hi - lo) lo hi
 
-def plugUnbornNat (birth : ℕ → ℕ) (lo hi : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
-  | .empty => cartesianRangeNat birth lo hi
-  | .node l k r => .node (plugUnbornNat birth lo k l) k (plugUnbornNat birth (k + 1) hi r)
+def plugUnbornNat (birth : ℕ → ℕ) (lo hi : ℕ) : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ
+  | .nil => cartesianRangeNat birth lo hi
+  | .node k l r => .node k (plugUnbornNat birth lo k l) (plugUnbornNat birth (k + 1) hi r)
 
-def rightmostKeyNat (cur : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → ℕ
-  | .empty => cur
-  | .node _ k r => rightmostKeyNat k r
+def rightmostKeyNat (cur : ℕ) : _root_.BinaryTree ℕ → ℕ
+  | .nil => cur
+  | .node k _ r => rightmostKeyNat k r
 
-def subtreeMaxNat : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → ℕ → ℕ
-  | .empty, v => v
-  | .node l k r, v =>
+def subtreeMaxNat : _root_.BinaryTree ℕ → ℕ → ℕ
+  | .nil, v => v
+  | .node k l r, v =>
       if v < k then subtreeMaxNat l v
       else if k < v then subtreeMaxNat r v
       else rightmostKeyNat k r
 
 structure BlockQuotientData where
-  G_init : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
-  G_end : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
+  G_init : ℕ → _root_.BinaryTree ℕ
+  G_end : ℕ → _root_.BinaryTree ℕ
   F_idx : ℕ → List ℕ
   u_gap : ℕ → List ℕ
 
 instance : Inhabited BlockQuotientData :=
-  ⟨⟨fun _ => .empty, fun _ => .empty, fun _ => [], fun _ => []⟩⟩
+  ⟨⟨fun _ => .nil, fun _ => .nil, fun _ => [], fun _ => []⟩⟩
 
 structure ValidBlockQuotientPkg (N_X : ℕ) (pkg : BlockQuotientData) : Prop where
-  bst_init : ∀ p < N_X, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (pkg.G_init p)
-  bst_end : ∀ p < N_X, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (pkg.G_end p)
+  bst_init : ∀ p < N_X, _root_.BinaryTree.IsBST (pkg.G_init p)
+  bst_end : ∀ p < N_X, _root_.BinaryTree.IsBST (pkg.G_end p)
   inorder_init : ∀ p < N_X, inorderNat (pkg.G_init p) = List.Ico (p + 1) (N_X + 1)
   inorder_end : ∀ p < N_X, inorderNat (pkg.G_end p) = List.Ico (p + 1) (N_X + 1)
   reach_mono : ∀ p < N_X, ∀ c, p + 1 ≤ c → c ≤ N_X →
@@ -779,104 +779,104 @@ def totalPkgMovers (S : ℕ → ℕ) (P L : ℕ) (pkgs : ℕ → ℕ → BlockQu
       let X := (scaleBlocks S P (ℓ - 1)).getD Xi (0, 0)
       let NX := (splitBlock (S ℓ) X.1 X.2).length - 1
       (Finset.range NX).sum (fun p => ((pkgs ℓ Xi).F_idx p).length)))
-def execRightRotSeq : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List RightRotOp → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
+def execRightRotSeq : _root_.BinaryTree Unit → List RightRotOp → _root_.BinaryTree Unit
   | t, [] => t
   | t, op :: rest => execRightRotSeq (execRightRotOp t op) rest
 
-def rightReachList : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List ℕ
-  | _, .empty => []
-  | a, .node l _ r =>
+def rightReachList : ℕ → _root_.BinaryTree Unit → List ℕ
+  | _, .nil => []
+  | a, .node _ l r =>
       let x := a + l.num_nodes
       rightReachList a l ++ [x + r.num_nodes] ++ rightReachList (x + 1) r
 
-def eraseKeys {α : Type} : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
-  | .empty => .empty
-  | .node l _ r => .node (eraseKeys l) () (eraseKeys r)
+def eraseKeys {α : Type} : _root_.BinaryTree α → _root_.BinaryTree Unit
+  | .nil => .nil
+  | .node _ l r => .node () (eraseKeys l) (eraseKeys r)
 
-def IsRangeBST : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → Prop
-  | _, .empty => True
-  | a, .node l k r =>
+def IsRangeBST : ℕ → _root_.BinaryTree ℕ → Prop
+  | _, .nil => True
+  | a, .node k l r =>
       k = a + l.num_nodes ∧ IsRangeBST a l ∧ IsRangeBST (k + 1) r
 
-def labelRange : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
-  | _, .empty => .empty
-  | a, .node l _ r =>
+def labelRange : ℕ → _root_.BinaryTree Unit → _root_.BinaryTree ℕ
+  | _, .nil => .nil
+  | a, .node _ l r =>
       let k := a + l.num_nodes
-      .node (labelRange a l) k (labelRange (k + 1) r)
+      .node k (labelRange a l) (labelRange (k + 1) r)
 
-def subtreeAtLeftDepthGen {α : Type} : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree α
+def subtreeAtLeftDepthGen {α : Type} : _root_.BinaryTree α → ℕ → _root_.BinaryTree α
   | t, 0 => t
-  | .empty, _ + 1 => .empty
-  | .node l _ _, d + 1 => subtreeAtLeftDepthGen l d
+  | .nil, _ + 1 => .nil
+  | .node _ l _, d + 1 => subtreeAtLeftDepthGen l d
 
-def applyAtLeftDepthGen {α : Type} (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) :
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree α
+def applyAtLeftDepthGen {α : Type} (f : _root_.BinaryTree α → _root_.BinaryTree α) :
+    _root_.BinaryTree α → ℕ → _root_.BinaryTree α
   | t, 0 => f t
-  | .empty, _ + 1 => .empty
-  | .node l k r, d + 1 => .node (applyAtLeftDepthGen f l d) k r
+  | .nil, _ + 1 => .nil
+  | .node k l r, d + 1 => .node k (applyAtLeftDepthGen f l d) r
 
-def execGappedCascadeAtRootGen {α : Type} : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → List ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree α
-  | t, [] => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight t
-  | .node (.node a k1 b) k2 c, g :: rest =>
+def execGappedCascadeAtRootGen {α : Type} : _root_.BinaryTree α → List ℕ → _root_.BinaryTree α
+  | t, [] => _root_.BinaryTree.rotateRight t
+  | .node k2 (.node k1 a b) c, g :: rest =>
       let a' := applyAtLeftDepthGen (fun s => execGappedCascadeAtRootGen s rest) a g
-      .node a' k1 (.node b k2 c)
+      .node k1 a' (.node k2 b c)
   | t, _ :: _ => t
 
-def subtreeAtPosGen {α : Type} : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → List Dir → _root_.SplayDeque.Legacy.SplayTree.BinaryTree α
+def subtreeAtPosGen {α : Type} : _root_.BinaryTree α → List Dir → _root_.BinaryTree α
   | t, [] => t
-  | .empty, _ :: _ => .empty
-  | .node l _ _, .L :: rest => subtreeAtPosGen l rest
+  | .nil, _ :: _ => .nil
+  | .node _ l _, .L :: rest => subtreeAtPosGen l rest
   | .node _ _ r, .R :: rest => subtreeAtPosGen r rest
 
-def applyAtPosGen {α : Type} (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) :
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → List Dir → _root_.SplayDeque.Legacy.SplayTree.BinaryTree α
+def applyAtPosGen {α : Type} (f : _root_.BinaryTree α → _root_.BinaryTree α) :
+    _root_.BinaryTree α → List Dir → _root_.BinaryTree α
   | t, [] => f t
-  | .empty, _ :: _ => .empty
-  | .node l k r, .L :: rest => .node (applyAtPosGen f l rest) k r
-  | .node l k r, .R :: rest => .node l k (applyAtPosGen f r rest)
+  | .nil, _ :: _ => .nil
+  | .node k l r, .L :: rest => .node k (applyAtPosGen f l rest) r
+  | .node k l r, .R :: rest => .node k l (applyAtPosGen f r rest)
 
-def execRightRotOpGen {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) : RightRotOp → _root_.SplayDeque.Legacy.SplayTree.BinaryTree α
-  | .single pos => applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight t pos
+def execRightRotOpGen {α : Type} (t : _root_.BinaryTree α) : RightRotOp → _root_.BinaryTree α
+  | .single pos => applyAtPosGen _root_.BinaryTree.rotateRight t pos
   | .cascade pos gaps =>
       applyAtPosGen (fun s => execGappedCascadeAtRootGen s gaps) t pos
 
-def restrictInterval (lo hi : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
-  | .empty => .empty
-  | .node l k r =>
+def restrictInterval (lo hi : ℕ) : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ
+  | .nil => .nil
+  | .node k l r =>
       if k < lo then restrictInterval lo hi r
       else if hi ≤ k then restrictInterval lo hi l
-      else .node (restrictInterval lo hi l) k (restrictInterval lo hi r)
+      else .node k (restrictInterval lo hi l) (restrictInterval lo hi r)
 
-def blockTree (S m : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ :=
+def blockTree (S m : ℕ) (T : _root_.BinaryTree ℕ) : _root_.BinaryTree ℕ :=
   restrictInterval (m * S) ((m + 1) * S) T
 
-def preorderList {α : Type} : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → List α
-  | .empty => []
-  | .node l k r => k :: (preorderList l ++ preorderList r)
+def preorderList {α : Type} : _root_.BinaryTree α → List α
+  | .nil => []
+  | .node k l r => k :: (preorderList l ++ preorderList r)
 
-def isGlobalKey (D S : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ) : Bool :=
+def isGlobalKey (D S : ℕ) (T : _root_.BinaryTree ℕ) (k : ℕ) : Bool :=
   decide (k ∈ (preorderList (blockTree S (k / S) T)).take D)
 
-def extractGlobalTree (isG : ℕ → Bool) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
-  | .empty => .empty
-  | .node l k r =>
+def extractGlobalTree (isG : ℕ → Bool) : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ
+  | .nil => .nil
+  | .node k l r =>
       let lG := extractGlobalTree isG l
       let rG := extractGlobalTree isG r
-      if isG k then .node lG k rG
+      if isG k then .node k lG rG
       else match lG with
-        | .empty => rG
+        | .nil => rG
         | _ => lG
 
-def globalTree (D S : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit :=
+def globalTree (D S : ℕ) (T : _root_.BinaryTree ℕ) : _root_.BinaryTree Unit :=
   eraseKeys (extractGlobalTree (isGlobalKey D S T) T)
 
-def allPairsInterblock (S : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List ℕ → Bool
-  | .node (.node _ x _) y _, [] => decide (x / S < y / S)
-  | .node (.node a x _) y _, g :: rest =>
+def allPairsInterblock (S : ℕ) : _root_.BinaryTree ℕ → List ℕ → Bool
+  | .node y (.node x _ _) _, [] => decide (x / S < y / S)
+  | .node y (.node x a _) _, g :: rest =>
       decide (x / S < y / S) && allPairsInterblock S (subtreeAtLeftDepthGen a g) rest
   | _, _ => false
 
-def countPureInterblockCascades (S : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List RightRotOp → ℕ
+def countPureInterblockCascades (S : ℕ) : _root_.BinaryTree ℕ → List RightRotOp → ℕ
   | _, [] => 0
   | T, .single pos :: rest =>
       countPureInterblockCascades S (execRightRotOpGen T (.single pos)) rest
@@ -884,52 +884,52 @@ def countPureInterblockCascades (S : ℕ) : _root_.SplayDeque.Legacy.SplayTree.B
       let hit := allPairsInterblock S (subtreeAtPosGen T pos) gaps
       (if hit then 1 else 0) +
         countPureInterblockCascades S (execRightRotOpGen T (.cascade pos gaps)) rest
-def twMapTree {α β : Type} (f : α → β) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → _root_.SplayDeque.Legacy.SplayTree.BinaryTree β
-  | .empty => .empty
-  | .node l k r => .node (twMapTree f l) (f k) (twMapTree f r)
+def twMapTree {α β : Type} (f : α → β) : _root_.BinaryTree α → _root_.BinaryTree β
+  | .nil => .nil
+  | .node k l r => .node (f k) (twMapTree f l) (twMapTree f r)
 
-def twEraseTree {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit :=
+def twEraseTree {α : Type} (t : _root_.BinaryTree α) : _root_.BinaryTree Unit :=
   twMapTree (fun _ => ()) t
 
-def twMirrorTree {α : Type} : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → _root_.SplayDeque.Legacy.SplayTree.BinaryTree α
-  | .empty => .empty
-  | .node l k r => .node (twMirrorTree r) k (twMirrorTree l)
+def twMirrorTree {α : Type} : _root_.BinaryTree α → _root_.BinaryTree α
+  | .nil => .nil
+  | .node k l r => .node k (twMirrorTree r) (twMirrorTree l)
 
-def twTreeMem {α : Type} (x : α) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → Prop
-  | .empty => False
-  | .node l k r => x = k ∨ twTreeMem x l ∨ twTreeMem x r
+def twTreeMem {α : Type} (x : α) : _root_.BinaryTree α → Prop
+  | .nil => False
+  | .node k l r => x = k ∨ twTreeMem x l ∨ twTreeMem x r
 
-def twDescendLeftPoly {α : Type} : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) →
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree α × List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)
-  | .empty, acc => (.empty, acc)
-  | .node .empty _ r, acc => (r, acc)
-  | .node l@(.node _ _ _) k r, acc => twDescendLeftPoly l ((k, r) :: acc)
+def twDescendLeftPoly {α : Type} : _root_.BinaryTree α → List (α × _root_.BinaryTree α) →
+    _root_.BinaryTree α × List (α × _root_.BinaryTree α)
+  | .nil, acc => (.nil, acc)
+  | .node _ .nil r, acc => (r, acc)
+  | .node k l@(.node _ _ _) r, acc => twDescendLeftPoly l ((k, r) :: acc)
 
-def twSplayLeftSpinePoly {α : Type} : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree α
+def twSplayLeftSpinePoly {α : Type} : _root_.BinaryTree α → List (α × _root_.BinaryTree α) → _root_.BinaryTree α
   | c, [] => c
-  | c, [(k1, s1)] => .node c k1 s1
+  | c, [(k1, s1)] => .node k1 c s1
   | c, (k1, s1) :: (k2, s2) :: rest =>
-      twSplayLeftSpinePoly (.node c k1 (.node s1 k2 s2)) rest
+      twSplayLeftSpinePoly (.node k1 c (.node k2 s1 s2)) rest
 
-def twAttachPoly {α : Type} : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree α
+def twAttachPoly {α : Type} : _root_.BinaryTree α → List (α × _root_.BinaryTree α) → _root_.BinaryTree α
   | c, [] => c
-  | c, (k, s) :: rest => twAttachPoly (.node c k s) rest
+  | c, (k, s) :: rest => twAttachPoly (.node k c s) rest
 
-def twPopPoly {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α :=
+def twPopPoly {α : Type} (t : _root_.BinaryTree α) : _root_.BinaryTree α :=
   let (c, path) := twDescendLeftPoly t []
   twSplayLeftSpinePoly c path
 
-def twEjectPoly {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α :=
+def twEjectPoly {α : Type} (t : _root_.BinaryTree α) : _root_.BinaryTree α :=
   twMirrorTree (twPopPoly (twMirrorTree t))
 
-def twToFrameL {α : Type} (p : α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) : Frame α :=
+def twToFrameL {α : Type} (p : α × _root_.BinaryTree α) : Frame α :=
   { dir := .L, key := p.1, sibling := p.2 }
 
 def twMirrorDir : Dir → Dir
   | .L => .R
   | .R => .L
 
-def twNegMirror {α : Type} (neg : α → α) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α :=
+def twNegMirror {α : Type} (neg : α → α) (t : _root_.BinaryTree α) : _root_.BinaryTree α :=
   twMapTree neg (twMirrorTree t)
 
 def twNegMirrorFrame {α : Type} (neg : α → α) (f : Frame α) : Frame α :=
@@ -948,36 +948,36 @@ def twToUDequeOp {α : Type} : DequeOp α → TwUDequeOp
   | .eject => .eject
   | .inject _ => .inject
 
-def twStepUDeque (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) : TwUDequeOp → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
+def twStepUDeque (t : _root_.BinaryTree Unit) : TwUDequeOp → _root_.BinaryTree Unit
   | .pop => popUnlabeled t
-  | .push => .node .empty () t
+  | .push => .node () .nil t
   | .eject => twMirrorTree (popUnlabeled (twMirrorTree t))
-  | .inject => .node t () .empty
+  | .inject => .node () t .nil
 
-def twCostUDeque (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) : TwUDequeOp → ℕ
+def twCostUDeque (t : _root_.BinaryTree Unit) : TwUDequeOp → ℕ
   | .pop => leftSpineLen t - 1
   | .push => 0
   | .eject => rightSpineLen t - 1
   | .inject => 0
 
-def TwValidUDequeSeq : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List TwUDequeOp → Prop
+def TwValidUDequeSeq : _root_.BinaryTree Unit → List TwUDequeOp → Prop
   | _, [] => True
-  | t, .pop :: rest => t ≠ .empty ∧ TwValidUDequeSeq (popUnlabeled t) rest
-  | t, .push :: rest => TwValidUDequeSeq (.node .empty () t) rest
+  | t, .pop :: rest => t ≠ .nil ∧ TwValidUDequeSeq (popUnlabeled t) rest
+  | t, .push :: rest => TwValidUDequeSeq (.node () .nil t) rest
   | t, .eject :: rest =>
-      t ≠ .empty ∧ TwValidUDequeSeq (twMirrorTree (popUnlabeled (twMirrorTree t))) rest
-  | t, .inject :: rest => TwValidUDequeSeq (.node t () .empty) rest
+      t ≠ .nil ∧ TwValidUDequeSeq (twMirrorTree (popUnlabeled (twMirrorTree t))) rest
+  | t, .inject :: rest => TwValidUDequeSeq (.node () t .nil) rest
 
-def twUDequeSeqCost : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List TwUDequeOp → ℕ
+def twUDequeSeqCost : _root_.BinaryTree Unit → List TwUDequeOp → ℕ
   | _, [] => 0
   | t, op :: rest => twCostUDeque t op + twUDequeSeqCost (twStepUDeque t op) rest
 
-def twLabelInorderAux : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ × ℕ
-  | .empty, k => (.empty, k)
-  | .node l _ r, k =>
+def twLabelInorderAux : _root_.BinaryTree Unit → ℕ → _root_.BinaryTree ℕ × ℕ
+  | .nil, k => (.nil, k)
+  | .node _ l r, k =>
       let (l', k1) := twLabelInorderAux l k
       let (r', k2) := twLabelInorderAux r (k1 + 1)
-      (.node l' k1 r', k2)
+      (.node k1 l' r', k2)
 
 inductive TwFate where
   | L : TwFate
@@ -995,20 +995,20 @@ def twMirrorFate : TwFate → TwFate
   | .M => .M
   | .R => .L
 
-def twDualTree (C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate :=
+def twDualTree (C : _root_.BinaryTree TwFate) : _root_.BinaryTree TwFate :=
   twMapTree twMirrorFate (twMirrorTree C)
 
 def twFateOf (Lm Rm x : ℚ) : TwFate :=
   if x ≤ Lm then .L else if x < Rm then .M else .R
 
-def twFinalBounds : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℚ → ℚ → ℚ → List TwUDequeOp → ℚ × ℚ
+def twFinalBounds : _root_.BinaryTree ℚ → ℚ → ℚ → List TwUDequeOp → ℚ × ℚ
   | _, L, R, [] => (L, R)
   | T, L, R, .push :: rest =>
       let q := match T.minKey? with | none => (L + R) / 2 | some x => (L + x) / 2
-      twFinalBounds (.node .empty q T) L R rest
+      twFinalBounds (.node q .nil T) L R rest
   | T, L, R, .inject :: rest =>
       let q := match T.maxKey? with | none => (L + R) / 2 | some z => (z + R) / 2
-      twFinalBounds (.node T q .empty) L R rest
+      twFinalBounds (.node q T .nil) L R rest
   | T, L, R, .pop :: rest =>
       twFinalBounds (twPopPoly T) (T.minKey?.getD L) R rest
   | T, L, R, .eject :: rest =>
@@ -1027,87 +1027,87 @@ def twEraseCDequeOp : TwCDequeOp → TwUDequeOp
   | .eject => .eject
   | .inject _ => .inject
 
-def twBuildCops (Lm Rm : ℚ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℚ → ℚ → ℚ → List TwUDequeOp → List TwCDequeOp
+def twBuildCops (Lm Rm : ℚ) : _root_.BinaryTree ℚ → ℚ → ℚ → List TwUDequeOp → List TwCDequeOp
   | _, _, _, [] => []
   | T, L, R, .push :: rest =>
       let q := match T.minKey? with | none => (L + R) / 2 | some x => (L + x) / 2
-      .push (twFateOf Lm Rm q) :: twBuildCops Lm Rm (.node .empty q T) L R rest
+      .push (twFateOf Lm Rm q) :: twBuildCops Lm Rm (.node q .nil T) L R rest
   | T, L, R, .inject :: rest =>
       let q := match T.maxKey? with | none => (L + R) / 2 | some z => (z + R) / 2
-      .inject (twFateOf Lm Rm q) :: twBuildCops Lm Rm (.node T q .empty) L R rest
+      .inject (twFateOf Lm Rm q) :: twBuildCops Lm Rm (.node q T .nil) L R rest
   | T, L, R, .pop :: rest =>
       .pop :: twBuildCops Lm Rm (twPopPoly T) (T.minKey?.getD L) R rest
   | T, L, R, .eject :: rest =>
       .eject :: twBuildCops Lm Rm (twEjectPoly T) L (T.maxKey?.getD R) rest
 
-def TwIsTriOrdered : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate → Prop
-  | .empty => True
-  | .node l f r =>
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => twFateCode x ≤ twFateCode f) l ∧
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => twFateCode f ≤ twFateCode x) r ∧
+def TwIsTriOrdered : _root_.BinaryTree TwFate → Prop
+  | .nil => True
+  | .node f l r =>
+      _root_.SplayDeque.Direct.ForallTree (fun x => twFateCode x ≤ twFateCode f) l ∧
+      _root_.SplayDeque.Direct.ForallTree (fun x => twFateCode f ≤ twFateCode x) r ∧
       TwIsTriOrdered l ∧ TwIsTriOrdered r
 
-def twCountFate (target : TwFate) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate → ℕ
-  | .empty => 0
-  | .node l f r => (if f = target then 1 else 0) + twCountFate target l + twCountFate target r
+def twCountFate (target : TwFate) : _root_.BinaryTree TwFate → ℕ
+  | .nil => 0
+  | .node f l r => (if f = target then 1 else 0) + twCountFate target l + twCountFate target r
 
-def TwValidCDequeSeq : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate → List TwCDequeOp → Prop
+def TwValidCDequeSeq : _root_.BinaryTree TwFate → List TwCDequeOp → Prop
   | C, [] => TwIsTriOrdered C ∧ twCountFate .L C = 0 ∧ twCountFate .R C = 0
   | C, .pop :: rest =>
       TwIsTriOrdered C ∧ 1 ≤ twCountFate .L C ∧ TwValidCDequeSeq (twPopPoly C) rest
   | C, .push f :: rest =>
-      TwIsTriOrdered C ∧ _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => twFateCode f ≤ twFateCode x) C ∧
-      TwValidCDequeSeq (.node .empty f C) rest
+      TwIsTriOrdered C ∧ _root_.SplayDeque.Direct.ForallTree (fun x => twFateCode f ≤ twFateCode x) C ∧
+      TwValidCDequeSeq (.node f .nil C) rest
   | C, .eject :: rest =>
       TwIsTriOrdered C ∧ 1 ≤ twCountFate .R C ∧ TwValidCDequeSeq (twEjectPoly C) rest
   | C, .inject f :: rest =>
-      TwIsTriOrdered C ∧ _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => twFateCode x ≤ twFateCode f) C ∧
-      TwValidCDequeSeq (.node C f .empty) rest
+      TwIsTriOrdered C ∧ _root_.SplayDeque.Direct.ForallTree (fun x => twFateCode x ≤ twFateCode f) C ∧
+      TwValidCDequeSeq (.node f C .nil) rest
 
-def twProjL : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
-  | .empty => .empty
-  | .node l .L r => .node (twProjL l) () (twProjL r)
-  | .node l .M _ => twProjL l
-  | .node l .R _ => twProjL l
+def twProjL : _root_.BinaryTree TwFate → _root_.BinaryTree Unit
+  | .nil => .nil
+  | .node .L l r => .node () (twProjL l) (twProjL r)
+  | .node .M l _ => twProjL l
+  | .node .R l _ => twProjL l
 
-def twProjM : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
-  | .empty => .empty
-  | .node _ .L r => twProjM r
-  | .node l .M r => .node (twProjM l) () (twProjM r)
-  | .node l .R _ => twProjM l
+def twProjM : _root_.BinaryTree TwFate → _root_.BinaryTree Unit
+  | .nil => .nil
+  | .node .L _ r => twProjM r
+  | .node .M l r => .node () (twProjM l) (twProjM r)
+  | .node .R l _ => twProjM l
 
-def twProjR : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
-  | .empty => .empty
-  | .node _ .L r => twProjR r
-  | .node _ .M r => twProjR r
-  | .node l .R r => .node (twProjR l) () (twProjR r)
+def twProjR : _root_.BinaryTree TwFate → _root_.BinaryTree Unit
+  | .nil => .nil
+  | .node .L _ r => twProjR r
+  | .node .M _ r => twProjR r
+  | .node .R l r => .node () (twProjR l) (twProjR r)
 
-def twPhiMR (C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate) : ℕ :=
+def twPhiMR (C : _root_.BinaryTree TwFate) : ℕ :=
   2 * leftSpineLen (twProjM C) + 2 * rightSpineLen (twProjM C) + 2 * leftSpineLen (twProjR C)
 
-def twPhi2 (C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate) : ℕ :=
+def twPhi2 (C : _root_.BinaryTree TwFate) : ℕ :=
   twPhiMR C + 2 * rightSpineLen (twProjL C)
 
-def twLeftmostFate : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate → Option TwFate
-  | .empty => none
-  | .node .empty k _ => some k
-  | .node l@(.node _ _ _) _ _ => twLeftmostFate l
+def twLeftmostFate : _root_.BinaryTree TwFate → Option TwFate
+  | .nil => none
+  | .node k .nil _ => some k
+  | .node _ l@(.node _ _ _) _ => twLeftmostFate l
 
-def TwSortedPath : TwFate → List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate) → Prop
+def TwSortedPath : TwFate → List (TwFate × _root_.BinaryTree TwFate) → Prop
   | _, [] => True
   | cur, (k, _) :: rest => twFateCode cur ≤ twFateCode k ∧ TwSortedPath k rest
 
-def twFilterProjL : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate) → List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit)
+def twFilterProjL : List (TwFate × _root_.BinaryTree TwFate) → List (_root_.BinaryTree Unit)
   | [] => []
   | (.L, s) :: rest => twProjL s :: twFilterProjL rest
   | (.M, _) :: rest => twFilterProjL rest
   | (.R, _) :: rest => twFilterProjL rest
 
-def twAttachUnit : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
+def twAttachUnit : _root_.BinaryTree Unit → List (_root_.BinaryTree Unit) → _root_.BinaryTree Unit
   | u, [] => u
-  | u, r :: rest => twAttachUnit (.node u () r) rest
+  | u, r :: rest => twAttachUnit (.node () u r) rest
 
-def twCountKeyM : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate) → ℕ
+def twCountKeyM : List (TwFate × _root_.BinaryTree TwFate) → ℕ
   | [] => 0
   | (.M, _) :: rest => 1 + twCountKeyM rest
   | (.L, _) :: rest => twCountKeyM rest
@@ -1125,33 +1125,33 @@ inductive TwExtCoreOp where
   | inject : TwExtCoreOp
   deriving DecidableEq, Repr
 
-def twExecExtCoreOp (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) : TwExtCoreOp → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
-  | .push => .node .empty () u
+def twExecExtCoreOp (u : _root_.BinaryTree Unit) : TwExtCoreOp → _root_.BinaryTree Unit
+  | .push => .node () .nil u
   | .pop => popUnlabeled u
   | .rslr d => rotateLeftAtRightDepth u d
-  | .inject => .node u () .empty
+  | .inject => .node () u .nil
 
-def twExtCascadeStepCost (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) : TwExtCoreOp → ℕ
+def twExtCascadeStepCost (u : _root_.BinaryTree Unit) : TwExtCoreOp → ℕ
   | .pop => (leftSpineLen u - 1) / 2
   | _ => 0
 
-def TwValidExtCoreSeq : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List TwExtCoreOp → Prop
-  | u, [] => u = .empty
-  | u, .push :: rest => TwValidExtCoreSeq (.node .empty () u) rest
-  | u, .pop :: rest => u ≠ .empty ∧ TwValidExtCoreSeq (popUnlabeled u) rest
+def TwValidExtCoreSeq : _root_.BinaryTree Unit → List TwExtCoreOp → Prop
+  | u, [] => u = .nil
+  | u, .push :: rest => TwValidExtCoreSeq (.node () .nil u) rest
+  | u, .pop :: rest => u ≠ .nil ∧ TwValidExtCoreSeq (popUnlabeled u) rest
   | u, .rslr d :: rest =>
       d + 2 ≤ rightSpineLen u ∧ TwValidExtCoreSeq (rotateLeftAtRightDepth u d) rest
-  | u, .inject :: rest => TwValidExtCoreSeq (.node u () .empty) rest
+  | u, .inject :: rest => TwValidExtCoreSeq (.node () u .nil) rest
 
-def TwValidExtSteps : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List TwExtCoreOp → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → Prop
+def TwValidExtSteps : _root_.BinaryTree Unit → List TwExtCoreOp → _root_.BinaryTree Unit → Prop
   | u, [], u' => u = u'
-  | u, .push :: rest, u' => TwValidExtSteps (.node .empty () u) rest u'
-  | u, .pop :: rest, u' => u ≠ .empty ∧ TwValidExtSteps (popUnlabeled u) rest u'
+  | u, .push :: rest, u' => TwValidExtSteps (.node () .nil u) rest u'
+  | u, .pop :: rest, u' => u ≠ .nil ∧ TwValidExtSteps (popUnlabeled u) rest u'
   | u, .rslr d :: rest, u' =>
       d + 2 ≤ rightSpineLen u ∧ TwValidExtSteps (rotateLeftAtRightDepth u d) rest u'
-  | u, .inject :: rest, u' => TwValidExtSteps (.node u () .empty) rest u'
+  | u, .inject :: rest, u' => TwValidExtSteps (.node () u .nil) rest u'
 
-def twExtCoreCascadeCost : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List TwExtCoreOp → ℕ
+def twExtCoreCascadeCost : _root_.BinaryTree Unit → List TwExtCoreOp → ℕ
   | _, [] => 0
   | u, op :: rest => twExtCascadeStepCost u op + twExtCoreCascadeCost (twExecExtCoreOp u op) rest
 
@@ -1170,7 +1170,7 @@ def twCountExtInject : List TwExtCoreOp → ℕ
   | .inject :: rest => 1 + twCountExtInject rest
   | _ :: rest => twCountExtInject rest
 
-def twExtractPopRRslrs : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate) → List TwExtCoreOp
+def twExtractPopRRslrs : List (TwFate × _root_.BinaryTree TwFate) → List TwExtCoreOp
   | [] => []
   | [_] => []
   | (k1, _) :: (k2, _) :: rest =>
@@ -1179,20 +1179,20 @@ def twExtractPopRRslrs : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.Bina
       else
         twExtractPopRRslrs rest
 
-def TwValidCoreSteps : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List CoreOp → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → Prop
+def TwValidCoreSteps : _root_.BinaryTree Unit → List CoreOp → _root_.BinaryTree Unit → Prop
   | t, [], t' => t = t'
-  | t, .push :: rest, t' => TwValidCoreSteps (.node .empty () t) rest t'
-  | t, .pop :: rest, t' => t ≠ .empty ∧ TwValidCoreSteps (popUnlabeled t) rest t'
+  | t, .push :: rest, t' => TwValidCoreSteps (.node () .nil t) rest t'
+  | t, .pop :: rest, t' => t ≠ .nil ∧ TwValidCoreSteps (popUnlabeled t) rest t'
   | t, .rslr d :: rest, t' =>
       d + 2 ≤ rightSpineLen t ∧ TwValidCoreSteps (rotateLeftAtRightDepth t d) rest t'
 
-def twRightChain : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
-  | 0 => .empty
-  | k + 1 => .node .empty () (twRightChain k)
+def twRightChain : ℕ → _root_.BinaryTree Unit
+  | 0 => .nil
+  | k + 1 => .node () .nil (twRightChain k)
 
-def twAppendRightmost : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit
-  | .empty, tl => tl
-  | .node l _ r, tl => .node l () (twAppendRightmost r tl)
+def twAppendRightmost : _root_.BinaryTree Unit → _root_.BinaryTree Unit → _root_.BinaryTree Unit
+  | .nil, tl => tl
+  | .node _ l r, tl => .node () l (twAppendRightmost r tl)
 
 def twPullUpSeq : ℕ → List CoreOp
   | 0 => []
@@ -1202,28 +1202,28 @@ def twShiftCoreOp : CoreOp → CoreOp
   | .rslr d => .rslr (d + 1)
   | op => op
 
-def twBuildFromEmptyAux : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List CoreOp
+def twBuildFromEmptyAux : ℕ → _root_.BinaryTree Unit → List CoreOp
   | 0, _ => []
-  | _ + 1, .empty => []
-  | fuel + 1, .node .empty _ r => twBuildFromEmptyAux fuel r ++ [.push]
-  | fuel + 1, .node (.node a _ b) _ r =>
-      twBuildFromEmptyAux fuel (.node a () (.node b () r)) ++ [.rslr 0]
+  | _ + 1, .nil => []
+  | fuel + 1, .node _ .nil r => twBuildFromEmptyAux fuel r ++ [.push]
+  | fuel + 1, .node _ (.node _ a b) r =>
+      twBuildFromEmptyAux fuel (.node () a (.node () b r)) ++ [.rslr 0]
 
-def twBuildFromEmpty (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) : List CoreOp :=
+def twBuildFromEmpty (t : _root_.BinaryTree Unit) : List CoreOp :=
   twBuildFromEmptyAux (2 * t.num_nodes - rightSpineLen t) t
-def btbCascadeTopKey : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → ℕ
-  | .node _ y _ => y
-  | .empty => 0
+def btbCascadeTopKey : _root_.BinaryTree ℕ → ℕ
+  | .node y _ _ => y
+  | .nil => 0
 
-def btbCascadeBotKey : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List ℕ → ℕ
-  | .node (.node _ x _) _ _, [] => x
-  | .node (.node a _ _) _ _, g :: rest => btbCascadeBotKey (subtreeAtLeftDepthGen a g) rest
+def btbCascadeBotKey : _root_.BinaryTree ℕ → List ℕ → ℕ
+  | .node _ (.node x _ _) _, [] => x
+  | .node _ (.node _ a _) _, g :: rest => btbCascadeBotKey (subtreeAtLeftDepthGen a g) rest
   | _, _ => 0
 
-def btbIsIntrablock (S m : ℕ) (s : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (gaps : List ℕ) : Bool :=
+def btbIsIntrablock (S m : ℕ) (s : _root_.BinaryTree ℕ) (gaps : List ℕ) : Bool :=
   decide (btbCascadeBotKey s gaps / S = m ∧ btbCascadeTopKey s / S = m)
 
-def btbCountIntrablock (S m : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List RightRotOp → ℕ
+def btbCountIntrablock (S m : ℕ) : _root_.BinaryTree ℕ → List RightRotOp → ℕ
   | _, [] => 0
   | T, .single pos :: rest =>
       btbCountIntrablock S m (execRightRotOpGen T (.single pos)) rest
@@ -1231,10 +1231,10 @@ def btbCountIntrablock (S m : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTr
       (if btbIsIntrablock S m (subtreeAtPosGen T pos) gaps then 1 else 0) +
         btbCountIntrablock S m (execRightRotOpGen T (.cascade pos gaps)) rest
 
-def btbIsTypeB (S : ℕ) (s : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (gaps : List ℕ) : Bool :=
+def btbIsTypeB (S : ℕ) (s : _root_.BinaryTree ℕ) (gaps : List ℕ) : Bool :=
   decide (btbCascadeBotKey s gaps / S < btbCascadeTopKey s / S) && !(allPairsInterblock S s gaps)
 
-def btbCountTypeB (S : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List RightRotOp → ℕ
+def btbCountTypeB (S : ℕ) : _root_.BinaryTree ℕ → List RightRotOp → ℕ
   | _, [] => 0
   | T, .single pos :: rest =>
       btbCountTypeB S (execRightRotOpGen T (.single pos)) rest
@@ -1242,20 +1242,20 @@ def btbCountTypeB (S : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ 
       (if btbIsTypeB S (subtreeAtPosGen T pos) gaps then 1 else 0) +
         btbCountTypeB S (execRightRotOpGen T (.cascade pos gaps)) rest
 
-def btbSubtreeOffset (a : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List Dir → ℕ
+def btbSubtreeOffset (a : ℕ) : _root_.BinaryTree ℕ → List Dir → ℕ
   | _, [] => a
-  | .empty, _ :: _ => a
-  | .node l _ _, .L :: rest => btbSubtreeOffset a l rest
-  | .node _ k r, .R :: rest => btbSubtreeOffset (k + 1) r rest
+  | .nil, _ :: _ => a
+  | .node _ l _, .L :: rest => btbSubtreeOffset a l rest
+  | .node k _ r, .R :: rest => btbSubtreeOffset (k + 1) r rest
 
-def btbProjectPos (lo hi : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List Dir → List Dir
+def btbProjectPos (lo hi : ℕ) : _root_.BinaryTree ℕ → List Dir → List Dir
   | _, [] => []
-  | .empty, _ :: _ => []
-  | .node l k _, .L :: rest =>
+  | .nil, _ :: _ => []
+  | .node k l _, .L :: rest =>
       if k < lo then []
       else if hi ≤ k then btbProjectPos lo hi l rest
       else .L :: btbProjectPos lo hi l rest
-  | .node _ k r, .R :: rest =>
+  | .node k _ r, .R :: rest =>
       if k < lo then btbProjectPos lo hi r rest
       else if hi ≤ k then []
       else .R :: btbProjectPos lo hi r rest
@@ -1265,16 +1265,16 @@ def btbCountDirL : List Dir → ℕ
   | .L :: rest => 1 + btbCountDirL rest
   | .R :: rest => btbCountDirL rest
 
-def btbSumTruncLD (ld cap : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → ℕ
-  | .empty => 0
-  | .node l _ r =>
+def btbSumTruncLD (ld cap : ℕ) : _root_.BinaryTree ℕ → ℕ
+  | .nil => 0
+  | .node _ l r =>
       min ld cap + btbSumTruncLD (ld + 1) cap l + btbSumTruncLD ld cap r
 
-def btbBlockPsi (D S m : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) : ℕ :=
+def btbBlockPsi (D S m : ℕ) (T : _root_.BinaryTree ℕ) : ℕ :=
   let bt := blockTree S m T
   leftSpineLen (eraseKeys bt) + btbSumTruncLD 0 D bt
 
-def btbTotalBlockPsi (D M S : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) : ℕ :=
+def btbTotalBlockPsi (D M S : ℕ) (T : _root_.BinaryTree ℕ) : ℕ :=
   (Finset.range M).sum (fun m => btbBlockPsi D S m T)
 structure PrimalJumpLaws (P : ℕ) (kops : List KeyedCoreOp) : Prop where
   pop_step_jumps : ∀ t (ht : t < kops.length) (s : ℕ),
@@ -1308,11 +1308,11 @@ structure PrimalJumpLaws (P : ℕ) (kops : List KeyedCoreOp) : Prop where
 
 structure ValidFoldedCoreLaws (P : ℕ) (kops : List KeyedCoreOp) : Prop where
   fold_bst_inorder : ∀ t ≤ kops.length,
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (foldBST P (keyedState kops t)).1 ∧
+    _root_.BinaryTree.IsBST (foldBST P (keyedState kops t)).1 ∧
       inorderNat (foldBST P (keyedState kops t)).1 = inorderNat (keyedState kops t)
   fold_cursor : ∀ t ≤ kops.length,
-    (keyedState kops t = .empty ∧ (foldBST P (keyedState kops t)).2 = P) ∨
-      (keyedState kops t ≠ .empty ∧
+    (keyedState kops t = .nil ∧ (foldBST P (keyedState kops t)).2 = P) ∨
+      (keyedState kops t ≠ .nil ∧
         (rightSpineTopDownNat (keyedState kops t)).head? =
           some (foldBST P (keyedState kops t)).2 ∧
         (leftSpineBottomUpNat (keyedState kops t)).getLast? =
@@ -1402,9 +1402,9 @@ structure ValidFoldedCoreLaws (P : ℕ) (kops : List KeyedCoreOp) : Prop where
   upperPrevWin_inj : ∀ id1 < (jumps kops).length, id1 ∉ MBaseSet kops →
     ∀ id2 < (jumps kops).length, id2 ∉ MBaseSet kops →
       upperPrevWin kops id1 = upperPrevWin kops id2 → id1 = id2
-def pgsdMaxSubtreeKey : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → ℕ → ℕ
-  | .empty, x => x
-  | .node l k r, x =>
+def pgsdMaxSubtreeKey : _root_.BinaryTree ℕ → ℕ → ℕ
+  | .nil, x => x
+  | .node k l r, x =>
       if x < k then pgsdMaxSubtreeKey l x
       else if x = k then k + r.num_nodes
       else pgsdMaxSubtreeKey r x
@@ -1412,12 +1412,12 @@ def pgsdMaxSubtreeKey : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → �
 def pgsdCountGlobalLt (isG : ℕ → Bool) (m : ℕ) : ℕ :=
   ((List.range m).filter isG).length
 
-def pgsdNonSplitting (p : ℕ → Bool) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → Prop
-  | .empty => True
-  | .node l k r =>
+def pgsdNonSplitting (p : ℕ → Bool) : _root_.BinaryTree ℕ → Prop
+  | .nil => True
+  | .node k l r =>
       pgsdNonSplitting p l ∧
       pgsdNonSplitting p r ∧
-      (extractGlobalTree p l ≠ .empty → extractGlobalTree p r ≠ .empty → p k = true)
+      (extractGlobalTree p l ≠ .nil → extractGlobalTree p r ≠ .nil → p k = true)
 def tocShiftDir (d : Dir) : RightRotOp → RightRotOp
   | .single pos => .single (d :: pos)
   | .cascade pos gaps => .cascade (d :: pos) gaps
@@ -1426,9 +1426,9 @@ def tocShiftLeft (d : ℕ) : RightRotOp → RightRotOp
   | .single pos => .single (List.replicate d Dir.L ++ pos)
   | .cascade pos gaps => .cascade (List.replicate d Dir.L ++ pos) gaps
 
-def tocAgreeAboveLeftDepth : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → Prop
+def tocAgreeAboveLeftDepth : ℕ → _root_.BinaryTree ℕ → _root_.BinaryTree ℕ → Prop
   | 0, _, _ => True
-  | m + 1, .node l1 k1 r1, .node l2 k2 r2 =>
+  | m + 1, .node k1 l1 r1, .node k2 l2 r2 =>
       k1 = k2 ∧ r1 = r2 ∧ tocAgreeAboveLeftDepth m l1 l2
   | _ + 1, _, _ => False
 
@@ -1462,13 +1462,13 @@ def tocCascadeAsSingles : List ℕ → List RightRotOp
 
 def tocSingleSeq (h_0 : ℕ) (idxs : List ℕ) : List RightRotOp :=
   idxs.map (fun idx => .single (List.replicate (h_0 - (idx + 2)) Dir.L))
-def pklPathInorder : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) → List ℕ
+def pklPathInorder : List (ℕ × _root_.BinaryTree ℕ) → List ℕ
   | [] => []
   | (k, r) :: rest => k :: (inorderNat r ++ pklPathInorder rest)
 
-def pklBuildBirthOps : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → ℕ → List CoreOp → List KeyedCoreOp
+def pklBuildBirthOps : _root_.BinaryTree ℕ → ℕ → List CoreOp → List KeyedCoreOp
   | _, _, [] => []
-  | T, b, .push :: rest => .push b :: pklBuildBirthOps (.node .empty b T) (b + 1) rest
+  | T, b, .push :: rest => .push b :: pklBuildBirthOps (.node b .nil T) (b + 1) rest
   | T, b, .pop :: rest =>
       let s := (leftSpineBottomUpNat T).headD 0
       .pop s :: pklBuildBirthOps (popNat T) b rest
@@ -1480,11 +1480,11 @@ def pklMapKeyedOp (f : ℕ → ℕ) : KeyedCoreOp → KeyedCoreOp
   | .pop s => .pop (f s)
   | .rslr d => .rslr d
 
-def pklValidTrace : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List KeyedCoreOp → Prop
-  | H, [] => H = .empty
-  | H, .push w :: rest => pklValidTrace (.node .empty w H) rest
+def pklValidTrace : _root_.BinaryTree ℕ → List KeyedCoreOp → Prop
+  | H, [] => H = .nil
+  | H, .push w :: rest => pklValidTrace (.node w .nil H) rest
   | H, .pop s :: rest =>
-      H ≠ .empty ∧ (leftSpineBottomUpNat H).head? = some s ∧ pklValidTrace (popNat H) rest
+      H ≠ .nil ∧ (leftSpineBottomUpNat H).head? = some s ∧ pklValidTrace (popNat H) rest
   | H, .rslr d :: rest =>
       d + 2 ≤ (rightSpineTopDownNat H).length ∧
         pklValidTrace (rotateLeftAtRightDepthNat H d) rest
@@ -1493,13 +1493,13 @@ def pklCountCoreRslr : List CoreOp → ℕ
   | [] => 0
   | .rslr _ :: rest => 1 + pklCountCoreRslr rest
   | _ :: rest => pklCountCoreRslr rest
-def puqPreEmbeddedState (P : ℕ) (kops : List KeyedCoreOp) (t : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ :=
+def puqPreEmbeddedState (P : ℕ) (kops : List KeyedCoreOp) (t : ℕ) : _root_.BinaryTree ℕ :=
   plugUnbornNat (birthStep kops) (popIdx kops t) P (foldBST P (keyedState kops t)).1
 
-def puqBlockQuotient (subs : List (ℕ × ℕ)) (c_lo c_hi : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ
-  | .empty => .empty
-  | .node l k r =>
-      if c_hi ≤ c_lo then .empty
+def puqBlockQuotient (subs : List (ℕ × ℕ)) (c_lo c_hi : ℕ) : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ
+  | .nil => .nil
+  | .node k l r =>
+      if c_hi ≤ c_lo then .nil
       else
         let lo_bound := (subs.getD c_lo (0, 0)).1
         let hi_bound := (subs.getD (c_hi - 1) (0, 0)).2
@@ -1507,17 +1507,17 @@ def puqBlockQuotient (subs : List (ℕ × ℕ)) (c_lo c_hi : ℕ) : _root_.Splay
         else if hi_bound ≤ k then puqBlockQuotient subs c_lo c_hi l
         else
           let c := subs.findIdx (fun b => decide (b.1 ≤ k ∧ k < b.2))
-          .node (puqBlockQuotient subs c_lo c l) c (puqBlockQuotient subs (c + 1) c_hi r)
+          .node c (puqBlockQuotient subs c_lo c l) (puqBlockQuotient subs (c + 1) c_hi r)
 
 def puqConcretePkg (S : ℕ → ℕ) (P L : ℕ) (kops : List KeyedCoreOp) (ℓ Xi : ℕ) :
     BlockQuotientData :=
   let X := (scaleBlocks S P (ℓ - 1)).getD Xi (0, 0)
   let subs := splitBlock (S ℓ) X.1 X.2
   let KX := subs.length
-  let gInit : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ := fun p =>
+  let gInit : ℕ → _root_.BinaryTree ℕ := fun p =>
     let sp := subs.getD p (0, 0)
     puqBlockQuotient subs (p + 1) KX (puqPreEmbeddedState P kops (popStep kops sp.1))
-  let gEnd : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ := fun p =>
+  let gEnd : ℕ → _root_.BinaryTree ℕ := fun p =>
     let sp := subs.getD p (0, 0)
     puqBlockQuotient subs (p + 1) KX (puqPreEmbeddedState P kops (tEmpty kops sp.1 sp.2))
   let fIdx : ℕ → List ℕ := fun p =>
@@ -1610,7 +1610,7 @@ def PuqIsSubblockPart (subs : List (ℕ × ℕ)) : Prop :=
 def PuqPlugUnbornLaws (P : ℕ) (kops : List KeyedCoreOp) : Prop :=
   (∀ t ≤ kops.length,
     popIdx kops t ≤ P ∧
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (puqPreEmbeddedState P kops t) ∧
+      _root_.BinaryTree.IsBST (puqPreEmbeddedState P kops t) ∧
       inorderNat (puqPreEmbeddedState P kops t) = List.Ico (popIdx kops t) P) ∧
   (∀ t1 t2, t1 ≤ t2 → popIdx kops t1 ≤ popIdx kops t2) ∧
   (∀ t ≤ kops.length, ∀ v ∈ inorderNat (keyedState kops t),
@@ -1643,14 +1643,14 @@ def PuqPlugUnbornLaws (P : ℕ) (kops : List KeyedCoreOp) : Prop :=
       s = popIdx kops t ∧
         leftSpineBottomUpNat (puqPreEmbeddedState P kops t) =
           leftSpineBottomUpNat (foldBST P (keyedState kops t)).1 ∧
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (spliceMinNat (puqPreEmbeddedState P kops t)) ∧
+        _root_.BinaryTree.IsBST (spliceMinNat (puqPreEmbeddedState P kops t)) ∧
         puqPreEmbeddedState P kops (t + 1) =
           js.foldl (fun T e => rotateRightOnLeftSpine e.x T)
             (spliceMinNat (puqPreEmbeddedState P kops t)) ∧
         ∀ j (hj : j < js.length),
           let Tj := (js.take j).foldl (fun T e => rotateRightOnLeftSpine e.x T)
             (spliceMinNat (puqPreEmbeddedState P kops t))
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST Tj ∧
+          _root_.BinaryTree.IsBST Tj ∧
             ∃ pre suf, leftSpineBottomUpNat Tj = pre ++ (js[j]'hj).x :: (js[j]'hj).y :: suf) ∧
   (∀ t (ht : t < kops.length) (s : ℕ),
     kops[t]'ht = .pop s →
@@ -1682,28 +1682,28 @@ def PuqPlugUnbornLaws (P : ℕ) (kops : List KeyedCoreOp) : Prop :=
 def PuqBlockQuotientLaws : Prop :=
   (∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
     ∀ c_lo c_hi, c_lo ≤ c_hi → c_hi ≤ subs.length →
-    ∀ T, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (puqBlockQuotient subs c_lo c_hi T)) ∧
+    ∀ T, _root_.BinaryTree.IsBST T → _root_.BinaryTree.IsBST (puqBlockQuotient subs c_lo c_hi T)) ∧
   (∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
     ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-    ∀ T loT hiT, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+    ∀ T loT hiT, _root_.BinaryTree.IsBST T →
       inorderNat T = List.Ico loT hiT →
       loT ≤ (subs.getD c_lo (0, 0)).1 →
       (subs.getD (c_hi - 1) (0, 0)).2 ≤ hiT →
       inorderNat (puqBlockQuotient subs c_lo c_hi T) = List.Ico c_lo c_hi) ∧
   (∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
     ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-    ∀ T, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+    ∀ T, _root_.BinaryTree.IsBST T →
       puqBlockQuotient subs c_lo c_hi T =
         puqBlockQuotient subs c_lo c_hi
           (restrictRangeNat (subs.getD c_lo (0, 0)).1 (subs.getD (c_hi - 1) (0, 0)).2 T)) ∧
   (∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
     ∀ c_lo c_lo' c_hi, c_lo ≤ c_lo' → c_lo' ≤ c_hi → c_hi ≤ subs.length →
-    ∀ T, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+    ∀ T, _root_.BinaryTree.IsBST T →
       restrictRangeNat c_lo' c_hi (puqBlockQuotient subs c_lo c_hi T) =
         puqBlockQuotient subs c_lo' c_hi T) ∧
   (∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
     ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-    ∀ T, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+    ∀ T, _root_.BinaryTree.IsBST T →
       let lo_b := (subs.getD c_lo (0, 0)).1
       let hi_b := (subs.getD (c_hi - 1) (0, 0)).2
       let T' := restrictRangeNat lo_b hi_b T
@@ -1711,20 +1711,20 @@ def PuqBlockQuotientLaws : Prop :=
         c_lo ≤ c ∧ c < c_hi ∧
           ∃ r ∈ leftSpineBottomUpNat T',
             (subs.getD c (0, 0)).1 ≤ r ∧ r < (subs.getD c (0, 0)).2)) ∧
-  (∀ lo_b hi_b (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+  (∀ lo_b hi_b (T : _root_.BinaryTree ℕ), _root_.BinaryTree.IsBST T →
     ∀ x0 ∈ leftSpineBottomUpNat T, lo_b ≤ x0 →
       ∀ r, x0 ≤ r → r < hi_b →
         (r ∈ leftSpineBottomUpNat (restrictRangeNat lo_b hi_b T) ↔
           r ∈ leftSpineBottomUpNat T)) ∧
   (∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
     ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-    ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (s : ℕ), _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+    ∀ (T : _root_.BinaryTree ℕ) (s : ℕ), _root_.BinaryTree.IsBST T →
       (inorderNat T).head? = some s →
       s < (subs.getD c_lo (0, 0)).1 →
       puqBlockQuotient subs c_lo c_hi (spliceMinNat T) = puqBlockQuotient subs c_lo c_hi T) ∧
   (∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
     ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-    ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (u : ℕ), _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+    ∀ (T : _root_.BinaryTree ℕ) (u : ℕ), _root_.BinaryTree.IsBST T →
       let G := puqBlockQuotient subs c_lo c_hi T
       let G' := puqBlockQuotient subs c_lo c_hi (rotateRightOnLeftSpine u T)
       let lo_b := (subs.getD c_lo (0, 0)).1
@@ -1734,36 +1734,36 @@ def PuqBlockQuotientLaws : Prop :=
           G' = rotateRightOnLeftSpine (subs.findIdx (fun b => decide (b.1 ≤ u ∧ u < b.2))) G)) ∧
   (∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
     ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-    ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (u v c : ℕ), _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+    ∀ (T : _root_.BinaryTree ℕ) (u v c : ℕ), _root_.BinaryTree.IsBST T →
       (∃ pre suf, leftSpineBottomUpNat T = pre ++ u :: v :: suf) →
       c ∈ leftSpineBottomUpNat (puqBlockQuotient subs c_lo c_hi T) →
       c ∉ leftSpineBottomUpNat (puqBlockQuotient subs c_lo c_hi (rotateRightOnLeftSpine u T)) →
       (subs.getD c_lo (0, 0)).1 ≤ u ∧ u < v ∧ v < (subs.getD (c_hi - 1) (0, 0)).2 ∧
         subs.findIdx (fun b => decide (b.1 ≤ u ∧ u < b.2)) < c ∧
         subs.findIdx (fun b => decide (b.1 ≤ v ∧ v < b.2)) = c) ∧
-  (∀ (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a b u : ℕ),
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G → inorderNat G = List.Ico a b →
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (rotateRightOnLeftSpine u G) ∧
+  (∀ (G : _root_.BinaryTree ℕ) (a b u : ℕ),
+    _root_.BinaryTree.IsBST G → inorderNat G = List.Ico a b →
+      _root_.BinaryTree.IsBST (rotateRightOnLeftSpine u G) ∧
         inorderNat (rotateRightOnLeftSpine u G) = List.Ico a b ∧
         (∀ c ∈ leftSpineBottomUpNat (rotateRightOnLeftSpine u G),
           c ∈ leftSpineBottomUpNat G) ∧
         (∀ c, a ≤ c → c < b →
           subtreeMaxNat G c ≤ subtreeMaxNat (rotateRightOnLeftSpine u G) c)) ∧
-  (∀ (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G →
+  (∀ (G : _root_.BinaryTree ℕ), _root_.BinaryTree.IsBST G →
     List.Pairwise (· < ·) (leftSpineBottomUpNat G) ∧
       ∀ u ∈ leftSpineBottomUpNat G, u ∈ inorderNat G) ∧
-  (∀ (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a b : ℕ),
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G → inorderNat G = List.Ico a b →
+  (∀ (G : _root_.BinaryTree ℕ) (a b : ℕ),
+    _root_.BinaryTree.IsBST G → inorderNat G = List.Ico a b →
       (∀ c, a ≤ c → c < b → c ≤ subtreeMaxNat G c ∧ subtreeMaxNat G c < b) ∧
         (∀ u ∈ leftSpineBottomUpNat G, ∀ v ∈ leftSpineBottomUpNat G,
           u < v → subtreeMaxNat G u < v)) ∧
-  (∀ (B : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (P_top x u : ℕ),
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST B → x ∈ inorderNat B → u ∈ leftSpineBottomUpNat B → x < u →
+  (∀ (B : _root_.BinaryTree ℕ) (P_top x u : ℕ),
+    _root_.BinaryTree.IsBST B → x ∈ inorderNat B → u ∈ leftSpineBottomUpNat B → x < u →
       lcrsParent P_top B x ≤ u) ∧
   (∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
     ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-    ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (loT hiT P_top c_y c_w : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+    ∀ (T : _root_.BinaryTree ℕ) (loT hiT P_top c_y c_w : ℕ),
+      _root_.BinaryTree.IsBST T →
       inorderNat T = List.Ico loT hiT →
       loT ≤ (subs.getD c_lo (0, 0)).1 →
       (subs.getD (c_hi - 1) (0, 0)).2 ≤ hiT →
@@ -1774,8 +1774,8 @@ def PuqBlockQuotientLaws : Prop :=
       subtreeMaxNat (puqBlockQuotient subs c_lo c_hi T) c_y < c_w) ∧
   (∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
     ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-    ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (loT hiT P_top c_a c_w : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+    ∀ (T : _root_.BinaryTree ℕ) (loT hiT P_top c_a c_w : ℕ),
+      _root_.BinaryTree.IsBST T →
       inorderNat T = List.Ico loT hiT →
       loT ≤ (subs.getD c_lo (0, 0)).1 →
       (subs.getD (c_hi - 1) (0, 0)).2 ≤ hiT →
@@ -1793,27 +1793,27 @@ def psspContig (B lo hi : ℕ) (bs : List (ℕ × ℕ)) : Prop :=
     lo ≤ sc.1 ∧ sc.1 < sc.2 ∧ sc.2 ≤ hi ∧ B ≤ sc.2 - sc.1 ∧ sc.2 - sc.1 < 2 * B) ∧
   (∀ c, c + 1 < bs.length → (bs.getD c (0, 0)).2 = (bs.getD (c + 1) (0, 0)).1)
 
-def psspHasKeyIn (lo hi : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → Bool
-  | .empty => false
-  | .node l k r =>
+def psspHasKeyIn (lo hi : ℕ) : _root_.BinaryTree ℕ → Bool
+  | .nil => false
+  | .node k l r =>
       decide (lo ≤ k ∧ k < hi) || psspHasKeyIn lo hi l || psspHasKeyIn lo hi r
 
-def psspHasAncDesc (lo_p hi_p lo_q hi_q : ℕ) : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → Bool
-  | .empty => false
-  | .node l k r =>
+def psspHasAncDesc (lo_p hi_p lo_q hi_q : ℕ) : _root_.BinaryTree ℕ → Bool
+  | .nil => false
+  | .node k l r =>
       (decide (lo_q ≤ k ∧ k < hi_q) &&
         (psspHasKeyIn lo_p hi_p l || psspHasKeyIn lo_p hi_p r)) ||
       psspHasAncDesc lo_p hi_p lo_q hi_q l ||
       psspHasAncDesc lo_p hi_p lo_q hi_q r
 
-def psspProjPath (hi : ℕ) : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) → List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)
+def psspProjPath (hi : ℕ) : List (ℕ × _root_.BinaryTree ℕ) → List (ℕ × _root_.BinaryTree ℕ)
   | [] => []
   | (k, r) :: rest =>
       if k < hi then (k, restrictRangeNat 0 hi r) :: psspProjPath hi rest
       else []
-def fdmRightSpineFrames : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)
-  | k, .empty => [(k, .empty)]
-  | k, .node l2 k2 r2 => (k, l2) :: fdmRightSpineFrames k2 r2
+def fdmRightSpineFrames : ℕ → _root_.BinaryTree ℕ → List (ℕ × _root_.BinaryTree ℕ)
+  | k, .nil => [(k, .nil)]
+  | k, .node k2 l2 r2 => (k, l2) :: fdmRightSpineFrames k2 r2
 
 
 -- === BEGIN SolPart2 ===
@@ -1831,7 +1831,7 @@ by
       ∀ (n m : ℕ) (init : BST ℤ) (ops : Fin m → DequeOp ℤ),
         init.tree.num_nodes = n →
         ValidDequeSeq init.tree ops →
-        ∃ (C0 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate) (cops : List TwCDequeOp),
+        ∃ (C0 : _root_.BinaryTree TwFate) (cops : List TwCDequeOp),
           C0.num_nodes = n ∧
           cops.length = m ∧
           TwValidCDequeSeq C0 cops ∧
@@ -1839,14 +1839,14 @@ by
             ((twUDequeSeqCost (twEraseTree C0) (cops.map twEraseCDequeOp) : ℕ) : ℝ) := by
     clear n m init ops hn hvalid
     intro n m init ops hn hvalid
-    have h_forall_mono : ∀ {α : Type} {p q : α → Prop} {t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α},
+    have h_forall_mono : ∀ {α : Type} {p q : α → Prop} {t : _root_.BinaryTree α},
         (∀ x, p x → q x) → ForallTree p t → ForallTree q t := by
       intro α p q t hpq ht
       induction ht with
       | left => exact .left
       | node l k r _ hk _ ihl ihr => exact .node l k r ihl (hpq k hk) ihr
 
-    have h_forall_and : ∀ {α : Type} {p q : α → Prop} {t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α},
+    have h_forall_and : ∀ {α : Type} {p q : α → Prop} {t : _root_.BinaryTree α},
         ForallTree p t → ForallTree q t → ForallTree (fun x => p x ∧ q x) t := by
       intro α p q t hp hq
       induction hp with
@@ -1856,7 +1856,7 @@ by
         | node _ _ _ hql hqk hqr =>
           exact .node l k r (ihl hql) ⟨hpk, hqk⟩ (ihr hqr)
 
-    have h_mem_forall : ∀ {α : Type} (p : α → Prop) {t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α} {x : α},
+    have h_mem_forall : ∀ {α : Type} (p : α → Prop) {t : _root_.BinaryTree α} {x : α},
         ForallTree p t → twTreeMem x t → p x := by
       intro α p t x hfor hmem
       induction hfor with
@@ -1867,60 +1867,60 @@ by
         · exact ihl hmem
         · exact ihr hmem
 
-    have h_map_nodes : ∀ {α β : Type} (f : α → β) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_map_nodes : ∀ {α β : Type} (f : α → β) (t : _root_.BinaryTree α),
         (twMapTree f t).num_nodes = t.num_nodes := by
       intro α β f t
       induction t with
-      | empty => rfl
-      | node l k r ihl ihr => simp [twMapTree, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, ihl, ihr]
+      | nil => rfl
+      | node k l r ihl ihr => simp [twMapTree, _root_.BinaryTree.num_nodes, ihl, ihr]
 
-    have h_map_map : ∀ {α β γ : Type} (g : β → γ) (f : α → β) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_map_map : ∀ {α β γ : Type} (g : β → γ) (f : α → β) (t : _root_.BinaryTree α),
         twMapTree g (twMapTree f t) = twMapTree (fun x => g (f x)) t := by
       intro α β γ g f t
       induction t with
-      | empty => rfl
-      | node l k r ihl ihr => simp [twMapTree, ihl, ihr]
+      | nil => rfl
+      | node k l r ihl ihr => simp [twMapTree, ihl, ihr]
 
-    have h_map_id : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α), twMapTree (fun x => x) t = t := by
+    have h_map_id : ∀ {α : Type} (t : _root_.BinaryTree α), twMapTree (fun x => x) t = t := by
       intro α t
       induction t with
-      | empty => rfl
-      | node l k r ihl ihr => simp [twMapTree, ihl, ihr]
+      | nil => rfl
+      | node k l r ihl ihr => simp [twMapTree, ihl, ihr]
 
-    have h_map_congr : ∀ {α β : Type} {f g : α → β} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_map_congr : ∀ {α β : Type} {f g : α → β} (t : _root_.BinaryTree α),
         (∀ x, f x = g x) → twMapTree f t = twMapTree g t := by
       intro α β f g t hfg
       induction t with
-      | empty => rfl
-      | node l k r ihl ihr => simp [twMapTree, hfg k, ihl, ihr]
+      | nil => rfl
+      | node k l r ihl ihr => simp [twMapTree, hfg k, ihl, ihr]
 
-    have h_erase_map : ∀ {α β : Type} (f : α → β) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_erase_map : ∀ {α β : Type} (f : α → β) (t : _root_.BinaryTree α),
         twEraseTree (twMapTree f t) = twEraseTree t := by
       intro α β f t
       unfold twEraseTree
       rw [h_map_map]
 
-    have h_mirror_mirror : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_mirror_mirror : ∀ {α : Type} (t : _root_.BinaryTree α),
         twMirrorTree (twMirrorTree t) = t := by
       intro α t
       induction t with
-      | empty => rfl
-      | node l k r ihl ihr => simp [twMirrorTree, ihl, ihr]
+      | nil => rfl
+      | node k l r ihl ihr => simp [twMirrorTree, ihl, ihr]
 
-    have h_map_mirror : ∀ {α β : Type} (f : α → β) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_map_mirror : ∀ {α β : Type} (f : α → β) (t : _root_.BinaryTree α),
         twMapTree f (twMirrorTree t) = twMirrorTree (twMapTree f t) := by
       intro α β f t
       induction t with
-      | empty => rfl
-      | node l k r ihl ihr => simp [twMapTree, twMirrorTree, ihl, ihr]
+      | nil => rfl
+      | node k l r ihl ihr => simp [twMapTree, twMirrorTree, ihl, ihr]
 
-    have h_forall_map : ∀ {α β : Type} (f : α → β) (p : β → Prop) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_forall_map : ∀ {α β : Type} (f : α → β) (p : β → Prop) (t : _root_.BinaryTree α),
         ForallTree p (twMapTree f t) ↔ ForallTree (fun x => p (f x)) t := by
       intro α β f p t
       induction t with
-      | empty =>
+      | nil =>
         constructor <;> intro _ <;> exact .left
-      | node l k r ihl ihr =>
+      | node k l r ihl ihr =>
         constructor
         · intro h
           cases h with
@@ -1931,13 +1931,13 @@ by
           | node _ _ _ hl hk hr =>
             exact .node _ _ _ (ihl.mpr hl) hk (ihr.mpr hr)
 
-    have h_forall_mirror : ∀ {α : Type} (p : α → Prop) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_forall_mirror : ∀ {α : Type} (p : α → Prop) (t : _root_.BinaryTree α),
         ForallTree p (twMirrorTree t) ↔ ForallTree p t := by
       intro α p t
       induction t with
-      | empty =>
+      | nil =>
         constructor <;> intro _ <;> exact .left
-      | node l k r ihl ihr =>
+      | node k l r ihl ihr =>
         constructor
         · intro h
           cases h with
@@ -1948,29 +1948,29 @@ by
           | node _ _ _ hl hk hr =>
             exact .node _ _ _ (ihr.mpr hr) hk (ihl.mpr hl)
 
-    have h_lsl_mirror : ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+    have h_lsl_mirror : ∀ (u : _root_.BinaryTree Unit),
         leftSpineLen (twMirrorTree u) = rightSpineLen u := by
       intro u
       induction u with
-      | empty => rfl
-      | node l _ r _ ihr => simp [twMirrorTree, leftSpineLen, rightSpineLen, ihr]
+      | nil => rfl
+      | node _ l r _ ihr => simp [twMirrorTree, leftSpineLen, rightSpineLen, ihr]
 
-    have h_descPoly_map : ∀ {α β : Type} (f : α → β) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)
-        (acc : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_descPoly_map : ∀ {α β : Type} (f : α → β) (t : _root_.BinaryTree α)
+        (acc : List (α × _root_.BinaryTree α)),
         twDescendLeftPoly (twMapTree f t) (acc.map (fun p => (f p.1, twMapTree f p.2))) =
           (twMapTree f (twDescendLeftPoly t acc).1,
            (twDescendLeftPoly t acc).2.map (fun p => (f p.1, twMapTree f p.2))) := by
       intro α β f t
       induction t with
-      | empty => intro acc; simp [twDescendLeftPoly, twMapTree]
-      | node l k r ihl _ =>
+      | nil => intro acc; simp [twDescendLeftPoly, twMapTree]
+      | node k l r ihl _ =>
         intro acc
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · simp [twDescendLeftPoly, twMapTree]
         · simpa [twMapTree, twDescendLeftPoly] using ihl ((k, r) :: acc)
 
-    have h_splayPoly_map : ∀ {α β : Type} (f : α → β) (n : ℕ) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)
-        (path : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_splayPoly_map : ∀ {α β : Type} (f : α → β) (n : ℕ) (c : _root_.BinaryTree α)
+        (path : List (α × _root_.BinaryTree α)),
         path.length ≤ n →
         twMapTree f (twSplayLeftSpinePoly c path) =
           twSplayLeftSpinePoly (twMapTree f c) (path.map (fun p => (f p.1, twMapTree f p.2))) := by
@@ -1987,9 +1987,9 @@ by
         · rfl
         · rfl
         · have hrest : rest.length ≤ n := by simp at hlen; omega
-          simpa [twSplayLeftSpinePoly, twMapTree] using ih (.node c k1 (.node s1 k2 s2)) rest hrest
+          simpa [twSplayLeftSpinePoly, twMapTree] using ih (.node k1 c (.node k2 s1 s2)) rest hrest
 
-    have h_popPoly_map : ∀ {α β : Type} (f : α → β) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_popPoly_map : ∀ {α β : Type} (f : α → β) (t : _root_.BinaryTree α),
         twMapTree f (twPopPoly t) = twPopPoly (twMapTree f t) := by
       intro α β f t
       unfold twPopPoly
@@ -1997,27 +1997,27 @@ by
       simp only [List.map_nil] at hd
       rw [hd, h_splayPoly_map f (twDescendLeftPoly t []).2.length _ _ le_rfl]
 
-    have h_ejectPoly_map : ∀ {α β : Type} (f : α → β) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_ejectPoly_map : ∀ {α β : Type} (f : α → β) (t : _root_.BinaryTree α),
         twMapTree f (twEjectPoly t) = twEjectPoly (twMapTree f t) := by
       intro α β f t
       unfold twEjectPoly
       rw [h_map_mirror, h_popPoly_map, h_map_mirror]
 
-    have h_descPoly_erase : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (acc : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_descPoly_erase : ∀ {α : Type} (t : _root_.BinaryTree α) (acc : List (α × _root_.BinaryTree α)),
         descendLeft (twEraseTree t) (acc.map (fun p => twEraseTree p.2)) =
           (twEraseTree (twDescendLeftPoly t acc).1,
            (twDescendLeftPoly t acc).2.map (fun p => twEraseTree p.2)) := by
       intro α t
       induction t with
-      | empty => intro acc; simp [descendLeft, twDescendLeftPoly, twEraseTree, twMapTree]
-      | node l k r ihl _ =>
+      | nil => intro acc; simp [descendLeft, twDescendLeftPoly, twEraseTree, twMapTree]
+      | node k l r ihl _ =>
         intro acc
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · simp [descendLeft, twDescendLeftPoly, twEraseTree, twMapTree]
         · simpa [twEraseTree, twMapTree, descendLeft, twDescendLeftPoly] using ihl ((k, r) :: acc)
 
-    have h_splayPoly_erase : ∀ {α : Type} (n : ℕ) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)
-        (path : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_splayPoly_erase : ∀ {α : Type} (n : ℕ) (c : _root_.BinaryTree α)
+        (path : List (α × _root_.BinaryTree α)),
         path.length ≤ n →
         twEraseTree (twSplayLeftSpinePoly c path) =
           splayLeftSpine (twEraseTree c) (path.map (fun p => twEraseTree p.2)) := by
@@ -2035,9 +2035,9 @@ by
         · rfl
         · have hrest : rest.length ≤ n := by simp at hlen; omega
           simpa [twSplayLeftSpinePoly, splayLeftSpine, twEraseTree, twMapTree] using
-            ih (.node c k1 (.node s1 k2 s2)) rest hrest
+            ih (.node k1 c (.node k2 s1 s2)) rest hrest
 
-    have h_popPoly_erase : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_popPoly_erase : ∀ {α : Type} (t : _root_.BinaryTree α),
         twEraseTree (twPopPoly t) = popUnlabeled (twEraseTree t) := by
       intro α t
       unfold twPopPoly popUnlabeled
@@ -2045,7 +2045,7 @@ by
       simp only [List.map_nil] at hd
       rw [hd, h_splayPoly_erase (twDescendLeftPoly t []).2.length _ _ le_rfl]
 
-    have h_ejectPoly_erase : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_ejectPoly_erase : ∀ {α : Type} (t : _root_.BinaryTree α),
         twEraseTree (twEjectPoly t) = twMirrorTree (popUnlabeled (twMirrorTree (twEraseTree t))) := by
       intro α t
       have h1 : twEraseTree (twEjectPoly t) = twMirrorTree (twEraseTree (twPopPoly (twMirrorTree t))) := by
@@ -2056,37 +2056,37 @@ by
         exact (h_map_mirror (fun _ => ()) t).symm
       rw [h1, h_popPoly_erase, h2]
 
-    have h_descPoly_len : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (acc : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
-        t ≠ .empty →
+    have h_descPoly_len : ∀ {α : Type} (t : _root_.BinaryTree α) (acc : List (α × _root_.BinaryTree α)),
+        t ≠ .nil →
         (twDescendLeftPoly t acc).2.length + 1 = leftSpineLen (twEraseTree t) + acc.length := by
       intro α t
       induction t with
-      | empty => intro _ h; exact absurd rfl h
-      | node l k r ihl _ =>
+      | nil => intro _ h; exact absurd rfl h
+      | node k l r ihl _ =>
         intro acc _
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · simp [twDescendLeftPoly, twEraseTree, twMapTree, leftSpineLen]
           omega
         · have h1 := ihl ((k, r) :: acc) (by simp)
           simp only [twDescendLeftPoly, List.length_cons, twEraseTree, twMapTree, leftSpineLen] at h1 ⊢
           omega
 
-    have h_minKey_none : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α), t.minKey? = none ↔ t = .empty := by
+    have h_minKey_none : ∀ {α : Type} (t : _root_.BinaryTree α), t.minKey? = none ↔ t = .nil := by
       intro α t
       cases t with
-      | empty => simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.minKey?]
-      | node l k r =>
-        simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.minKey?, reduceCtorEq, iff_false]
+      | nil => simp [_root_.BinaryTree.minKey?]
+      | node k l r =>
+        simp only [_root_.BinaryTree.minKey?, reduceCtorEq, iff_false]
         cases l.minKey? <;> simp
 
-    have h_minKey_mem : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (k : α),
+    have h_minKey_mem : ∀ {α : Type} (t : _root_.BinaryTree α) (k : α),
         t.minKey? = some k → twTreeMem k t := by
       intro α t
       induction t with
-      | empty => intro k h; simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.minKey?] at h
-      | node l key r ihl _ =>
+      | nil => intro k h; simp [_root_.BinaryTree.minKey?] at h
+      | node key l r ihl _ =>
         intro k h
-        simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.minKey?] at h
+        simp only [_root_.BinaryTree.minKey?] at h
         cases hl : l.minKey? with
         | none =>
           rw [hl] at h
@@ -2098,22 +2098,22 @@ by
           subst hEq
           exact Or.inr (Or.inl (ihl m hl))
 
-    have h_minKey_le : ∀ {α : Type} [LinearOrder α] (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (k : α),
+    have h_minKey_le : ∀ {α : Type} [LinearOrder α] (t : _root_.BinaryTree α) (k : α),
         IsBST t → t.minKey? = some k → ForallTree (fun x => k ≤ x) t := by
       intro α _ t k hbst
-      induction hbst with
-      | left => intro h; simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.minKey?] at h
+      induction hbst using isBSTRec with
+      | left => intro h; simp [_root_.BinaryTree.minKey?] at h
       | node key l r hl_lt hr_gt hl_bst _ ihl _ =>
         intro h
-        simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.minKey?] at h
+        simp only [_root_.BinaryTree.minKey?] at h
         cases hl : l.minKey? with
         | none =>
           rw [hl] at h
           injection h with hEq
           subst hEq
-          have hl_empty : l = .empty := (h_minKey_none l).mp hl
+          have hl_empty : l = .nil := (h_minKey_none l).mp hl
           subst hl_empty
-          exact .node .empty key r .left le_rfl (h_forall_mono (fun _ hx => le_of_lt hx) hr_gt)
+          exact .node .nil key r .left le_rfl (h_forall_mono (fun _ hx => le_of_lt hx) hr_gt)
         | some m =>
           rw [hl] at h
           injection h with hEq
@@ -2123,26 +2123,26 @@ by
           exact .node l key r (ihl hl) (le_of_lt hm_lt_key)
             (h_forall_mono (fun _ hx => le_of_lt (lt_trans hm_lt_key hx)) hr_gt)
 
-    have h_minKey_node : ∀ {α : Type} (l : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (k : α) (r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
-        (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node l k r).minKey? = match l.minKey? with | none => some k | some m => some m :=
+    have h_minKey_node : ∀ {α : Type} (l : _root_.BinaryTree α) (k : α) (r : _root_.BinaryTree α),
+        (_root_.BinaryTree.node k l r).minKey? = match l.minKey? with | none => some k | some m => some m :=
       fun _ _ _ => rfl
 
-    have h_descPoly_attach : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (k : α) (acc : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_descPoly_attach : ∀ {α : Type} (t : _root_.BinaryTree α) (k : α) (acc : List (α × _root_.BinaryTree α)),
         t.minKey? = some k →
-        twAttachPoly (.node .empty k (twDescendLeftPoly t acc).1) (twDescendLeftPoly t acc).2 =
+        twAttachPoly (.node k .nil (twDescendLeftPoly t acc).1) (twDescendLeftPoly t acc).2 =
           twAttachPoly t acc := by
       intro α t
       induction t with
-      | empty => intro k _ h; simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.minKey?] at h
-      | node l key r ihl _ =>
+      | nil => intro k _ h; simp [_root_.BinaryTree.minKey?] at h
+      | node key l r ihl _ =>
         intro k acc h
-        rcases l with _ | ⟨ll, lk, lr⟩
-        · simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.minKey?] at h
+        rcases l with _ | ⟨lk, ll, lr⟩
+        · simp only [_root_.BinaryTree.minKey?] at h
           injection h with hEq
           subst hEq
           simp [twDescendLeftPoly]
-        · have hl_ne : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node ll lk lr ≠ .empty := by simp
-          cases hl : (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node ll lk lr).minKey? with
+        · have hl_ne : _root_.BinaryTree.node lk ll lr ≠ .nil := by simp
+          cases hl : (_root_.BinaryTree.node lk ll lr).minKey? with
           | none => exact absurd ((h_minKey_none _).mp hl) hl_ne
           | some m =>
             rw [h_minKey_node, hl] at h
@@ -2150,8 +2150,8 @@ by
             subst hEq
             simpa [twDescendLeftPoly, twAttachPoly] using ihl m ((key, r) :: acc) hl
 
-    have h_forall_attach : ∀ {α : Type} (p : α → Prop) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)
-        (path : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_forall_attach : ∀ {α : Type} (p : α → Prop) (c : _root_.BinaryTree α)
+        (path : List (α × _root_.BinaryTree α)),
         ForallTree p (twAttachPoly c path) ↔
           ForallTree p c ∧ ∀ pair ∈ path, p pair.1 ∧ ForallTree p pair.2 := by
       intro α p c path
@@ -2167,8 +2167,8 @@ by
         · rintro ⟨hc, ⟨hk, hs⟩, hrest⟩
           exact ⟨.node c k s hc hk hs, hrest⟩
 
-    have h_forall_splayPoly : ∀ {α : Type} (n : ℕ) (p : α → Prop) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)
-        (path : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_forall_splayPoly : ∀ {α : Type} (n : ℕ) (p : α → Prop) (c : _root_.BinaryTree α)
+        (path : List (α × _root_.BinaryTree α)),
         path.length ≤ n →
         (ForallTree p (twSplayLeftSpinePoly c path) ↔ ForallTree p (twAttachPoly c path)) := by
       intro α n
@@ -2185,7 +2185,7 @@ by
         · rfl
         · have hrest : rest.length ≤ n := by simp at hlen; omega
           simp only [twSplayLeftSpinePoly, twAttachPoly]
-          rw [ih p (.node c k1 (.node s1 k2 s2)) rest hrest]
+          rw [ih p (.node k1 c (.node k2 s1 s2)) rest hrest]
           rw [h_forall_attach, h_forall_attach]
           constructor
           · rintro ⟨h1, hrest_p⟩
@@ -2193,28 +2193,28 @@ by
             | node _ _ _ hc hk1 hs12 =>
               cases hs12 with
               | node _ _ _ hs1 hk2 hs2 =>
-                exact ⟨.node (.node c k1 s1) k2 s2 (.node c k1 s1 hc hk1 hs1) hk2 hs2, hrest_p⟩
+                exact ⟨.node (.node k1 c s1) k2 s2 (.node c k1 s1 hc hk1 hs1) hk2 hs2, hrest_p⟩
           · rintro ⟨h1, hrest_p⟩
             cases h1 with
             | node _ _ _ hcs1 hk2 hs2 =>
               cases hcs1 with
               | node _ _ _ hc hk1 hs1 =>
-                exact ⟨.node c k1 (.node s1 k2 s2) hc hk1 (.node s1 k2 s2 hs1 hk2 hs2), hrest_p⟩
+                exact ⟨.node c k1 (.node k2 s1 s2) hc hk1 (.node s1 k2 s2 hs1 hk2 hs2), hrest_p⟩
 
-    have h_bst_attach_head : ∀ {α : Type} [LinearOrder α] (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)
-        (path : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_bst_attach_head : ∀ {α : Type} [LinearOrder α] (c : _root_.BinaryTree α)
+        (path : List (α × _root_.BinaryTree α)),
         IsBST (twAttachPoly c path) → IsBST c := by
       intro α _ c path
       induction path generalizing c with
       | nil => exact id
       | cons hd rest ih =>
         intro h
-        have hnode := ih (.node c hd.1 hd.2) h
-        cases hnode with
+        have hnode := ih (.node hd.1 c hd.2) h
+        cases hnode using isBSTCases with
         | node _ _ _ _ _ hc _ => exact hc
 
-    have h_bst_attach_gt : ∀ {α : Type} [LinearOrder α] (x : α) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)
-        (path : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_bst_attach_gt : ∀ {α : Type} [LinearOrder α] (x : α) (c : _root_.BinaryTree α)
+        (path : List (α × _root_.BinaryTree α)),
         IsBST (twAttachPoly c path) → twTreeMem x c →
         ∀ pair ∈ path, x < pair.1 ∧ ForallTree (fun y => x < y) pair.2 := by
       intro α _ x c path
@@ -2223,16 +2223,16 @@ by
       | cons hd rest ih =>
         rcases hd with ⟨k, s⟩
         intro hbst hmem pair hpair
-        have hnode : IsBST (.node c k s) := h_bst_attach_head (.node c k s) rest hbst
-        cases hnode with
+        have hnode : IsBST (.node k c s) := h_bst_attach_head (.node k c s) rest hbst
+        cases hnode using isBSTCases with
         | node _ _ _ hc_lt hs_gt _ _ =>
           have hxk : x < k := h_mem_forall (fun y => y < k) hc_lt hmem
           rcases List.mem_cons.mp hpair with rfl | hrest
           · exact ⟨hxk, h_forall_mono (fun _ hy => lt_trans hxk hy) hs_gt⟩
-          · exact ih (.node c k s) hbst (Or.inr (Or.inl hmem)) pair hrest
+          · exact ih (.node k c s) hbst (Or.inr (Or.inl hmem)) pair hrest
 
-    have h_bst_attach_congr : ∀ {α : Type} [LinearOrder α] (c c' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)
-        (path : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_bst_attach_congr : ∀ {α : Type} [LinearOrder α] (c c' : _root_.BinaryTree α)
+        (path : List (α × _root_.BinaryTree α)),
         IsBST (twAttachPoly c path) → IsBST c' →
         (∀ p : α → Prop, ForallTree p c → ForallTree p c') →
         IsBST (twAttachPoly c' path) := by
@@ -2242,19 +2242,19 @@ by
       | cons hd rest ih =>
         rcases hd with ⟨k, s⟩
         intro hbst hc' himp
-        have hnode : IsBST (.node c k s) := h_bst_attach_head (.node c k s) rest hbst
-        cases hnode with
+        have hnode : IsBST (.node k c s) := h_bst_attach_head (.node k c s) rest hbst
+        cases hnode using isBSTCases with
         | node _ _ _ hc_lt hs_gt _ hs_bst =>
-          have hnode' : IsBST (.node c' k s) :=
+          have hnode' : IsBST (.node k c' s) :=
             .node k c' s (himp _ hc_lt) hs_gt hc' hs_bst
-          refine ih (.node c k s) (.node c' k s) hbst hnode' ?_
+          refine ih (.node k c s) (.node k c' s) hbst hnode' ?_
           intro p hp
           cases hp with
           | node _ _ _ hpc hpk hps =>
             exact .node c' k s (himp p hpc) hpk hps
 
-    have h_bst_splayPoly : ∀ {α : Type} [LinearOrder α] (n : ℕ) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)
-        (path : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_bst_splayPoly : ∀ {α : Type} [LinearOrder α] (n : ℕ) (c : _root_.BinaryTree α)
+        (path : List (α × _root_.BinaryTree α)),
         path.length ≤ n → IsBST (twAttachPoly c path) → IsBST (twSplayLeftSpinePoly c path) := by
       intro α _ n
       induction n with
@@ -2270,20 +2270,20 @@ by
         · exact hbst
         · have hrest : rest.length ≤ n := by simp at hlen; omega
           simp only [twAttachPoly] at hbst
-          have hbef : IsBST (.node (.node c k1 s1) k2 s2) :=
-            h_bst_attach_head (.node (.node c k1 s1) k2 s2) rest hbst
-          have haft : IsBST (.node c k1 (.node s1 k2 s2)) := by
-            cases hbef with
+          have hbef : IsBST (.node k2 (.node k1 c s1) s2) :=
+            h_bst_attach_head (.node k2 (.node k1 c s1) s2) rest hbst
+          have haft : IsBST (.node k1 c (.node k2 s1 s2)) := by
+            cases hbef using isBSTCases with
             | node _ _ _ hcs1_lt hs2_gt hcs1_bst hs2_bst =>
-              cases hcs1_bst with
+              cases hcs1_bst using isBSTCases with
               | node _ _ _ hc_lt hs1_gt hc_bst hs1_bst =>
                 cases hcs1_lt with
                 | node _ _ _ _ hk12 hs1_lt2 =>
-                  exact .node k1 c (.node s1 k2 s2) hc_lt
+                  exact .node k1 c (.node k2 s1 s2) hc_lt
                     (.node s1 k2 s2 hs1_gt hk12 (h_forall_mono (fun _ hy => lt_trans hk12 hy) hs2_gt))
                     hc_bst (.node k2 s1 s2 hs1_lt2 hs2_gt hs1_bst hs2_bst)
-          have hbst' : IsBST (twAttachPoly (.node c k1 (.node s1 k2 s2)) rest) := by
-            refine h_bst_attach_congr (.node (.node c k1 s1) k2 s2) (.node c k1 (.node s1 k2 s2))
+          have hbst' : IsBST (twAttachPoly (.node k1 c (.node k2 s1 s2)) rest) := by
+            refine h_bst_attach_congr (.node k2 (.node k1 c s1) s2) (.node k1 c (.node k2 s1 s2))
               rest hbst haft ?_
             intro p hp
             cases hp with
@@ -2291,26 +2291,26 @@ by
               cases hcs1 with
               | node _ _ _ hpc hpk1 hps1 =>
                 exact .node _ _ _ hpc hpk1 (.node _ _ _ hps1 hpk2 hps2)
-          exact ih (.node c k1 (.node s1 k2 s2)) rest hrest hbst'
+          exact ih (.node k1 c (.node k2 s1 s2)) rest hrest hbst'
 
-    have h_desc_min : ∀ {α : Type} [LinearOrder α] (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (k : α)
-        (acc : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_desc_min : ∀ {α : Type} [LinearOrder α] (t : _root_.BinaryTree α) (k : α)
+        (acc : List (α × _root_.BinaryTree α)),
         IsBST t → t.minKey? = some k →
         descend.go k t (acc.map twToFrameL) =
-          (.node .empty k (twDescendLeftPoly t acc).1,
+          (.node k .nil (twDescendLeftPoly t acc).1,
            (twDescendLeftPoly t acc).2.map twToFrameL) := by
       intro α _ t k acc hbst
-      induction hbst generalizing acc with
-      | left => intro h; simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.minKey?] at h
+      induction hbst using isBSTRec generalizing acc with
+      | left => intro h; simp [_root_.BinaryTree.minKey?] at h
       | node key l r hl_lt _ _ _ ihl _ =>
         intro hmin
-        rcases l with _ | ⟨ll, lk, lr⟩
-        · simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.minKey?] at hmin
+        rcases l with _ | ⟨lk, ll, lr⟩
+        · simp only [_root_.BinaryTree.minKey?] at hmin
           injection hmin with hEq
           subst hEq
           simp [descend.go, twDescendLeftPoly]
-        · have hl_ne : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node ll lk lr ≠ .empty := by simp
-          cases hl : (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node ll lk lr).minKey? with
+        · have hl_ne : _root_.BinaryTree.node lk ll lr ≠ .nil := by simp
+          cases hl : (_root_.BinaryTree.node lk ll lr).minKey? with
           | none => exact absurd ((h_minKey_none _).mp hl) hl_ne
           | some m =>
             rw [h_minKey_node, hl] at hmin
@@ -2321,11 +2321,11 @@ by
             simp only [descend.go, if_neg hm_ne, if_pos hm_lt, twDescendLeftPoly]
             exact ihl ((key, r) :: acc) hl
 
-    have h_splayUp_L : ∀ {α : Type} (n : ℕ) (k : α) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)
-        (path : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_splayUp_L : ∀ {α : Type} (n : ℕ) (k : α) (c : _root_.BinaryTree α)
+        (path : List (α × _root_.BinaryTree α)),
         path.length ≤ n →
-        splayUp (.node .empty k c) (path.map twToFrameL) =
-          .node .empty k (twSplayLeftSpinePoly c path) := by
+        splayUp (.node k .nil c) (path.map twToFrameL) =
+          .node k .nil (twSplayLeftSpinePoly c path) := by
       intro α n
       induction n with
       | zero =>
@@ -2339,11 +2339,11 @@ by
         · rfl
         · rfl
         · have hrest : rest.length ≤ n := by simp at hlen; omega
-          simpa [splayUp, twToFrameL, Frame.attach, Dir.bringUp, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight,
-            twSplayLeftSpinePoly] using ih k (.node c k1 (.node s1 k2 s2)) rest hrest
+          simpa [splayUp, twToFrameL, Frame.attach, Dir.bringUp, _root_.BinaryTree.rotateRight,
+            twSplayLeftSpinePoly] using ih k (.node k1 c (.node k2 s1 s2)) rest hrest
 
-    have h_pop_spec : ∀ {α : Type} [LinearOrder α] (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
-        IsBST t → t ≠ .empty →
+    have h_pop_spec : ∀ {α : Type} [LinearOrder α] (t : _root_.BinaryTree α),
+        IsBST t → t ≠ .nil →
         ∃ k : α,
           t.minKey? = some k ∧
           twTreeMem k t ∧
@@ -2354,10 +2354,10 @@ by
           ForallTree (fun x => k < x) (twPopPoly t) ∧
           (∀ p : α → Prop, ForallTree p t → ForallTree p (twPopPoly t)) := by
       intro α _ t hbst hne
-      have h_splay_node : ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (q : α)
-          (l : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (key : α) (r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (path : List (Frame α)),
-          descend.go q u [] = (.node l key r, path) →
-          splay u q = splayUp (.node l key r) path := by
+      have h_splay_node : ∀ (u : _root_.BinaryTree α) (q : α)
+          (l : _root_.BinaryTree α) (key : α) (r : _root_.BinaryTree α) (path : List (Frame α)),
+          descend.go q u [] = (.node key l r, path) →
+          splay u q = splayUp (.node key l r) path := by
         intro u q l key r path h
         unfold splay descend
         rw [h]
@@ -2370,7 +2370,7 @@ by
           unfold SplayTree.pop
           rw [hmin]
           dsimp (config := { failIfUnchanged := false }) only
-          rw [h_splay_node t k .empty k _ _ hd, h_splayUp_L (twDescendLeftPoly t []).2.length k _ _ le_rfl]
+          rw [h_splay_node t k .nil k _ _ hd, h_splayUp_L (twDescendLeftPoly t []).2.length k _ _ le_rfl]
           rfl
         · have hd := h_desc_min t k [] hbst hmin
           simp only [List.map_nil] at hd
@@ -2383,12 +2383,12 @@ by
           simp only [List.length_map]
           have heq : (twDescendLeftPoly t []).2.length = leftSpineLen (twEraseTree t) - 1 := by omega
           rw [heq]
-        · have hatt : twAttachPoly (.node .empty k (twDescendLeftPoly t []).1)
+        · have hatt : twAttachPoly (.node k .nil (twDescendLeftPoly t []).1)
               (twDescendLeftPoly t []).2 = t := h_descPoly_attach t k [] hmin
-          have hbst_att : IsBST (twAttachPoly (.node .empty k (twDescendLeftPoly t []).1)
+          have hbst_att : IsBST (twAttachPoly (.node k .nil (twDescendLeftPoly t []).1)
               (twDescendLeftPoly t []).2) := by rw [hatt]; exact hbst
           have hhead := h_bst_attach_head _ _ hbst_att
-          cases hhead with
+          cases hhead using isBSTCases with
           | node _ _ _ _ _ _ hcr_bst =>
             have hbst_cr_att : IsBST (twAttachPoly (twDescendLeftPoly t []).1
                 (twDescendLeftPoly t []).2) := by
@@ -2397,21 +2397,21 @@ by
               cases hp with
               | node _ _ _ _ _ hpr => exact hpr
             exact h_bst_splayPoly (twDescendLeftPoly t []).2.length _ _ le_rfl hbst_cr_att
-        · have hatt : twAttachPoly (.node .empty k (twDescendLeftPoly t []).1)
+        · have hatt : twAttachPoly (.node k .nil (twDescendLeftPoly t []).1)
               (twDescendLeftPoly t []).2 = t := h_descPoly_attach t k [] hmin
-          have hbst_att : IsBST (twAttachPoly (.node .empty k (twDescendLeftPoly t []).1)
+          have hbst_att : IsBST (twAttachPoly (.node k .nil (twDescendLeftPoly t []).1)
               (twDescendLeftPoly t []).2) := by rw [hatt]; exact hbst
           have hhead := h_bst_attach_head _ _ hbst_att
-          have hgt_path := h_bst_attach_gt k (.node .empty k (twDescendLeftPoly t []).1)
+          have hgt_path := h_bst_attach_gt k (.node k .nil (twDescendLeftPoly t []).1)
             (twDescendLeftPoly t []).2 hbst_att (Or.inl rfl)
-          cases hhead with
+          cases hhead using isBSTCases with
           | node _ _ _ _ hcr_gt _ _ =>
             unfold twPopPoly
             dsimp (config := { failIfUnchanged := false }) only
             rw [h_forall_splayPoly (twDescendLeftPoly t []).2.length _ _ _ le_rfl, h_forall_attach]
             exact ⟨hcr_gt, hgt_path⟩
         · intro p hpt
-          have hatt : twAttachPoly (.node .empty k (twDescendLeftPoly t []).1)
+          have hatt : twAttachPoly (.node k .nil (twDescendLeftPoly t []).1)
               (twDescendLeftPoly t []).2 = t := h_descPoly_attach t k [] hmin
           rw [← hatt, h_forall_attach] at hpt
           rcases hpt with ⟨hnode, hpath⟩
@@ -2425,8 +2425,8 @@ by
 
     have h_eject_spec : ∀ {α : Type} [LinearOrder α] (neg : α → α)
         (hinv : ∀ x, neg (neg x) = x) (hlt : ∀ x y, neg x < neg y ↔ y < x)
-        (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
-        IsBST t → t ≠ .empty →
+        (t : _root_.BinaryTree α),
+        IsBST t → t ≠ .nil →
         ∃ k : α,
           t.maxKey? = some k ∧
           twTreeMem k t ∧
@@ -2447,16 +2447,16 @@ by
       have hle : ∀ x y, neg x ≤ neg y ↔ y ≤ x := by
         intro x y
         rw [← not_lt, ← not_lt, hlt]
-      have hneg_inv : ∀ u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α, twNegMirror neg (twNegMirror neg u) = u := by
+      have hneg_inv : ∀ u : _root_.BinaryTree α, twNegMirror neg (twNegMirror neg u) = u := by
         intro u
         unfold twNegMirror
         rw [← h_map_mirror, h_mirror_mirror, h_map_map]
         calc twMapTree (fun x => neg (neg x)) u
           _ = twMapTree (fun x => x) u := h_map_congr u hinv
           _ = u := h_map_id u
-      have hneg_bst_imp : ∀ u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α, IsBST u → IsBST (twNegMirror neg u) := by
+      have hneg_bst_imp : ∀ u : _root_.BinaryTree α, IsBST u → IsBST (twNegMirror neg u) := by
         intro u hu
-        induction hu with
+        induction hu using isBSTRec with
         | left => exact .left
         | node key l r hl_lt hr_gt _ _ ihl ihr =>
           refine .node (neg key) (twNegMirror neg r) (twNegMirror neg l) ?_ ?_ ihr ihl
@@ -2466,24 +2466,24 @@ by
           · unfold twNegMirror
             rw [h_forall_map, h_forall_mirror]
             exact h_forall_mono (fun x hx => (hlt key x).mpr hx) hl_lt
-      have hneg_min_max : ∀ u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α,
+      have hneg_min_max : ∀ u : _root_.BinaryTree α,
           (twNegMirror neg u).minKey? = Option.map neg u.maxKey? := by
         intro u
         induction u with
-        | empty => rfl
-        | node l key r _ ihr =>
-          simp only [twNegMirror, twMirrorTree, twMapTree, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.minKey?, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.maxKey?]
+        | nil => rfl
+        | node key l r _ ihr =>
+          simp only [twNegMirror, twMirrorTree, twMapTree, _root_.BinaryTree.minKey?, _root_.BinaryTree.maxKey?]
           change (match (twNegMirror neg r).minKey? with | none => some (neg key) | some m => some m) = _
           rw [ihr]
           cases r.maxKey? <;> rfl
-      have hneg_desc : ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (q : α) (acc : List (Frame α)),
+      have hneg_desc : ∀ (u : _root_.BinaryTree α) (q : α) (acc : List (Frame α)),
           descend.go (neg q) (twNegMirror neg u) (acc.map (twNegMirrorFrame neg)) =
             (twNegMirror neg (descend.go q u acc).1,
              (descend.go q u acc).2.map (twNegMirrorFrame neg)) := by
         intro u
         induction u with
-        | empty => intro _ _; rfl
-        | node l key r ihl ihr =>
+        | nil => intro _ _; rfl
+        | node key l r ihl ihr =>
           intro q acc
           simp only [twNegMirror, twMirrorTree, twMapTree, descend.go]
           by_cases hqk : q = key
@@ -2500,30 +2500,30 @@ by
               have hyes : neg q < neg key := (hlt q key).mpr hklt
               simp only [if_neg hqk, if_neg hqlt, if_neg hnq, if_pos hyes]
               exact ihr q ({ dir := .R, key := key, sibling := l } :: acc)
-      have hneg_rotR : ∀ u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α,
-          twNegMirror neg (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight u) = _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft (twNegMirror neg u) := by
-        rintro (_ | ⟨_ | ⟨a, x, b⟩, y, c⟩) <;> rfl
-      have hneg_rotL : ∀ u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α,
-          twNegMirror neg (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft u) = _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight (twNegMirror neg u) := by
-        rintro (_ | ⟨a, x, _ | ⟨b, y, c⟩⟩) <;> rfl
-      have hneg_bringUp : ∀ (d : Dir) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+      have hneg_rotR : ∀ u : _root_.BinaryTree α,
+          twNegMirror neg (_root_.BinaryTree.rotateRight u) = _root_.BinaryTree.rotateLeft (twNegMirror neg u) := by
+        rintro (_ | ⟨y, _ | ⟨x, a, b⟩, c⟩) <;> rfl
+      have hneg_rotL : ∀ u : _root_.BinaryTree α,
+          twNegMirror neg (_root_.BinaryTree.rotateLeft u) = _root_.BinaryTree.rotateRight (twNegMirror neg u) := by
+        rintro (_ | ⟨x, a, _ | ⟨y, b, c⟩⟩) <;> rfl
+      have hneg_bringUp : ∀ (d : Dir) (u : _root_.BinaryTree α),
           twNegMirror neg (d.bringUp u) = (twMirrorDir d).bringUp (twNegMirror neg u) := by
         rintro (_ | _) u
         · exact hneg_rotR u
         · exact hneg_rotL u
-      have hneg_attach : ∀ (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (f : Frame α),
+      have hneg_attach : ∀ (c : _root_.BinaryTree α) (f : Frame α),
           twNegMirror neg (f.attach c) = (twNegMirrorFrame neg f).attach (twNegMirror neg c) := by
         rintro c ⟨_ | _, k, sib⟩ <;> rfl
-      have hneg_node : ∀ (l : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (k : α) (r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
-          twNegMirror neg (.node l k r) = .node (twNegMirror neg r) (neg k) (twNegMirror neg l) :=
+      have hneg_node : ∀ (l : _root_.BinaryTree α) (k : α) (r : _root_.BinaryTree α),
+          twNegMirror neg (.node k l r) = .node (neg k) (twNegMirror neg r) (twNegMirror neg l) :=
         fun _ _ _ => rfl
-      have hneg_empty : twNegMirror neg .empty = .empty := rfl
-      have hneg_applyChild : ∀ (d1 d2 : Dir) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+      have hneg_empty : twNegMirror neg .nil = .nil := rfl
+      have hneg_applyChild : ∀ (d1 d2 : Dir) (u : _root_.BinaryTree α),
           twNegMirror neg (applyChild d2 d1.bringUp u) =
             applyChild (twMirrorDir d2) (twMirrorDir d1).bringUp (twNegMirror neg u) := by
-        rintro d1 (_ | _) (_ | ⟨l, k, r⟩) <;>
+        rintro d1 (_ | _) (_ | ⟨k, l, r⟩) <;>
           simp [applyChild, hneg_node, hneg_empty, twMirrorDir, hneg_bringUp]
-      have hneg_splayUp : ∀ (n : ℕ) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (path : List (Frame α)),
+      have hneg_splayUp : ∀ (n : ℕ) (c : _root_.BinaryTree α) (path : List (Frame α)),
           path.length ≤ n →
           twNegMirror neg (splayUp c path) = splayUp (twNegMirror neg c) (path.map (twNegMirrorFrame neg)) := by
         intro n
@@ -2551,10 +2551,10 @@ by
               simp only [if_neg hd, if_neg hd']
               rw [ih _ rest hrest, hneg_bringUp, hneg_applyChild, hneg_attach, hneg_attach]
               rfl
-      have hneg_ne : twNegMirror neg t ≠ .empty := by
+      have hneg_ne : twNegMirror neg t ≠ .nil := by
         cases t with
-        | empty => exact absurd rfl hne
-        | node l k r => simp [twNegMirror, twMirrorTree, twMapTree]
+        | nil => exact absurd rfl hne
+        | node k l r => simp [twNegMirror, twMirrorTree, twMapTree]
       obtain ⟨nk, hnmin, hnmem, hnle, hnpop, hncost, hnbst, hngt, hnfor⟩ :=
         h_pop_spec (twNegMirror neg t) (hneg_bst_imp t hbst) hneg_ne
       have hmax_eq : Option.map neg t.maxKey? = some nk := by
@@ -2564,12 +2564,12 @@ by
       | some k =>
         simp only [hmax, Option.map_some, Option.some.injEq] at hmax_eq
         subst hmax_eq
-        have hmem_map : ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (x : α),
+        have hmem_map : ∀ (u : _root_.BinaryTree α) (x : α),
             twTreeMem (neg x) (twNegMirror neg u) → twTreeMem x u := by
           intro u x
           induction u with
-          | empty => intro h; cases h
-          | node l key r ihl ihr =>
+          | nil => intro h; cases h
+          | node key l r ihl ihr =>
             intro h
             rcases h with h1 | h2 | h3
             · exact Or.inl ((hinj x key).mp h1)
@@ -2589,25 +2589,25 @@ by
             rw [hd]
             rcases hdg : descend.go k t [] with ⟨c, path⟩
             cases c with
-            | empty =>
+            | nil =>
               cases path with
               | nil => rfl
               | cons f rest =>
                 simp only [hneg_empty, List.map_cons]
                 rw [hneg_splayUp rest.length _ rest le_rfl, hneg_attach, hneg_empty]
-            | node cl ck cr =>
+            | node ck cl cr =>
               cases path with
               | nil => rfl
               | cons f rest =>
                 simp only [hneg_node, List.map_cons]
-                change twNegMirror neg (splayUp (.node cl ck cr) (f :: rest)) =
-                  splayUp (.node (twNegMirror neg cr) (neg ck) (twNegMirror neg cl))
+                change twNegMirror neg (splayUp (.node ck cl cr) (f :: rest)) =
+                  splayUp (.node (neg ck) (twNegMirror neg cr) (twNegMirror neg cl))
                     (twNegMirrorFrame neg f :: rest.map (twNegMirrorFrame neg))
                 rw [← hneg_node]
-                exact hneg_splayUp (f :: rest).length (.node cl ck cr) (f :: rest) le_rfl
-          have hright_neg : ∀ u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α,
+                exact hneg_splayUp (f :: rest).length (.node ck cl cr) (f :: rest) le_rfl
+          have hright_neg : ∀ u : _root_.BinaryTree α,
               (twNegMirror neg u).right = twNegMirror neg u.left := by
-            rintro (_ | ⟨l, key, r⟩) <;> rfl
+            rintro (_ | ⟨key, l, r⟩) <;> rfl
           have heject_neg : twNegMirror neg (SplayTree.eject t) = SplayTree.pop (twNegMirror neg t) := by
             unfold SplayTree.eject SplayTree.pop
             rw [hmax, hnmin]
@@ -2657,14 +2657,14 @@ by
           exact h_forall_mono (fun x hx => by simpa [hinv x] using hx) hres
 
 
-    have h_dequeSeq_succ : ∀ {m : ℕ} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℤ) (ops : Fin (m + 1) → DequeOp ℤ)
+    have h_dequeSeq_succ : ∀ {m : ℕ} (t : _root_.BinaryTree ℤ) (ops : Fin (m + 1) → DequeOp ℤ)
         (i : Fin (m + 1)),
         dequeSeq t ops i.succ = dequeSeq ((ops 0).step t) (fun j => ops j.succ) i := by
       intro m t ops i
       have hrec : ∀ k : ℕ,
-          (@Nat.recOn (fun _ => _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℤ) (k + 1) t
+          (@Nat.recOn (fun _ => _root_.BinaryTree ℤ) (k + 1) t
             (fun j acc => if h : j < m + 1 then (ops ⟨j, h⟩).step acc else acc)) =
-          (@Nat.recOn (fun _ => _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℤ) k ((ops 0).step t)
+          (@Nat.recOn (fun _ => _root_.BinaryTree ℤ) k ((ops 0).step t)
             (fun j acc => if h : j < m then (ops (Fin.succ ⟨j, h⟩)).step acc else acc)) := by
         intro k
         induction k with
@@ -2684,7 +2684,7 @@ by
             rw [dif_neg hk1, dif_neg hk]
       exact hrec i.val
 
-    have h_stage1_gen : ∀ (k : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℤ) (ops : Fin k → DequeOp ℤ),
+    have h_stage1_gen : ∀ (k : ℕ) (t : _root_.BinaryTree ℤ) (ops : Fin k → DequeOp ℤ),
         IsBST t → ValidDequeSeq t ops →
         let uops := List.ofFn (fun i => twToUDequeOp (ops i))
         TwValidUDequeSeq (twEraseTree t) uops ∧
@@ -2717,10 +2717,10 @@ by
         cases hop0 : ops 0 with
         | pop =>
           rw [hop0] at h0 hval_tail
-          have hne : t ≠ .empty := h0
-          have he_ne : twEraseTree t ≠ .empty := by
+          have hne : t ≠ .nil := h0
+          have he_ne : twEraseTree t ≠ .nil := by
             cases t with
-            | empty => exact absurd rfl hne
+            | nil => exact absurd rfl hne
             | node _ _ _ => simp [twEraseTree, twMapTree]
           obtain ⟨_, _, _, _, hpop_eq, hpop_cost, hpop_bst, _, _⟩ := h_pop_spec t hbst hne
           simp only [DequeOp.step] at hval_tail ⊢
@@ -2736,9 +2736,10 @@ by
         | push x =>
           rw [hop0] at h0 hval_tail
           simp only [DequeOp.Valid, DequeOp.step, SplayTree.push] at h0 hval_tail ⊢
-          have hpush_bst : IsBST (.node .empty x t) := .node x .empty t .left h0 .left hbst
-          obtain ⟨hval_u, hcost_u⟩ := ih (.node .empty x t) (fun j => ops j.succ) hpush_bst hval_tail
-          have herase_push : twEraseTree (.node .empty x t) = .node .empty () (twEraseTree t) := rfl
+          have hpush_bst : IsBST (.node x .nil t) :=
+            .node x .nil t .left ((forallTree_iff _ _).mpr h0) .left hbst
+          obtain ⟨hval_u, hcost_u⟩ := ih (.node x .nil t) (fun j => ops j.succ) hpush_bst hval_tail
+          have herase_push : twEraseTree (.node x .nil t) = .node () .nil (twEraseTree t) := rfl
           rw [herase_push] at hval_u hcost_u
           refine ⟨hval_u, ?_⟩
           rw [show twToUDequeOp (.push x) = .push from rfl]
@@ -2746,10 +2747,10 @@ by
           exact hcost_u
         | eject =>
           rw [hop0] at h0 hval_tail
-          have hne : t ≠ .empty := h0
-          have he_ne : twEraseTree t ≠ .empty := by
+          have hne : t ≠ .nil := h0
+          have he_ne : twEraseTree t ≠ .nil := by
             cases t with
-            | empty => exact absurd rfl hne
+            | nil => exact absurd rfl hne
             | node _ _ _ => simp [twEraseTree, twMapTree]
           obtain ⟨_, _, _, _, hej_eq, hej_cost, hej_bst, _, _⟩ :=
             h_eject_spec (fun z : ℤ => -z) (fun z => by ring)
@@ -2767,9 +2768,10 @@ by
         | inject x =>
           rw [hop0] at h0 hval_tail
           simp only [DequeOp.Valid, DequeOp.step, SplayTree.inject] at h0 hval_tail ⊢
-          have hinj_bst : IsBST (.node t x .empty) := .node x t .empty h0 .left hbst .left
-          obtain ⟨hval_u, hcost_u⟩ := ih (.node t x .empty) (fun j => ops j.succ) hinj_bst hval_tail
-          have herase_inj : twEraseTree (.node t x .empty) = .node (twEraseTree t) () .empty := rfl
+          have hinj_bst : IsBST (.node x t .nil) :=
+            .node x t .nil ((forallTree_iff _ _).mpr h0) .left hbst .left
+          obtain ⟨hval_u, hcost_u⟩ := ih (.node x t .nil) (fun j => ops j.succ) hinj_bst hval_tail
+          have herase_inj : twEraseTree (.node x t .nil) = .node () (twEraseTree t) .nil := rfl
           rw [herase_inj] at hval_u hcost_u
           refine ⟨hval_u, ?_⟩
           rw [show twToUDequeOp (.inject x) = .inject from rfl]
@@ -2777,40 +2779,40 @@ by
           exact hcost_u
 
 
-    have h_label_spec : ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (k : ℕ),
+    have h_label_spec : ∀ (u : _root_.BinaryTree Unit) (k : ℕ),
         (twLabelInorderAux u k).2 = k + u.num_nodes ∧
         twEraseTree (twLabelInorderAux u k).1 = u ∧
         ForallTree (fun x => k ≤ x ∧ x < k + u.num_nodes) (twLabelInorderAux u k).1 ∧
         IsBST (twLabelInorderAux u k).1 := by
       intro u
       induction u with
-      | empty =>
+      | nil =>
         intro k
-        simp only [twLabelInorderAux, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+        simp only [twLabelInorderAux, _root_.BinaryTree.num_nodes]
         exact ⟨by omega, rfl, .left, .left⟩
-      | node l u0 r ihl ihr =>
+      | node u0 l r ihl ihr =>
         intro k
         cases u0
         obtain ⟨hl2, hle, hlb, hlbst⟩ := ihl k
         obtain ⟨hr2, hre, hrb, hrbst⟩ := ihr ((twLabelInorderAux l k).2 + 1)
         simp only [twLabelInorderAux]
         refine ⟨?_, ?_, ?_, ?_⟩
-        · simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega
+        · simp only [_root_.BinaryTree.num_nodes]; omega
         · unfold twEraseTree at hle hre ⊢
           simp [twMapTree, hle, hre]
         · refine .node _ _ _ ?_ ?_ ?_
-          · exact h_forall_mono (fun x hx => by simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega) hlb
-          · simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega
-          · exact h_forall_mono (fun x hx => by simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega) hrb
+          · exact h_forall_mono (fun x hx => by simp [_root_.BinaryTree.num_nodes]; omega) hlb
+          · simp [_root_.BinaryTree.num_nodes]; omega
+          · exact h_forall_mono (fun x hx => by simp [_root_.BinaryTree.num_nodes]; omega) hrb
         · refine .node _ _ _ ?_ ?_ hlbst hrbst
           · exact h_forall_mono (fun x hx => by omega) hlb
           · exact h_forall_mono (fun x hx => by omega) hrb
 
     have h_bst_strictMono : ∀ {α β : Type} [LinearOrder α] [LinearOrder β]
-        (f : α → β) (hf : StrictMono f) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+        (f : α → β) (hf : StrictMono f) (t : _root_.BinaryTree α),
         IsBST t → IsBST (twMapTree f t) := by
       intro α β _ _ f hf t hbst
-      induction hbst with
+      induction hbst using isBSTRec with
       | left => exact .left
       | node key l r hl hr _ _ ihl ihr =>
         refine .node (f key) (twMapTree f l) (twMapTree f r) ?_ ?_ ihl ihr
@@ -2823,10 +2825,10 @@ by
       unfold twFateOf
       split_ifs with h1 h2 h3 h4 h5 <;> simp [twFateCode] <;> linarith
 
-    have h_bst_tri : ∀ (Lm Rm : ℚ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℚ),
+    have h_bst_tri : ∀ (Lm Rm : ℚ) (T : _root_.BinaryTree ℚ),
         IsBST T → TwIsTriOrdered (twMapTree (twFateOf Lm Rm) T) := by
       intro Lm Rm T hbst
-      induction hbst with
+      induction hbst using isBSTRec with
       | left => trivial
       | node key l r hl hr _ _ ihl ihr =>
         simp only [twMapTree, TwIsTriOrdered]
@@ -2836,12 +2838,12 @@ by
         · rw [h_forall_map]
           exact h_forall_mono (fun x hx => h_fate_mono Lm Rm key x (le_of_lt hx)) hr
 
-    have h_mem_countFate : ∀ (f : ℚ → TwFate) (x : ℚ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℚ),
+    have h_mem_countFate : ∀ (f : ℚ → TwFate) (x : ℚ) (T : _root_.BinaryTree ℚ),
         twTreeMem x T → 1 ≤ twCountFate (f x) (twMapTree f T) := by
       intro f x T
       induction T with
-      | empty => intro h; cases h
-      | node l k r ihl ihr =>
+      | nil => intro h; cases h
+      | node k l r ihl ihr =>
         intro h
         simp only [twMapTree, twCountFate]
         rcases h with rfl | hl | hr
@@ -2849,7 +2851,7 @@ by
         · have := ihl hl; omega
         · have := ihr hr; omega
 
-    have h_allM_counts : ∀ (Lm Rm : ℚ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℚ),
+    have h_allM_counts : ∀ (Lm Rm : ℚ) (T : _root_.BinaryTree ℚ),
         ForallTree (fun y => Lm < y ∧ y < Rm) T →
         twCountFate .L (twMapTree (twFateOf Lm Rm) T) = 0 ∧
         twCountFate .R (twMapTree (twFateOf Lm Rm) T) = 0 := by
@@ -2862,7 +2864,7 @@ by
           rw [if_neg (not_le_of_gt hk.1), if_pos hk.2]
         simp [twMapTree, twCountFate, hfk, ihl.1, ihl.2, ihr.1, ihr.2]
 
-    have h_buildCops_erase : ∀ (Lm Rm : ℚ) (uops : List TwUDequeOp) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℚ) (L R : ℚ),
+    have h_buildCops_erase : ∀ (Lm Rm : ℚ) (uops : List TwUDequeOp) (T : _root_.BinaryTree ℚ) (L R : ℚ),
         (twBuildCops Lm Rm T L R uops).map twEraseCDequeOp = uops := by
       intro Lm Rm uops
       induction uops with
@@ -2871,7 +2873,7 @@ by
         intro T L R
         cases op <;> simp [twBuildCops, twEraseCDequeOp, ih]
 
-    have h_stage2_loop : ∀ (Lm Rm : ℚ) (uops : List TwUDequeOp) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℚ) (L R : ℚ),
+    have h_stage2_loop : ∀ (Lm Rm : ℚ) (uops : List TwUDequeOp) (T : _root_.BinaryTree ℚ) (L R : ℚ),
         TwValidUDequeSeq (twEraseTree T) uops →
         IsBST T →
         L < R →
@@ -2894,16 +2896,16 @@ by
           simp only [twFinalBounds, twBuildCops] at hfin ⊢
           cases hmin : T.minKey? with
           | none =>
-            have hT_emp : T = .empty := (h_minKey_none T).mp hmin
+            have hT_emp : T = .nil := (h_minKey_none T).mp hmin
             subst hT_emp
             simp only [hmin] at hfin ⊢
             set q := (L + R) / 2
             have hLq : L < q := by dsimp (config := { failIfUnchanged := false }) [q]; linarith
             have hqR : q < R := by dsimp (config := { failIfUnchanged := false }) [q]; linarith
-            have hbst' : IsBST (.node .empty q .empty) := .node q .empty .empty .left .left .left .left
-            have hbnd' : ForallTree (fun y => L < y ∧ y < R) (.node .empty q .empty) :=
-              .node .empty q .empty .left ⟨hLq, hqR⟩ .left
-            obtain ⟨h1, h2, h3, hvc⟩ := ih (.node .empty q .empty) L R hval hbst' hLR hbnd' hfin
+            have hbst' : IsBST (.node q .nil .nil) := .node q .nil .nil .left .left .left .left
+            have hbnd' : ForallTree (fun y => L < y ∧ y < R) (.node q .nil .nil) :=
+              .node .nil q .nil .left ⟨hLq, hqR⟩ .left
+            obtain ⟨h1, h2, h3, hvc⟩ := ih (.node q .nil .nil) L R hval hbst' hLR hbnd' hfin
             exact ⟨h1, h2, h3, trivial, .left, hvc⟩
           | some x =>
             simp only [hmin] at hfin ⊢
@@ -2916,25 +2918,25 @@ by
             have hqR : q < R := lt_trans hqx hx_bnd.2
             have hq_lt_T : ForallTree (fun y => q < y) T :=
               h_forall_mono (fun y hy => lt_of_lt_of_le hqx hy) hx_le
-            have hbst' : IsBST (.node .empty q T) := .node q .empty T .left hq_lt_T .left hbst
-            have hbnd' : ForallTree (fun y => L < y ∧ y < R) (.node .empty q T) :=
-              .node .empty q T .left ⟨hLq, hqR⟩ hbnd
-            obtain ⟨h1, h2, h3, hvc⟩ := ih (.node .empty q T) L R hval hbst' hLR hbnd' hfin
+            have hbst' : IsBST (.node q .nil T) := .node q .nil T .left hq_lt_T .left hbst
+            have hbnd' : ForallTree (fun y => L < y ∧ y < R) (.node q .nil T) :=
+              .node .nil q T .left ⟨hLq, hqR⟩ hbnd
+            obtain ⟨h1, h2, h3, hvc⟩ := ih (.node q .nil T) L R hval hbst' hLR hbnd' hfin
             refine ⟨h1, h2, h3, h_bst_tri Lm Rm T hbst, ?_, hvc⟩
             rw [h_forall_map]
             exact h_forall_mono (fun y hy => h_fate_mono Lm Rm q y (le_of_lt hy)) hq_lt_T
         | inject =>
           simp only [twFinalBounds, twBuildCops] at hfin ⊢
-          by_cases hT_emp : T = .empty
+          by_cases hT_emp : T = .nil
           · subst hT_emp
-            simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.maxKey?] at hfin ⊢
+            simp only [_root_.BinaryTree.maxKey?] at hfin ⊢
             set q := (L + R) / 2
             have hLq : L < q := by dsimp (config := { failIfUnchanged := false }) [q]; linarith
             have hqR : q < R := by dsimp (config := { failIfUnchanged := false }) [q]; linarith
-            have hbst' : IsBST (.node .empty q .empty) := .node q .empty .empty .left .left .left .left
-            have hbnd' : ForallTree (fun y => L < y ∧ y < R) (.node .empty q .empty) :=
-              .node .empty q .empty .left ⟨hLq, hqR⟩ .left
-            obtain ⟨h1, h2, h3, hvc⟩ := ih (.node .empty q .empty) L R hval hbst' hLR hbnd' hfin
+            have hbst' : IsBST (.node q .nil .nil) := .node q .nil .nil .left .left .left .left
+            have hbnd' : ForallTree (fun y => L < y ∧ y < R) (.node q .nil .nil) :=
+              .node .nil q .nil .left ⟨hLq, hqR⟩ .left
+            obtain ⟨h1, h2, h3, hvc⟩ := ih (.node q .nil .nil) L R hval hbst' hLR hbnd' hfin
             exact ⟨h1, h2, h3, trivial, .left, hvc⟩
           · obtain ⟨z, hmax, hz_mem, hz_ge, _, _, _, _, _⟩ :=
               h_eject_spec (fun q : ℚ => -q) (fun q => by ring)
@@ -2947,16 +2949,16 @@ by
             have hLq : L < q := lt_trans hz_bnd.1 hzq
             have hT_lt_q : ForallTree (fun y => y < q) T :=
               h_forall_mono (fun y hy => lt_of_le_of_lt hy hzq) hz_ge
-            have hbst' : IsBST (.node T q .empty) := .node q T .empty hT_lt_q .left hbst .left
-            have hbnd' : ForallTree (fun y => L < y ∧ y < R) (.node T q .empty) :=
-              .node T q .empty hbnd ⟨hLq, hqR⟩ .left
-            obtain ⟨h1, h2, h3, hvc⟩ := ih (.node T q .empty) L R hval hbst' hLR hbnd' hfin
+            have hbst' : IsBST (.node q T .nil) := .node q T .nil hT_lt_q .left hbst .left
+            have hbnd' : ForallTree (fun y => L < y ∧ y < R) (.node q T .nil) :=
+              .node T q .nil hbnd ⟨hLq, hqR⟩ .left
+            obtain ⟨h1, h2, h3, hvc⟩ := ih (.node q T .nil) L R hval hbst' hLR hbnd' hfin
             refine ⟨h1, h2, h3, h_bst_tri Lm Rm T hbst, ?_, hvc⟩
             rw [h_forall_map]
             exact h_forall_mono (fun y hy => h_fate_mono Lm Rm y q (le_of_lt hy)) hT_lt_q
         | pop =>
           rcases hval with ⟨he_ne, hval_rest⟩
-          have hT_ne : T ≠ .empty := by
+          have hT_ne : T ≠ .nil := by
             intro h; subst h; exact he_ne rfl
           obtain ⟨x, hmin, hx_mem, _, _, _, hpop_bst, hpop_gt, hpop_for⟩ := h_pop_spec T hbst hT_ne
           simp only [twFinalBounds, twBuildCops, hmin, Option.getD_some] at hfin ⊢
@@ -2976,7 +2978,7 @@ by
             h_bst_tri Lm Rm T hbst, hcntL, hvc⟩
         | eject =>
           rcases hval with ⟨he_ne, hval_rest⟩
-          have hT_ne : T ≠ .empty := by
+          have hT_ne : T ≠ .nil := by
             intro h; subst h; exact he_ne rfl
           obtain ⟨z, hmax, hz_mem, _, _, _, hej_bst, hej_lt, hej_for⟩ :=
             h_eject_spec (fun q : ℚ => -q) (fun q => by ring)
@@ -3005,7 +3007,7 @@ by
     have ht0_nodes : t0.num_nodes = n := by
       dsimp (config := { failIfUnchanged := false }) [t0, twEraseTree]; rw [h_map_nodes, hn]
     obtain ⟨_, hl_erase, hl_bnd, hl_bst⟩ := h_label_spec t0 0
-    set T0 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℚ := twMapTree (fun x : ℕ => (x : ℚ) + 1) (twLabelInorderAux t0 0).1
+    set T0 : _root_.BinaryTree ℚ := twMapTree (fun x : ℕ => (x : ℚ) + 1) (twLabelInorderAux t0 0).1
     have hT0_erase : twEraseTree T0 = t0 := by
       dsimp (config := { failIfUnchanged := false }) [T0]; rw [h_erase_map, hl_erase]
     have hT0_bst : IsBST T0 := by
@@ -3045,7 +3047,7 @@ by
       exact hcost_eq
 
   have h_stage3 :
-      ∀ (n m : ℕ) (C0 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate) (cops : List TwCDequeOp),
+      ∀ (n m : ℕ) (C0 : _root_.BinaryTree TwFate) (cops : List TwCDequeOp),
         C0.num_nodes = n →
         cops.length = m →
         TwValidCDequeSeq C0 cops →
@@ -3061,59 +3063,59 @@ by
             2 * n + 13 * m := by
     clear h_stage12 n m init ops hn hvalid
     intro n m C0 cops hn hm hvc
-    have h_forall_mono : ∀ {α : Type} {p q : α → Prop} {t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α},
+    have h_forall_mono : ∀ {α : Type} {p q : α → Prop} {t : _root_.BinaryTree α},
         (∀ x, p x → q x) → ForallTree p t → ForallTree q t := by
       intro α p q t hpq ht
       induction ht with
       | left => exact .left
       | node l k r _ hk _ ihl ihr => exact .node l k r ihl (hpq k hk) ihr
 
-    have h_map_map : ∀ {α β γ : Type} (g : β → γ) (f : α → β) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_map_map : ∀ {α β γ : Type} (g : β → γ) (f : α → β) (t : _root_.BinaryTree α),
         twMapTree g (twMapTree f t) = twMapTree (fun x => g (f x)) t := by
       intro α β γ g f t
       induction t with
-      | empty => rfl
-      | node l k r ihl ihr => simp [twMapTree, ihl, ihr]
+      | nil => rfl
+      | node k l r ihl ihr => simp [twMapTree, ihl, ihr]
 
-    have h_map_id : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α), twMapTree (fun x => x) t = t := by
+    have h_map_id : ∀ {α : Type} (t : _root_.BinaryTree α), twMapTree (fun x => x) t = t := by
       intro α t
       induction t with
-      | empty => rfl
-      | node l k r ihl ihr => simp [twMapTree, ihl, ihr]
+      | nil => rfl
+      | node k l r ihl ihr => simp [twMapTree, ihl, ihr]
 
-    have h_map_congr : ∀ {α β : Type} {f g : α → β} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_map_congr : ∀ {α β : Type} {f g : α → β} (t : _root_.BinaryTree α),
         (∀ x, f x = g x) → twMapTree f t = twMapTree g t := by
       intro α β f g t hfg
       induction t with
-      | empty => rfl
-      | node l k r ihl ihr => simp [twMapTree, hfg, ihl, ihr]
+      | nil => rfl
+      | node k l r ihl ihr => simp [twMapTree, hfg, ihl, ihr]
 
-    have h_erase_map : ∀ {α β : Type} (f : α → β) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_erase_map : ∀ {α β : Type} (f : α → β) (t : _root_.BinaryTree α),
         twEraseTree (twMapTree f t) = twEraseTree t := by
       intro α β f t
       unfold twEraseTree
       rw [h_map_map]
 
-    have h_mirror_mirror : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α), twMirrorTree (twMirrorTree t) = t := by
+    have h_mirror_mirror : ∀ {α : Type} (t : _root_.BinaryTree α), twMirrorTree (twMirrorTree t) = t := by
       intro α t
       induction t with
-      | empty => rfl
-      | node l k r ihl ihr => simp [twMirrorTree, ihl, ihr]
+      | nil => rfl
+      | node k l r ihl ihr => simp [twMirrorTree, ihl, ihr]
 
-    have h_map_mirror : ∀ {α β : Type} (f : α → β) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_map_mirror : ∀ {α β : Type} (f : α → β) (t : _root_.BinaryTree α),
         twMapTree f (twMirrorTree t) = twMirrorTree (twMapTree f t) := by
       intro α β f t
       induction t with
-      | empty => rfl
-      | node l k r ihl ihr => simp [twMapTree, twMirrorTree, ihl, ihr]
+      | nil => rfl
+      | node k l r ihl ihr => simp [twMapTree, twMirrorTree, ihl, ihr]
 
-    have h_forall_map : ∀ {α β : Type} (f : α → β) (p : β → Prop) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_forall_map : ∀ {α β : Type} (f : α → β) (p : β → Prop) (t : _root_.BinaryTree α),
         ForallTree p (twMapTree f t) ↔ ForallTree (fun x => p (f x)) t := by
       intro α β f p t
       induction t with
-      | empty =>
+      | nil =>
         constructor <;> intro _ <;> exact .left
-      | node l k r ihl ihr =>
+      | node k l r ihl ihr =>
         constructor
         · intro h
           cases h with
@@ -3123,12 +3125,12 @@ by
           | node _ _ _ hl hk hr =>
             exact .node (twMapTree f l) (f k) (twMapTree f r) (ihl.mpr hl) hk (ihr.mpr hr)
 
-    have h_forall_mirror : ∀ {α : Type} (p : α → Prop) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_forall_mirror : ∀ {α : Type} (p : α → Prop) (t : _root_.BinaryTree α),
         ForallTree p (twMirrorTree t) ↔ ForallTree p t := by
       intro α p t
       induction t with
-      | empty => constructor <;> intro _ <;> exact .left
-      | node l k r ihl ihr =>
+      | nil => constructor <;> intro _ <;> exact .left
+      | node k l r ihl ihr =>
         constructor
         · intro h
           cases h with
@@ -3138,36 +3140,36 @@ by
           | node _ _ _ hl hk hr =>
             exact .node (twMirrorTree r) k (twMirrorTree l) (ihr.mpr hr) hk (ihl.mpr hl)
 
-    have h_lsl_mirror : ∀ u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit,
+    have h_lsl_mirror : ∀ u : _root_.BinaryTree Unit,
         leftSpineLen (twMirrorTree u) = rightSpineLen u := by
       intro u
       induction u with
-      | empty => rfl
-      | node l _ r _ ihr => simp [twMirrorTree, leftSpineLen, rightSpineLen, ihr]
+      | nil => rfl
+      | node _ l r _ ihr => simp [twMirrorTree, leftSpineLen, rightSpineLen, ihr]
 
-    have h_rsl_mirror : ∀ u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit,
+    have h_rsl_mirror : ∀ u : _root_.BinaryTree Unit,
         rightSpineLen (twMirrorTree u) = leftSpineLen u := by
       intro u
       have h := h_lsl_mirror (twMirrorTree u)
       rw [h_mirror_mirror] at h
       exact h.symm
 
-    have h_descPoly_map : ∀ {α β : Type} (f : α → β) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)
-        (acc : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_descPoly_map : ∀ {α β : Type} (f : α → β) (t : _root_.BinaryTree α)
+        (acc : List (α × _root_.BinaryTree α)),
         twDescendLeftPoly (twMapTree f t) (acc.map (fun p => (f p.1, twMapTree f p.2))) =
           (twMapTree f (twDescendLeftPoly t acc).1,
            (twDescendLeftPoly t acc).2.map (fun p => (f p.1, twMapTree f p.2))) := by
       intro α β f t
       induction t with
-      | empty => intro acc; simp [twMapTree, twDescendLeftPoly]
-      | node l k r ihl _ =>
+      | nil => intro acc; simp [twMapTree, twDescendLeftPoly]
+      | node k l r ihl _ =>
         intro acc
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · simp [twMapTree, twDescendLeftPoly]
         · simpa [twMapTree, twDescendLeftPoly] using ihl ((k, r) :: acc)
 
-    have h_splayPoly_map : ∀ {α β : Type} (f : α → β) (k : ℕ) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)
-        (path : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_splayPoly_map : ∀ {α β : Type} (f : α → β) (k : ℕ) (c : _root_.BinaryTree α)
+        (path : List (α × _root_.BinaryTree α)),
         path.length ≤ k →
         twMapTree f (twSplayLeftSpinePoly c path) =
           twSplayLeftSpinePoly (twMapTree f c) (path.map (fun p => (f p.1, twMapTree f p.2))) := by
@@ -3185,9 +3187,9 @@ by
         · rfl
         · have hrest : rest.length ≤ k := by simp at hlen; omega
           simpa [twSplayLeftSpinePoly, twMapTree] using
-            ih (.node c k1 (.node s1 k2 s2)) rest hrest
+            ih (.node k1 c (.node k2 s1 s2)) rest hrest
 
-    have h_popPoly_map : ∀ {α β : Type} (f : α → β) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_popPoly_map : ∀ {α β : Type} (f : α → β) (t : _root_.BinaryTree α),
         twMapTree f (twPopPoly t) = twPopPoly (twMapTree f t) := by
       intro α β f t
       unfold twPopPoly
@@ -3196,20 +3198,20 @@ by
       rw [hd]
       exact h_splayPoly_map f (twDescendLeftPoly t []).2.length _ _ le_rfl
 
-    have h_descPoly_erase : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (acc : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_descPoly_erase : ∀ {α : Type} (t : _root_.BinaryTree α) (acc : List (α × _root_.BinaryTree α)),
         descendLeft (twEraseTree t) (acc.map (fun p => twEraseTree p.2)) =
           (twEraseTree (twDescendLeftPoly t acc).1,
            (twDescendLeftPoly t acc).2.map (fun p => twEraseTree p.2)) := by
       intro α t
       induction t with
-      | empty => intro acc; simp [descendLeft, twDescendLeftPoly, twEraseTree, twMapTree]
-      | node l k r ihl _ =>
+      | nil => intro acc; simp [descendLeft, twDescendLeftPoly, twEraseTree, twMapTree]
+      | node k l r ihl _ =>
         intro acc
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · simp [descendLeft, twDescendLeftPoly, twEraseTree, twMapTree]
         · simpa [twEraseTree, twMapTree, descendLeft, twDescendLeftPoly] using ihl ((k, r) :: acc)
 
-    have h_splayPoly_erase : ∀ {α : Type} (k : ℕ) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (path : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
+    have h_splayPoly_erase : ∀ {α : Type} (k : ℕ) (c : _root_.BinaryTree α) (path : List (α × _root_.BinaryTree α)),
         path.length ≤ k →
         twEraseTree (twSplayLeftSpinePoly c path) =
           splayLeftSpine (twEraseTree c) (path.map (fun p => twEraseTree p.2)) := by
@@ -3227,9 +3229,9 @@ by
         · rfl
         · have hrest : rest.length ≤ k := by simp at hlen; omega
           simpa [twSplayLeftSpinePoly, splayLeftSpine, twEraseTree, twMapTree] using
-            ih (.node c k1 (.node s1 k2 s2)) rest hrest
+            ih (.node k1 c (.node k2 s1 s2)) rest hrest
 
-    have h_popPoly_erase : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_popPoly_erase : ∀ {α : Type} (t : _root_.BinaryTree α),
         twEraseTree (twPopPoly t) = popUnlabeled (twEraseTree t) := by
       intro α t
       unfold twPopPoly popUnlabeled
@@ -3238,7 +3240,7 @@ by
       rw [hd]
       exact h_splayPoly_erase (twDescendLeftPoly t []).2.length _ _ le_rfl
 
-    have h_ejectPoly_erase : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+    have h_ejectPoly_erase : ∀ {α : Type} (t : _root_.BinaryTree α),
         twEraseTree (twEjectPoly t) = twMirrorTree (popUnlabeled (twMirrorTree (twEraseTree t))) := by
       intro α t
       have h1 : twEraseTree (twEjectPoly t) = twMirrorTree (twEraseTree (twPopPoly (twMirrorTree t))) := by
@@ -3249,28 +3251,28 @@ by
         exact (h_map_mirror (fun _ => ()) t).symm
       rw [h1, h_popPoly_erase, h2]
 
-    have h_descPoly_len : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (acc : List (α × _root_.SplayDeque.Legacy.SplayTree.BinaryTree α)),
-        t ≠ .empty →
+    have h_descPoly_len : ∀ {α : Type} (t : _root_.BinaryTree α) (acc : List (α × _root_.BinaryTree α)),
+        t ≠ .nil →
         (twDescendLeftPoly t acc).2.length + 1 = leftSpineLen (twEraseTree t) + acc.length := by
       intro α t
       induction t with
-      | empty => intro _ h; exact absurd rfl h
-      | node l k r ihl _ =>
+      | nil => intro _ h; exact absurd rfl h
+      | node k l r ihl _ =>
         intro acc _
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · simp [twDescendLeftPoly, twEraseTree, twMapTree, leftSpineLen]; omega
-        · have hl_ne : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node ll lk lr ≠ .empty := by simp
+        · have hl_ne : _root_.BinaryTree.node lk ll lr ≠ .nil := by simp
           have ih := ihl ((k, r) :: acc) hl_ne
           simp only [twDescendLeftPoly, twEraseTree, twMapTree, leftSpineLen, List.length_cons] at ih ⊢
           omega
 
 
-    have h_projL_of_count0 : ∀ C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate,
-        twCountFate .L C = 0 → twProjL C = .empty := by
+    have h_projL_of_count0 : ∀ C : _root_.BinaryTree TwFate,
+        twCountFate .L C = 0 → twProjL C = .nil := by
       intro C
       induction C with
-      | empty => intro _; rfl
-      | node l f r ihl _ =>
+      | nil => intro _; rfl
+      | node f l r ihl _ =>
         intro h
         cases f with
         | L => simp [twCountFate] at h
@@ -3281,12 +3283,12 @@ by
           simp only [twCountFate, reduceCtorEq, ite_false] at h
           exact ihl (by omega)
 
-    have h_projR_of_count0 : ∀ C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate,
-        twCountFate .R C = 0 → twProjR C = .empty := by
+    have h_projR_of_count0 : ∀ C : _root_.BinaryTree TwFate,
+        twCountFate .R C = 0 → twProjR C = .nil := by
       intro C
       induction C with
-      | empty => intro _; rfl
-      | node l f r _ ihr =>
+      | nil => intro _; rfl
+      | node f l r _ ihr =>
         intro h
         cases f with
         | L =>
@@ -3297,7 +3299,7 @@ by
           exact ihr (by omega)
         | R => simp [twCountFate] at h
 
-    have h_countL_of_ge1 : ∀ C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate,
+    have h_countL_of_ge1 : ∀ C : _root_.BinaryTree TwFate,
         ForallTree (fun x => 1 ≤ twFateCode x) C → twCountFate .L C = 0 := by
       intro C h
       induction h with
@@ -3308,38 +3310,38 @@ by
         | M => simp [twCountFate, ihl, ihr]
         | R => simp [twCountFate, ihl, ihr]
 
-    have h_lsl_le_nodes : ∀ u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit, leftSpineLen u ≤ u.num_nodes := by
+    have h_lsl_le_nodes : ∀ u : _root_.BinaryTree Unit, leftSpineLen u ≤ u.num_nodes := by
       intro u
       induction u with
-      | empty => simp [leftSpineLen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
-      | node l _ r ihl _ => simp [leftSpineLen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega
+      | nil => simp [leftSpineLen, _root_.BinaryTree.num_nodes]
+      | node _ l r ihl _ => simp [leftSpineLen, _root_.BinaryTree.num_nodes]; omega
 
-    have h_rsl_le_nodes : ∀ u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit, rightSpineLen u ≤ u.num_nodes := by
+    have h_rsl_le_nodes : ∀ u : _root_.BinaryTree Unit, rightSpineLen u ≤ u.num_nodes := by
       intro u
       induction u with
-      | empty => simp [rightSpineLen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
-      | node l _ r _ ihr => simp [rightSpineLen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega
+      | nil => simp [rightSpineLen, _root_.BinaryTree.num_nodes]
+      | node _ l r _ ihr => simp [rightSpineLen, _root_.BinaryTree.num_nodes]; omega
 
-    have h_lsl_rsl_le : ∀ u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit,
+    have h_lsl_rsl_le : ∀ u : _root_.BinaryTree Unit,
         leftSpineLen u + rightSpineLen u ≤ u.num_nodes + 1 := by
       intro u
-      rcases u with _ | ⟨l, _, r⟩
-      · simp [leftSpineLen, rightSpineLen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+      rcases u with _ | ⟨_, l, r⟩
+      · simp [leftSpineLen, rightSpineLen, _root_.BinaryTree.num_nodes]
       · have hl := h_lsl_le_nodes l
         have hr := h_rsl_le_nodes r
-        simp only [leftSpineLen, rightSpineLen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+        simp only [leftSpineLen, rightSpineLen, _root_.BinaryTree.num_nodes]
         omega
 
-    have h_proj_nodes : ∀ C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate,
+    have h_proj_nodes : ∀ C : _root_.BinaryTree TwFate,
         (twProjL C).num_nodes + (twProjM C).num_nodes + (twProjR C).num_nodes ≤ C.num_nodes := by
       intro C
       induction C with
-      | empty => simp [twProjL, twProjM, twProjR, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
-      | node l f r ihl ihr =>
+      | nil => simp [twProjL, twProjM, twProjR, _root_.BinaryTree.num_nodes]
+      | node f l r ihl ihr =>
         cases f <;>
-          (simp only [twProjL, twProjM, twProjR, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega)
+          (simp only [twProjL, twProjM, twProjR, _root_.BinaryTree.num_nodes]; omega)
 
-    have h_phi2_init_le : ∀ C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate, twPhi2 C ≤ 2 * C.num_nodes + 2 := by
+    have h_phi2_init_le : ∀ C : _root_.BinaryTree TwFate, twPhi2 C ≤ 2 * C.num_nodes + 2 := by
       intro C
       have hL := h_rsl_le_nodes (twProjL C)
       have hM := h_lsl_rsl_le (twProjM C)
@@ -3351,7 +3353,7 @@ by
     have h_mirrorFate_inv : ∀ f : TwFate, twMirrorFate (twMirrorFate f) = f := by
       rintro (_ | _ | _) <;> rfl
 
-    have h_dual_inv : ∀ C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate, twDualTree (twDualTree C) = C := by
+    have h_dual_inv : ∀ C : _root_.BinaryTree TwFate, twDualTree (twDualTree C) = C := by
       intro C
       unfold twDualTree
       rw [← h_map_mirror, h_mirror_mirror, h_map_map]
@@ -3363,11 +3365,11 @@ by
         twFateCode a ≤ twFateCode b → twFateCode (twMirrorFate b) ≤ twFateCode (twMirrorFate a) := by
       rintro (_ | _ | _) (_ | _ | _) <;> decide
 
-    have h_dual_tri : ∀ C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate, TwIsTriOrdered C → TwIsTriOrdered (twDualTree C) := by
+    have h_dual_tri : ∀ C : _root_.BinaryTree TwFate, TwIsTriOrdered C → TwIsTriOrdered (twDualTree C) := by
       intro C
       induction C with
-      | empty => intro _; trivial
-      | node l f r ihl ihr =>
+      | nil => intro _; trivial
+      | node f l r ihl ihr =>
         rintro ⟨hl, hr, htl, htr⟩
         refine ⟨?_, ?_, ihr htr, ihl htl⟩
         · rw [h_forall_map, h_forall_mirror]
@@ -3375,37 +3377,37 @@ by
         · rw [h_forall_map, h_forall_mirror]
           exact h_forall_mono (fun x hx => h_fateCode_mirror x f hx) hl
 
-    have h_dual_countL : ∀ C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate,
+    have h_dual_countL : ∀ C : _root_.BinaryTree TwFate,
         twCountFate .L (twDualTree C) = twCountFate .R C := by
       intro C
       induction C with
-      | empty => rfl
-      | node l f r ihl ihr =>
+      | nil => rfl
+      | node f l r ihl ihr =>
         cases f <;>
           (simp [twDualTree, twMirrorTree, twMapTree, twMirrorFate, twCountFate] at ihl ihr ⊢;
            omega)
 
-    have h_projL_dual : ∀ C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate,
+    have h_projL_dual : ∀ C : _root_.BinaryTree TwFate,
         twProjL (twDualTree C) = twMirrorTree (twProjR C) := by
       intro C
       induction C with
-      | empty => rfl
-      | node l f r ihl ihr =>
+      | nil => rfl
+      | node f l r ihl ihr =>
         unfold twDualTree at ihl ihr ⊢
         cases f <;>
           simp [twMirrorTree, twMapTree, twMirrorFate, twProjL, twProjR, ihl, ihr]
 
-    have h_projM_dual : ∀ C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate,
+    have h_projM_dual : ∀ C : _root_.BinaryTree TwFate,
         twProjM (twDualTree C) = twMirrorTree (twProjM C) := by
       intro C
       induction C with
-      | empty => rfl
-      | node l f r ihl ihr =>
+      | nil => rfl
+      | node f l r ihl ihr =>
         unfold twDualTree at ihl ihr ⊢
         cases f <;>
           simp [twMirrorTree, twMapTree, twMirrorFate, twProjM, ihl, ihr]
 
-    have h_projR_dual : ∀ C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate,
+    have h_projR_dual : ∀ C : _root_.BinaryTree TwFate,
         twProjR (twDualTree C) = twMirrorTree (twProjL C) := by
       intro C
       have h := h_projL_dual (twDualTree C)
@@ -3414,21 +3416,21 @@ by
       rw [h_mirror_mirror] at h2
       exact h2.symm
 
-    have h_phi2_dual : ∀ C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate, twPhi2 (twDualTree C) = twPhi2 C := by
+    have h_phi2_dual : ∀ C : _root_.BinaryTree TwFate, twPhi2 (twDualTree C) = twPhi2 C := by
       intro C
       unfold twPhi2 twPhiMR
       rw [h_projL_dual, h_projM_dual, h_projR_dual,
           h_lsl_mirror, h_rsl_mirror, h_lsl_mirror, h_rsl_mirror]
       omega
 
-    have h_dual_eject : ∀ C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate,
+    have h_dual_eject : ∀ C : _root_.BinaryTree TwFate,
         twDualTree (twEjectPoly C) = twPopPoly (twDualTree C) := by
       intro C
       unfold twDualTree twEjectPoly
       rw [h_mirror_mirror, h_popPoly_map]
 
 
-    have h_extSteps_seq : ∀ (u1 u2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (s1 s2 : List TwExtCoreOp),
+    have h_extSteps_seq : ∀ (u1 u2 : _root_.BinaryTree Unit) (s1 s2 : List TwExtCoreOp),
         TwValidExtSteps u1 s1 u2 → TwValidExtCoreSeq u2 s2 → TwValidExtCoreSeq u1 (s1 ++ s2) := by
       intro u1 u2 s1 s2 h1 h2
       induction s1 generalizing u1 with
@@ -3440,7 +3442,7 @@ by
         | rslr d => exact ⟨h1.1, ih _ h1.2⟩
         | inject => exact ih _ h1
 
-    have h_extCost_append : ∀ (u1 u2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (s1 s2 : List TwExtCoreOp),
+    have h_extCost_append : ∀ (u1 u2 : _root_.BinaryTree Unit) (s1 s2 : List TwExtCoreOp),
         TwValidExtSteps u1 s1 u2 →
         twExtCoreCascadeCost u1 (s1 ++ s2) =
           twExtCoreCascadeCost u1 s1 + twExtCoreCascadeCost u2 s2 := by
@@ -3471,14 +3473,14 @@ by
         cases op <;> (simp only [List.cons_append, twCountExtPop, ih]; try omega)
 
 
-    have h_push_step : ∀ (C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate) (f : TwFate),
+    have h_push_step : ∀ (C : _root_.BinaryTree TwFate) (f : TwFate),
         ForallTree (fun x => twFateCode f ≤ twFateCode x) C →
         ∃ (stepL stepR : List TwExtCoreOp),
           twCountExtPop stepL + twCountExtPop stepR = 0 ∧
-          TwValidExtSteps (twProjL C) stepL (twProjL (.node .empty f C)) ∧
+          TwValidExtSteps (twProjL C) stepL (twProjL (.node f .nil C)) ∧
           TwValidExtSteps (twMirrorTree (twProjR C)) stepR
-            (twMirrorTree (twProjR (.node .empty f C))) ∧
-          twPhi2 (.node .empty f C) ≤
+            (twMirrorTree (twProjR (.node f .nil C))) ∧
+          twPhi2 (.node f .nil C) ≤
             2 * twExtCoreCascadeCost (twProjL C) stepL +
             2 * twExtCoreCascadeCost (twMirrorTree (twProjR C)) stepR +
             twPhi2 C + 9 := by
@@ -3489,7 +3491,7 @@ by
         simp only [twPhi2, twPhiMR, twProjL, twProjM, twProjR, rightSpineLen]
         omega
       | M =>
-        have hL0 : twProjL C = .empty := h_projL_of_count0 C (h_countL_of_ge1 C hord)
+        have hL0 : twProjL C = .nil := h_projL_of_count0 C (h_countL_of_ge1 C hord)
         refine ⟨[], [], rfl, ?_, rfl, ?_⟩
         · simp [twProjL, hL0, TwValidExtSteps]
         · simp only [twPhi2, twPhiMR, twProjL, twProjM, twProjR, leftSpineLen, rightSpineLen, hL0]
@@ -3497,7 +3499,7 @@ by
       | R =>
         have hge1 : ForallTree (fun x => 1 ≤ twFateCode x) C :=
           h_forall_mono (fun x hx => by (cases x <;> simp [twFateCode] at hx); decide) hord
-        have hL0 : twProjL C = .empty := h_projL_of_count0 C (h_countL_of_ge1 C hge1)
+        have hL0 : twProjL C = .nil := h_projL_of_count0 C (h_countL_of_ge1 C hge1)
         refine ⟨[], [.inject], rfl, ?_, ?_, ?_⟩
         · simp [twProjL, hL0, TwValidExtSteps]
         · simp [twProjR, twMirrorTree, TwValidExtSteps]
@@ -3505,21 +3507,21 @@ by
           omega
 
 
-    have h_descLeft_acc : ∀ (v : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (acc : List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit)),
+    have h_descLeft_acc : ∀ (v : _root_.BinaryTree Unit) (acc : List (_root_.BinaryTree Unit)),
         descendLeft v acc = ((descendLeft v []).1, (descendLeft v []).2 ++ acc) := by
       intro v
       induction v with
-      | empty => intro acc; simp [descendLeft]
-      | node l _ r ihl _ =>
+      | nil => intro acc; simp [descendLeft]
+      | node _ l r ihl _ =>
         intro acc
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · simp [descendLeft]
         · simp only [descendLeft]
           rw [ihl (r :: acc), ihl [r]]
           simp [List.append_assoc]
 
-    have h_rsl_splay_last : ∀ (k : ℕ) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (p : List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit))
-        (r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+    have h_rsl_splay_last : ∀ (k : ℕ) (c : _root_.BinaryTree Unit) (p : List (_root_.BinaryTree Unit))
+        (r : _root_.BinaryTree Unit),
         p.length ≤ k →
         rightSpineLen (splayLeftSpine c (p ++ [r])) ≤ 2 + rightSpineLen r := by
       intro k
@@ -3536,45 +3538,45 @@ by
         · simp [splayLeftSpine, rightSpineLen]; omega
         · have hp' : p'.length ≤ k := by simp at hlen; omega
           simpa [List.cons_append, splayLeftSpine] using
-            ih (.node c () (.node r1 () r2)) p' r hp'
+            ih (.node () c (.node () r1 r2)) p' r hp'
 
-    have h_rsl_popUnlabeled : ∀ u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit,
+    have h_rsl_popUnlabeled : ∀ u : _root_.BinaryTree Unit,
         rightSpineLen (popUnlabeled u) ≤ rightSpineLen u + 1 := by
       intro u
-      rcases u with _ | ⟨_ | ⟨ll, lk, lr⟩, _, r⟩
+      rcases u with _ | ⟨_, _ | ⟨lk, ll, lr⟩, r⟩
       · simp [popUnlabeled, descendLeft, splayLeftSpine, rightSpineLen]
       · simp [popUnlabeled, descendLeft, splayLeftSpine, rightSpineLen]; omega
       · unfold popUnlabeled
         simp only [descendLeft, rightSpineLen]
-        rw [h_descLeft_acc (.node ll lk lr) [r]]
+        rw [h_descLeft_acc (.node lk ll lr) [r]]
         dsimp (config := { failIfUnchanged := false }) only
-        have hb := h_rsl_splay_last (descendLeft (.node ll lk lr) []).2.length
-          (descendLeft (.node ll lk lr) []).1 (descendLeft (.node ll lk lr) []).2 r le_rfl
+        have hb := h_rsl_splay_last (descendLeft (.node lk ll lr) []).2.length
+          (descendLeft (.node lk ll lr) []).1 (descendLeft (.node lk ll lr) []).2 r le_rfl
         omega
 
-    have h_leftmost_some : ∀ C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate,
-        C ≠ .empty → ∃ f0, twLeftmostFate C = some f0 := by
+    have h_leftmost_some : ∀ C : _root_.BinaryTree TwFate,
+        C ≠ .nil → ∃ f0, twLeftmostFate C = some f0 := by
       intro C
       induction C with
-      | empty => intro h; exact absurd rfl h
-      | node l f r ihl _ =>
+      | nil => intro h; exact absurd rfl h
+      | node f l r ihl _ =>
         intro _
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · exact ⟨f, by simp [twLeftmostFate]⟩
         · simp only [twLeftmostFate]; exact ihl (by simp)
 
-    have h_leftmost_le : ∀ (C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate) (f0 : TwFate),
+    have h_leftmost_le : ∀ (C : _root_.BinaryTree TwFate) (f0 : TwFate),
         TwIsTriOrdered C → twLeftmostFate C = some f0 →
         ForallTree (fun x => twFateCode f0 ≤ twFateCode x) C := by
       intro C f0
       induction C with
-      | empty => intro _ h; simp [twLeftmostFate] at h
-      | node l k r ihl _ =>
+      | nil => intro _ h; simp [twLeftmostFate] at h
+      | node k l r ihl _ =>
         rintro ⟨hl_le, hr_ge, htl, _⟩ hlm
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · simp only [twLeftmostFate, Option.some.injEq] at hlm
           subst hlm
-          exact .node .empty k r .left (Nat.le_refl _) hr_ge
+          exact .node .nil k r .left (Nat.le_refl _) hr_ge
         · simp only [twLeftmostFate] at hlm
           have hl_f0 := ihl htl hlm
           have hf0_k : twFateCode f0 ≤ twFateCode k := by
@@ -3582,52 +3584,52 @@ by
             | node _ _ _ _ hf0_lk _ =>
               cases hl_le with
               | node _ _ _ _ hlk_k _ => omega
-          exact .node (.node ll lk lr) k r hl_f0 hf0_k
+          exact .node (.node lk ll lr) k r hl_f0 hf0_k
             (h_forall_mono (fun _ hx => le_trans hf0_k hx) hr_ge)
 
-    have h_leftmost_attach : ∀ (C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate) (f0 : TwFate)
-        (acc : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate)),
+    have h_leftmost_attach : ∀ (C : _root_.BinaryTree TwFate) (f0 : TwFate)
+        (acc : List (TwFate × _root_.BinaryTree TwFate)),
         twLeftmostFate C = some f0 →
-        twAttachPoly (.node .empty f0 (twDescendLeftPoly C acc).1) (twDescendLeftPoly C acc).2 =
+        twAttachPoly (.node f0 .nil (twDescendLeftPoly C acc).1) (twDescendLeftPoly C acc).2 =
           twAttachPoly C acc := by
       intro C f0
       induction C with
-      | empty => intro _ h; simp [twLeftmostFate] at h
-      | node l k r ihl _ =>
+      | nil => intro _ h; simp [twLeftmostFate] at h
+      | node k l r ihl _ =>
         intro acc hlm
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · simp only [twLeftmostFate, Option.some.injEq] at hlm
           subst hlm
           simp [twDescendLeftPoly]
         · simp only [twLeftmostFate] at hlm
           simpa [twDescendLeftPoly, twAttachPoly] using ihl ((k, r) :: acc) hlm
 
-    have h_tri_attach_head : ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate)
-        (path : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate)),
+    have h_tri_attach_head : ∀ (u : _root_.BinaryTree TwFate)
+        (path : List (TwFate × _root_.BinaryTree TwFate)),
         TwIsTriOrdered (twAttachPoly u path) → TwIsTriOrdered u := by
       intro u path
       induction path generalizing u with
       | nil => exact id
       | cons hd rest ih =>
         intro h
-        exact (ih (.node u hd.1 hd.2) h).2.2.1
+        exact (ih (.node hd.1 u hd.2) h).2.2.1
 
-    have h_sorted_of_attach : ∀ (path : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate))
-        (cl : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate) (cur : TwFate) (cr : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate),
-        TwIsTriOrdered (twAttachPoly (.node cl cur cr) path) → TwSortedPath cur path := by
+    have h_sorted_of_attach : ∀ (path : List (TwFate × _root_.BinaryTree TwFate))
+        (cl : _root_.BinaryTree TwFate) (cur : TwFate) (cr : _root_.BinaryTree TwFate),
+        TwIsTriOrdered (twAttachPoly (.node cur cl cr) path) → TwSortedPath cur path := by
       intro path
       induction path with
       | nil => intro _ _ _ _; trivial
       | cons hd rest ih =>
         rcases hd with ⟨k, s⟩
         intro cl cur cr htri
-        have hhead := h_tri_attach_head (.node (.node cl cur cr) k s) rest htri
+        have hhead := h_tri_attach_head (.node k (.node cur cl cr) s) rest htri
         have hcur_k : twFateCode cur ≤ twFateCode k := by
           cases hhead.1 with
           | node _ _ _ _ hk _ => exact hk
-        exact ⟨hcur_k, ih (.node cl cur cr) k s htri⟩
+        exact ⟨hcur_k, ih (.node cur cl cr) k s htri⟩
 
-    have h_projL_attach : ∀ (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate) (path : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate)),
+    have h_projL_attach : ∀ (c : _root_.BinaryTree TwFate) (path : List (TwFate × _root_.BinaryTree TwFate)),
         twProjL (twAttachPoly c path) = twAttachUnit (twProjL c) (twFilterProjL path) := by
       intro c path
       induction path generalizing c with
@@ -3636,16 +3638,16 @@ by
         rcases hd with ⟨k, s⟩
         cases k <;> simp [twAttachPoly, twFilterProjL, twAttachUnit, twProjL, ih]
 
-    have h_attachUnit_ne : ∀ (v : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (rs : List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit)),
-        v ≠ .empty → twAttachUnit v rs ≠ .empty := by
+    have h_attachUnit_ne : ∀ (v : _root_.BinaryTree Unit) (rs : List (_root_.BinaryTree Unit)),
+        v ≠ .nil → twAttachUnit v rs ≠ .nil := by
       intro v rs
       induction rs generalizing v with
       | nil => exact id
       | cons r rest ih =>
         intro _
-        exact ih (.node v () r) (by simp)
+        exact ih (.node () v r) (by simp)
 
-    have h_lsl_attachUnit : ∀ (v : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (rs : List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit)),
+    have h_lsl_attachUnit : ∀ (v : _root_.BinaryTree Unit) (rs : List (_root_.BinaryTree Unit)),
         leftSpineLen (twAttachUnit v rs) = leftSpineLen v + rs.length := by
       intro v rs
       induction rs generalizing v with
@@ -3654,8 +3656,8 @@ by
         simp only [twAttachUnit, ih, leftSpineLen, List.length_cons]
         omega
 
-    have h_descLeft_attachUnit : ∀ (v : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (rs acc : List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit)),
-        v ≠ .empty →
+    have h_descLeft_attachUnit : ∀ (v : _root_.BinaryTree Unit) (rs acc : List (_root_.BinaryTree Unit)),
+        v ≠ .nil →
         descendLeft (twAttachUnit v rs) acc = descendLeft v (rs ++ acc) := by
       intro v rs
       induction rs generalizing v with
@@ -3663,12 +3665,12 @@ by
       | cons r rest ih =>
         intro acc hv
         simp only [twAttachUnit]
-        rw [ih (.node v () r) acc (by simp)]
-        rcases v with _ | ⟨vl, vk, vr⟩
+        rw [ih (.node () v r) acc (by simp)]
+        rcases v with _ | ⟨vk, vl, vr⟩
         · exact absurd rfl hv
         · simp [descendLeft]
 
-    have h_filterProjL_empty : ∀ (cur : TwFate) (path : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate)),
+    have h_filterProjL_empty : ∀ (cur : TwFate) (path : List (TwFate × _root_.BinaryTree TwFate)),
         1 ≤ twFateCode cur → TwSortedPath cur path → twFilterProjL path = [] := by
       intro cur path
       induction path generalizing cur with
@@ -3681,8 +3683,8 @@ by
         | M => exact ih .M (by decide) hrest
         | R => exact ih .R (by decide) hrest
 
-    have h_projL_splay : ∀ (k : ℕ) (cur : TwFate) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate)
-        (path : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate)),
+    have h_projL_splay : ∀ (k : ℕ) (cur : TwFate) (c : _root_.BinaryTree TwFate)
+        (path : List (TwFate × _root_.BinaryTree TwFate)),
         path.length ≤ k → TwSortedPath cur path →
         twProjL (twSplayLeftSpinePoly c path) =
           splayLeftSpine (twProjL c) (twFilterProjL path) := by
@@ -3702,28 +3704,28 @@ by
           rcases hsort with ⟨_, hk12, hsort_rest⟩
           cases k1 <;> cases k2
           · simpa [twSplayLeftSpinePoly, twFilterProjL, splayLeftSpine, twProjL] using
-              ih .L (.node c .L (.node s1 .L s2)) rest hrest_len hsort_rest
+              ih .L (.node .L c (.node .L s1 s2)) rest hrest_len hsort_rest
           · have hnil := h_filterProjL_empty .M rest (by decide) hsort_rest
             simp only [twSplayLeftSpinePoly, twFilterProjL]
-            rw [ih .M (.node c .L (.node s1 .M s2)) rest hrest_len hsort_rest, hnil]
+            rw [ih .M (.node .L c (.node .M s1 s2)) rest hrest_len hsort_rest, hnil]
             rfl
           · have hnil := h_filterProjL_empty .R rest (by decide) hsort_rest
             simp only [twSplayLeftSpinePoly, twFilterProjL]
-            rw [ih .R (.node c .L (.node s1 .R s2)) rest hrest_len hsort_rest, hnil]
+            rw [ih .R (.node .L c (.node .R s1 s2)) rest hrest_len hsort_rest, hnil]
             rfl
           · simp [twFateCode] at hk12
           · simpa [twSplayLeftSpinePoly, twFilterProjL, twProjL] using
-              ih .M (.node c .M (.node s1 .M s2)) rest hrest_len hsort_rest
+              ih .M (.node .M c (.node .M s1 s2)) rest hrest_len hsort_rest
           · simpa [twSplayLeftSpinePoly, twFilterProjL, twProjL] using
-              ih .R (.node c .M (.node s1 .R s2)) rest hrest_len hsort_rest
+              ih .R (.node .M c (.node .R s1 s2)) rest hrest_len hsort_rest
           · simp [twFateCode] at hk12
           · simp [twFateCode] at hk12
           · simpa [twSplayLeftSpinePoly, twFilterProjL, twProjL] using
-              ih .R (.node c .R (.node s1 .R s2)) rest hrest_len hsort_rest
+              ih .R (.node .R c (.node .R s1 s2)) rest hrest_len hsort_rest
 
 
-    have h_projM_attach_congr : ∀ (rest : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate))
-        (w1 w2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate),
+    have h_projM_attach_congr : ∀ (rest : List (TwFate × _root_.BinaryTree TwFate))
+        (w1 w2 : _root_.BinaryTree TwFate),
         twProjM w1 = twProjM w2 →
         twProjM (twAttachPoly w1 rest) = twProjM (twAttachPoly w2 rest) := by
       intro rest
@@ -3735,8 +3737,8 @@ by
         apply ih
         cases k <;> simp [twProjM, h]
 
-    have h_projR_attach_congr : ∀ (rest : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate))
-        (w1 w2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate),
+    have h_projR_attach_congr : ∀ (rest : List (TwFate × _root_.BinaryTree TwFate))
+        (w1 w2 : _root_.BinaryTree TwFate),
         twProjR w1 = twProjR w2 →
         twProjR (twAttachPoly w1 rest) = twProjR (twAttachPoly w2 rest) := by
       intro rest
@@ -3748,8 +3750,8 @@ by
         apply ih
         cases k <;> simp [twProjR, h]
 
-    have h_lsl_projM_attach : ∀ (rest : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate))
-        (cur : TwFate) (w : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate),
+    have h_lsl_projM_attach : ∀ (rest : List (TwFate × _root_.BinaryTree TwFate))
+        (cur : TwFate) (w : _root_.BinaryTree TwFate),
         1 ≤ twFateCode cur → TwSortedPath cur rest →
         leftSpineLen (twProjM (twAttachPoly w rest)) =
           twCountKeyM rest + leftSpineLen (twProjM w) := by
@@ -3763,16 +3765,16 @@ by
         | L => simp [twFateCode] at hcur hk; omega
         | M =>
           simp only [twAttachPoly, twCountKeyM]
-          rw [ih .M (.node w .M s) (by decide) hrest']
+          rw [ih .M (.node .M w s) (by decide) hrest']
           simp only [twProjM, leftSpineLen]
           omega
         | R =>
           simp only [twAttachPoly, twCountKeyM]
-          rw [ih .R (.node w .R s) (by decide) hrest']
+          rw [ih .R (.node .R w s) (by decide) hrest']
           rfl
 
-    have h_rsl_projM_congr : ∀ (rest : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate))
-        (cur : TwFate) (w1 w2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate),
+    have h_rsl_projM_congr : ∀ (rest : List (TwFate × _root_.BinaryTree TwFate))
+        (cur : TwFate) (w1 w2 : _root_.BinaryTree TwFate),
         1 ≤ twFateCode cur → TwSortedPath cur rest →
         rightSpineLen (twProjM w1) = rightSpineLen (twProjM w2) →
         rightSpineLen (twProjM (twAttachPoly w1 rest)) =
@@ -3786,12 +3788,12 @@ by
         cases k with
         | L => simp [twFateCode] at hcur hk; omega
         | M =>
-          exact ih .M (.node w1 .M s) (.node w2 .M s) (by decide) hrest' rfl
+          exact ih .M (.node .M w1 s) (.node .M w2 s) (by decide) hrest' rfl
         | R =>
-          exact ih .R (.node w1 .R s) (.node w2 .R s) (by decide) hrest' hrsl
+          exact ih .R (.node .R w1 s) (.node .R w2 s) (by decide) hrest' hrsl
 
-    have h_projM_attach_R : ∀ (rest : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate))
-        (w : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate),
+    have h_projM_attach_R : ∀ (rest : List (TwFate × _root_.BinaryTree TwFate))
+        (w : _root_.BinaryTree TwFate),
         TwSortedPath .R rest → twProjM (twAttachPoly w rest) = twProjM w := by
       intro rest
       induction rest with
@@ -3802,10 +3804,10 @@ by
         cases k with
         | L => simp [twFateCode] at hk
         | M => simp [twFateCode] at hk
-        | R => exact ih (.node w .R s) hrest'
+        | R => exact ih (.node .R w s) hrest'
 
-    have h_lsl_projR_attach : ∀ (rest : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate))
-        (w : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate),
+    have h_lsl_projR_attach : ∀ (rest : List (TwFate × _root_.BinaryTree TwFate))
+        (w : _root_.BinaryTree TwFate),
         TwSortedPath .R rest →
         leftSpineLen (twProjR (twAttachPoly w rest)) =
           rest.length + leftSpineLen (twProjR w) := by
@@ -3820,12 +3822,12 @@ by
         | M => simp [twFateCode] at hk
         | R =>
           simp only [twAttachPoly, List.length_cons]
-          rw [ih (.node w .R s) hrest']
+          rw [ih (.node .R w s) hrest']
           simp only [twProjR, leftSpineLen]
           omega
 
-    have h_rslr_attach_R : ∀ (rest : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate)) (d : ℕ)
-        (w1 w2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate),
+    have h_rslr_attach_R : ∀ (rest : List (TwFate × _root_.BinaryTree TwFate)) (d : ℕ)
+        (w1 w2 : _root_.BinaryTree TwFate),
         TwSortedPath .R rest →
         d + 2 ≤ rightSpineLen (twMirrorTree (twProjR w1)) →
         rotateLeftAtRightDepth (twMirrorTree (twProjR w1)) d = twMirrorTree (twProjR w2) →
@@ -3844,21 +3846,21 @@ by
         | L => simp [twFateCode] at hk
         | M => simp [twFateCode] at hk
         | R =>
-          have hd1 : (d + 1) + 2 ≤ rightSpineLen (twMirrorTree (twProjR (.node w1 .R s))) := by
+          have hd1 : (d + 1) + 2 ≤ rightSpineLen (twMirrorTree (twProjR (.node .R w1 s))) := by
             simp only [twProjR, twMirrorTree, rightSpineLen]
             omega
-          have hrot1 : rotateLeftAtRightDepth (twMirrorTree (twProjR (.node w1 .R s))) (d + 1) =
-              twMirrorTree (twProjR (.node w2 .R s)) := by
+          have hrot1 : rotateLeftAtRightDepth (twMirrorTree (twProjR (.node .R w1 s))) (d + 1) =
+              twMirrorTree (twProjR (.node .R w2 s)) := by
             simp [twProjR, twMirrorTree, rotateLeftAtRightDepth, hrot]
-          obtain ⟨h1, h2⟩ := ih (d + 1) (.node w1 .R s) (.node w2 .R s) hrest' hd1 hrot1
+          obtain ⟨h1, h2⟩ := ih (d + 1) (.node .R w1 s) (.node .R w2 s) hrest' hd1 hrot1
           have hidx : rest'.length + (d + 1) = ((.R, s) :: rest').length + d := by
             simp [List.length_cons]; omega
           rw [hidx] at h1 h2
           exact ⟨h1, h2⟩
 
 
-    have h_pop_path_ind : ∀ (k : ℕ) (cur : TwFate) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate)
-        (path : List (TwFate × _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate)),
+    have h_pop_path_ind : ∀ (k : ℕ) (cur : TwFate) (c : _root_.BinaryTree TwFate)
+        (path : List (TwFate × _root_.BinaryTree TwFate)),
         path.length ≤ k → TwSortedPath cur path →
         let rslrs := twExtractPopRRslrs path
         twCountExtPop rslrs = 0 ∧
@@ -3889,8 +3891,8 @@ by
           omega
         · have hrest_len : rest.length ≤ k := by simp at hlen; omega
           rcases hsort with ⟨hcur1, hk12, hsort_rest⟩
-          set u_bef := _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node (.node c k1 s1) k2 s2
-          set u_aft := _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node c k1 (.node s1 k2 s2)
+          set u_bef := _root_.BinaryTree.node k2 (.node k1 c s1) s2
+          set u_aft := _root_.BinaryTree.node k1 c (.node k2 s1 s2)
           cases k1 <;> cases k2
           ·
             have hcurL : cur = .L := by (cases cur <;> simp [twFateCode] at hcur1); rfl
@@ -3982,7 +3984,7 @@ by
 
                 have hrsl_eq : rightSpineLen (twProjM (twAttachPoly u_aft ((.M, s3) :: rest'))) =
                     rightSpineLen (twProjM (twAttachPoly u_bef ((.M, s3) :: rest'))) :=
-                  h_rsl_projM_congr rest' .M (.node u_aft .M s3) (.node u_bef .M s3)
+                  h_rsl_projM_congr rest' .M (.node .M u_aft s3) (.node .M u_bef s3)
                     (by decide) hsort_rest' rfl
                 obtain ⟨hc1, hc2, hv, hbound⟩ :=
                   ih .M u_aft ((.M, s3) :: rest') hrest_len ⟨le_rfl, hsort_rest'⟩
@@ -4073,9 +4075,9 @@ by
               omega
 
 
-    have h_pop_step : ∀ C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate,
+    have h_pop_step : ∀ C : _root_.BinaryTree TwFate,
         TwIsTriOrdered C → 1 ≤ twCountFate .L C →
-        twEraseTree C ≠ .empty ∧
+        twEraseTree C ≠ .nil ∧
         ∃ (stepL stepR : List TwExtCoreOp),
           twCountExtPop stepL + twCountExtPop stepR = 1 ∧
           TwValidExtSteps (twProjL C) stepL (twProjL (twPopPoly C)) ∧
@@ -4086,12 +4088,12 @@ by
             2 * twExtCoreCascadeCost (twMirrorTree (twProjR C)) stepR +
             twPhi2 C + 9 := by
       intro C htri hcntL
-      have hC_ne : C ≠ .empty := by
+      have hC_ne : C ≠ .nil := by
         intro h; subst h; simp [twCountFate] at hcntL
-      have he_ne : twEraseTree C ≠ .empty := by
+      have he_ne : twEraseTree C ≠ .nil := by
         cases C with
-        | empty => exact absurd rfl hC_ne
-        | node l f r => simp [twEraseTree, twMapTree]
+        | nil => exact absurd rfl hC_ne
+        | node f l r => simp [twEraseTree, twMapTree]
       obtain ⟨f0, hlm⟩ := h_leftmost_some C hC_ne
       have hf0_all := h_leftmost_le C f0 htri hlm
       have hf0_L : f0 = .L := by
@@ -4107,28 +4109,28 @@ by
       subst hf0_L
       set cr := (twDescendLeftPoly C []).1
       set path := (twDescendLeftPoly C []).2
-      have hatt : twAttachPoly (.node .empty .L cr) path = C := by
+      have hatt : twAttachPoly (.node .L .nil cr) path = C := by
         simpa [twAttachPoly] using h_leftmost_attach C .L [] hlm
-      have htri_att : TwIsTriOrdered (twAttachPoly (.node .empty .L cr) path) := by
+      have htri_att : TwIsTriOrdered (twAttachPoly (.node .L .nil cr) path) := by
         rwa [hatt]
-      have hsort : TwSortedPath .L path := h_sorted_of_attach path .empty .L cr htri_att
+      have hsort : TwSortedPath .L path := h_sorted_of_attach path .nil .L cr htri_att
       have hlen_C : path.length = leftSpineLen (twEraseTree C) - 1 := by
         have hl := h_descPoly_len C [] hC_ne
         simp only [List.length_nil, Nat.add_zero] at hl
         dsimp (config := { failIfUnchanged := false }) only [path]
         omega
-      have hprojL_C : twProjL C = twAttachUnit (.node .empty () (twProjL cr)) (twFilterProjL path) := by
+      have hprojL_C : twProjL C = twAttachUnit (.node () .nil (twProjL cr)) (twFilterProjL path) := by
         rw [← hatt, h_projL_attach]
         rfl
-      have hprojL_ne : twProjL C ≠ .empty := by
+      have hprojL_ne : twProjL C ≠ .nil := by
         rw [hprojL_C]
-        exact h_attachUnit_ne (.node .empty () (twProjL cr)) (twFilterProjL path) (by simp)
+        exact h_attachUnit_ne (.node () .nil (twProjL cr)) (twFilterProjL path) (by simp)
       have hlsl_projL : leftSpineLen (twProjL C) - 1 = (twFilterProjL path).length := by
         rw [hprojL_C, h_lsl_attachUnit]
         simp [leftSpineLen]
       have hpop_projL : popUnlabeled (twProjL C) = twProjL (twPopPoly C) := by
         unfold popUnlabeled twPopPoly
-        rw [hprojL_C, h_descLeft_attachUnit (.node .empty () (twProjL cr)) (twFilterProjL path) []
+        rw [hprojL_C, h_descLeft_attachUnit (.node () .nil (twProjL cr)) (twFilterProjL path) []
           (by simp)]
         simp only [List.append_nil, descendLeft]
         exact (h_projL_splay path.length .L cr path le_rfl hsort).symm
@@ -4137,10 +4139,10 @@ by
         exact h_rsl_popUnlabeled (twProjL C)
       have hM_cr : twProjM (twAttachPoly cr path) = twProjM C := by
         rw [← hatt]
-        exact h_projM_attach_congr path cr (.node .empty .L cr) rfl
+        exact h_projM_attach_congr path cr (.node .L .nil cr) rfl
       have hR_cr : twProjR (twAttachPoly cr path) = twProjR C := by
         rw [← hatt]
-        exact h_projR_attach_congr path cr (.node .empty .L cr) rfl
+        exact h_projR_attach_congr path cr (.node .L .nil cr) rfl
       have hphiMR_cr : twPhiMR (twAttachPoly cr path) = twPhiMR C := by
         unfold twPhiMR; rw [hM_cr, hR_cr]
       obtain ⟨hc1, hc2, hvR, hbound⟩ := h_pop_path_ind path.length .L cr path le_rfl hsort
@@ -4159,7 +4161,7 @@ by
         omega
 
 
-    have h_traj : ∀ (cops : List TwCDequeOp) (C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree TwFate),
+    have h_traj : ∀ (cops : List TwCDequeOp) (C : _root_.BinaryTree TwFate),
         TwValidCDequeSeq C cops →
         ∃ (eops_L eops_R : List TwExtCoreOp),
           twCountExtPop eops_L + twCountExtPop eops_R ≤ cops.length ∧
@@ -4183,15 +4185,15 @@ by
         | push f =>
           rcases hval with ⟨_, hord, hval_rest⟩
           obtain ⟨sL, sR, hpop0, hvL, hvR, hstep⟩ := h_push_step C f hord
-          obtain ⟨rL, rR, hpop_r, hseqL, hseqR, hcost_r⟩ := ih (.node .empty f C) hval_rest
+          obtain ⟨rL, rR, hpop_r, hseqL, hseqR, hcost_r⟩ := ih (.node f .nil C) hval_rest
           refine ⟨sL ++ rL, sR ++ rR, ?_, h_extSteps_seq _ _ _ _ hvL hseqL,
             h_extSteps_seq _ _ _ _ hvR hseqR, ?_⟩
           · rw [h_extPop_append, h_extPop_append, List.length_cons]; omega
           · rw [h_extCost_append _ _ _ _ hvL, h_extCost_append _ _ _ _ hvR]
             simp only [List.map_cons, twEraseCDequeOp, twUDequeSeqCost, twCostUDeque,
               twStepUDeque, List.length_cons]
-            have herase : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node .empty () (twEraseTree C) =
-                twEraseTree (.node .empty f C) := rfl
+            have herase : _root_.BinaryTree.node () .nil (twEraseTree C) =
+                twEraseTree (.node f .nil C) := rfl
             rw [herase]
             omega
         | inject f =>
@@ -4203,19 +4205,19 @@ by
             exact h_forall_mono (fun x hx => h_fateCode_mirror x f hx) hord
           obtain ⟨s1, s2, hpop0, hv1, hv2, hstep⟩ :=
             h_push_step (twDualTree C) (twMirrorFate f) hord_dual
-          have hdual_next : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node .empty (twMirrorFate f) (twDualTree C) =
-              twDualTree (.node C f .empty) := rfl
+          have hdual_next : _root_.BinaryTree.node (twMirrorFate f) .nil (twDualTree C) =
+              twDualTree (.node f C .nil) := rfl
           simp only [hdual_next, h_projL_dual, h_projR_dual, h_mirror_mirror, h_phi2_dual]
             at hv1 hv2 hstep
-          obtain ⟨rL, rR, hpop_r, hseqL, hseqR, hcost_r⟩ := ih (.node C f .empty) hval_rest
+          obtain ⟨rL, rR, hpop_r, hseqL, hseqR, hcost_r⟩ := ih (.node f C .nil) hval_rest
           refine ⟨s2 ++ rL, s1 ++ rR, ?_, h_extSteps_seq _ _ _ _ hv2 hseqL,
             h_extSteps_seq _ _ _ _ hv1 hseqR, ?_⟩
           · rw [h_extPop_append, h_extPop_append, List.length_cons]; omega
           · rw [h_extCost_append _ _ _ _ hv2, h_extCost_append _ _ _ _ hv1]
             simp only [List.map_cons, twEraseCDequeOp, twUDequeSeqCost, twCostUDeque,
               twStepUDeque, List.length_cons]
-            have herase : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node (twEraseTree C) () .empty =
-                twEraseTree (.node C f .empty) := rfl
+            have herase : _root_.BinaryTree.node () (twEraseTree C) .nil =
+                twEraseTree (.node f C .nil) := rfl
             rw [herase]
             omega
         | pop =>
@@ -4268,55 +4270,55 @@ by
       omega
 
   have h_stage4 :
-      ∀ (u0 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (P : ℕ) (eops : List TwExtCoreOp),
+      ∀ (u0 : _root_.BinaryTree Unit) (P : ℕ) (eops : List TwExtCoreOp),
         twCountExtPop eops = P →
         TwValidExtCoreSeq u0 eops →
         ∃ ops : List CoreOp,
           ValidCoreSeq P ops ∧ coreCascadeCost ops = twExtCoreCascadeCost u0 eops := by
     clear h_stage12 h_stage3 n m init ops hn hvalid
-    let listNodes : List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) → ℕ := fun xs =>
+    let listNodes : List (_root_.BinaryTree Unit) → ℕ := fun xs =>
       xs.foldr (fun x acc => 1 + x.num_nodes + acc) 0
 
     have h_rotL_nodes :
-        ∀ (d : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit), (rotateLeftAtRightDepth t d).num_nodes = t.num_nodes := by
+        ∀ (d : ℕ) (t : _root_.BinaryTree Unit), (rotateLeftAtRightDepth t d).num_nodes = t.num_nodes := by
       intro d
       induction d with
       | zero =>
         intro t
-        rcases t with _ | ⟨a, u1, _ | ⟨b, u2, c⟩⟩ <;>
-          (simp [rotateLeftAtRightDepth, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; try omega)
+        rcases t with _ | ⟨u1, a, _ | ⟨u2, b, c⟩⟩ <;>
+          (simp [rotateLeftAtRightDepth, _root_.BinaryTree.rotateLeft, _root_.BinaryTree.num_nodes]; try omega)
       | succ d ih =>
         intro t
-        rcases t with _ | ⟨l, u, r⟩
+        rcases t with _ | ⟨u, l, r⟩
         · rfl
-        · simp only [rotateLeftAtRightDepth, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, ih r]
+        · simp only [rotateLeftAtRightDepth, _root_.BinaryTree.num_nodes, ih r]
 
     have h_descend_nodes :
-        ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (acc : List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit)),
-          u ≠ .empty →
+        ∀ (u : _root_.BinaryTree Unit) (acc : List (_root_.BinaryTree Unit)),
+          u ≠ .nil →
           (descendLeft u acc).1.num_nodes + listNodes (descendLeft u acc).2 + 1 =
             u.num_nodes + listNodes acc := by
       intro u
       induction u with
-      | empty => intro _ h; exact absurd rfl h
-      | node l u0 r ihl _ =>
+      | nil => intro _ h; exact absurd rfl h
+      | node u0 l r ihl _ =>
         intro acc _
-        rcases l with _ | ⟨ll, lu, lr⟩
+        rcases l with _ | ⟨lu, ll, lr⟩
         · simp only [descendLeft]
           change r.num_nodes + listNodes acc + 1 = (1 + 0 + r.num_nodes) + listNodes acc
           omega
         · have h1 := ihl (r :: acc) (by simp)
           simp only [descendLeft]
-          change (descendLeft (.node ll lu lr) (r :: acc)).1.num_nodes +
-            listNodes (descendLeft (.node ll lu lr) (r :: acc)).2 + 1 =
+          change (descendLeft (.node lu ll lr) (r :: acc)).1.num_nodes +
+            listNodes (descendLeft (.node lu ll lr) (r :: acc)).2 + 1 =
             (1 + (1 + ll.num_nodes + lr.num_nodes) + r.num_nodes) + listNodes acc
-          change (descendLeft (.node ll lu lr) (r :: acc)).1.num_nodes +
-            listNodes (descendLeft (.node ll lu lr) (r :: acc)).2 + 1 =
+          change (descendLeft (.node lu ll lr) (r :: acc)).1.num_nodes +
+            listNodes (descendLeft (.node lu ll lr) (r :: acc)).2 + 1 =
             (1 + ll.num_nodes + lr.num_nodes) + (1 + r.num_nodes + listNodes acc) at h1
           omega
 
     have h_splay_nodes :
-        ∀ (n : ℕ) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (path : List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit)),
+        ∀ (n : ℕ) (c : _root_.BinaryTree Unit) (path : List (_root_.BinaryTree Unit)),
           path.length ≤ n →
           (splayLeftSpine c path).num_nodes = c.num_nodes + listNodes path := by
       intro n
@@ -4332,14 +4334,14 @@ by
         · change c.num_nodes = c.num_nodes + 0; omega
         · change 1 + c.num_nodes + r1.num_nodes = c.num_nodes + (1 + r1.num_nodes + 0); omega
         · have hrest : rest.length ≤ n := by simp at hlen; omega
-          have h1 := ih (.node c () (.node r1 () r2)) rest hrest
-          change (splayLeftSpine (.node c () (.node r1 () r2)) rest).num_nodes =
+          have h1 := ih (.node () c (.node () r1 r2)) rest hrest
+          change (splayLeftSpine (.node () c (.node () r1 r2)) rest).num_nodes =
             c.num_nodes + (1 + r1.num_nodes + (1 + r2.num_nodes + listNodes rest))
-          simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at h1
+          simp only [_root_.BinaryTree.num_nodes] at h1
           omega
 
     have h_pop_nodes :
-        ∀ t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit, t ≠ .empty → (popUnlabeled t).num_nodes + 1 = t.num_nodes := by
+        ∀ t : _root_.BinaryTree Unit, t ≠ .nil → (popUnlabeled t).num_nodes + 1 = t.num_nodes := by
       intro t ht
       unfold popUnlabeled
       have hd := h_descend_nodes t [] ht
@@ -4351,19 +4353,19 @@ by
       omega
 
     have h_ext_conservation :
-        ∀ (eops : List TwExtCoreOp) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+        ∀ (eops : List TwExtCoreOp) (u : _root_.BinaryTree Unit),
           TwValidExtCoreSeq u eops →
           u.num_nodes + twCountExtPush eops + twCountExtInject eops = twCountExtPop eops := by
       intro eops
       induction eops with
       | nil =>
-        intro u h; subst h; simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, twCountExtPush, twCountExtInject, twCountExtPop]
+        intro u h; subst h; simp [_root_.BinaryTree.num_nodes, twCountExtPush, twCountExtInject, twCountExtPop]
       | cons op rest ih =>
         intro u hval
         cases op with
         | push =>
-          have h1 := ih (.node .empty () u) hval
-          simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, twCountExtPush, twCountExtInject, twCountExtPop] at h1 ⊢
+          have h1 := ih (.node () .nil u) hval
+          simp only [_root_.BinaryTree.num_nodes, twCountExtPush, twCountExtInject, twCountExtPop] at h1 ⊢
           omega
         | pop =>
           rcases hval with ⟨hne, hval⟩
@@ -4378,11 +4380,11 @@ by
           simp only [twCountExtPush, twCountExtInject, twCountExtPop] at h1 ⊢
           omega
         | inject =>
-          have h1 := ih (.node u () .empty) hval
-          simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, twCountExtPush, twCountExtInject, twCountExtPop] at h1 ⊢
+          have h1 := ih (.node () u .nil) hval
+          simp only [_root_.BinaryTree.num_nodes, twCountExtPush, twCountExtInject, twCountExtPop] at h1 ⊢
           omega
 
-    let coreRun : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → List CoreOp → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → ℕ → ℕ → ℕ → Prop :=
+    let coreRun : _root_.BinaryTree Unit → List CoreOp → _root_.BinaryTree Unit → ℕ → ℕ → ℕ → Prop :=
       fun t1 ops t2 pushes pops cost =>
         TwValidCoreSteps t1 ops t2 ∧
         countCorePush ops = pushes ∧
@@ -4390,7 +4392,7 @@ by
         ∀ tail : List CoreOp, coreCascadeCostAux t1 (ops ++ tail) = cost + coreCascadeCostAux t2 tail
 
     have h_steps_append :
-        ∀ (a b : List CoreOp) (t1 t2 t3 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+        ∀ (a b : List CoreOp) (t1 t2 t3 : _root_.BinaryTree Unit),
           TwValidCoreSteps t1 a t2 → TwValidCoreSteps t2 b t3 →
           TwValidCoreSteps t1 (a ++ b) t3 := by
       intro a
@@ -4399,7 +4401,7 @@ by
       | cons op rest ih =>
         intro b t1 t2 t3 h1 h2
         cases op with
-        | push => exact ih b (.node .empty () t1) t2 t3 h1 h2
+        | push => exact ih b (.node () .nil t1) t2 t3 h1 h2
         | pop => exact ⟨h1.1, ih b (popUnlabeled t1) t2 t3 h1.2 h2⟩
         | rslr d => exact ⟨h1.1, ih b (rotateLeftAtRightDepth t1 d) t2 t3 h1.2 h2⟩
 
@@ -4418,7 +4420,7 @@ by
       | cons op rest ih => cases op <;> (simp [countCorePop, ih]; try omega)
 
     have h_run_trans :
-        ∀ {t1 t2 t3 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit} {a b : List CoreOp} {pa pb qa qb ca cb : ℕ},
+        ∀ {t1 t2 t3 : _root_.BinaryTree Unit} {a b : List CoreOp} {pa pb qa qb ca cb : ℕ},
           coreRun t1 a t2 pa qa ca →
           coreRun t2 b t3 pb qb cb →
           coreRun t1 (a ++ b) t3 (pa + pb) (qa + qb) (ca + cb) := by
@@ -4430,42 +4432,42 @@ by
         rw [List.append_assoc, hca (b ++ tail), hcb tail, Nat.add_assoc]
 
     have h_steps_empty :
-        ∀ (ops : List CoreOp) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
-          TwValidCoreSteps t ops .empty → ValidCoreSeqAux t ops := by
+        ∀ (ops : List CoreOp) (t : _root_.BinaryTree Unit),
+          TwValidCoreSteps t ops .nil → ValidCoreSeqAux t ops := by
       intro ops
       induction ops with
       | nil => intro t h; exact h
       | cons op rest ih =>
         intro t h
         cases op with
-        | push => exact ih (.node .empty () t) h
+        | push => exact ih (.node () .nil t) h
         | pop => exact ⟨h.1, ih (popUnlabeled t) h.2⟩
         | rslr d => exact ⟨h.1, ih (rotateLeftAtRightDepth t d) h.2⟩
 
     have h_app_nodes :
-        ∀ (u tl : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+        ∀ (u tl : _root_.BinaryTree Unit),
           (twAppendRightmost u tl).num_nodes = u.num_nodes + tl.num_nodes := by
       intro u tl
       induction u with
-      | empty => simp [twAppendRightmost, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
-      | node l _ r _ ihr => simp [twAppendRightmost, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, ihr]; omega
+      | nil => simp [twAppendRightmost, _root_.BinaryTree.num_nodes]
+      | node _ l r _ ihr => simp [twAppendRightmost, _root_.BinaryTree.num_nodes, ihr]; omega
 
     have h_chain_nodes : ∀ k : ℕ, (twRightChain k).num_nodes = k := by
       intro k
       induction k with
       | zero => rfl
-      | succ k ih => simp [twRightChain, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, ih]; omega
+      | succ k ih => simp [twRightChain, _root_.BinaryTree.num_nodes, ih]; omega
 
     have h_rsl_app :
-        ∀ (u tl : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+        ∀ (u tl : _root_.BinaryTree Unit),
           rightSpineLen (twAppendRightmost u tl) = rightSpineLen u + rightSpineLen tl := by
       intro u tl
       induction u with
-      | empty => simp [twAppendRightmost, rightSpineLen]
-      | node l _ r _ ihr => simp [twAppendRightmost, rightSpineLen, ihr]; omega
+      | nil => simp [twAppendRightmost, rightSpineLen]
+      | node _ l r _ ihr => simp [twAppendRightmost, rightSpineLen, ihr]; omega
 
     have h_rslr_app :
-        ∀ (d : ℕ) (u tl : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+        ∀ (d : ℕ) (u tl : _root_.BinaryTree Unit),
           d + 2 ≤ rightSpineLen u →
           d + 2 ≤ rightSpineLen (twAppendRightmost u tl) ∧
           rotateLeftAtRightDepth (twAppendRightmost u tl) d =
@@ -4474,14 +4476,14 @@ by
       induction d with
       | zero =>
         intro u tl h
-        rcases u with _ | ⟨a, _, _ | ⟨b, _, c⟩⟩
+        rcases u with _ | ⟨_, a, _ | ⟨_, b, c⟩⟩
         · simp [rightSpineLen] at h
         · simp [rightSpineLen] at h
         · refine ⟨?_, rfl⟩
           simp [twAppendRightmost, rightSpineLen]; omega
       | succ d ih =>
         intro u tl h
-        rcases u with _ | ⟨l, _, r⟩
+        rcases u with _ | ⟨_, l, r⟩
         · simp [rightSpineLen] at h
         · simp only [rightSpineLen] at h
           obtain ⟨h1, h2⟩ := ih r tl (by omega)
@@ -4490,22 +4492,22 @@ by
           · simp [twAppendRightmost, rotateLeftAtRightDepth, h2]
 
     have h_desc_append :
-        ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (a1 a2 : List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit)),
-          u ≠ .empty →
+        ∀ (u : _root_.BinaryTree Unit) (a1 a2 : List (_root_.BinaryTree Unit)),
+          u ≠ .nil →
           descendLeft u (a1 ++ a2) = ((descendLeft u a1).1, (descendLeft u a1).2 ++ a2) := by
       intro u
       induction u with
-      | empty => intro _ _ h; exact absurd rfl h
-      | node l _ r ihl _ =>
+      | nil => intro _ _ h; exact absurd rfl h
+      | node _ l r ihl _ =>
         intro a1 a2 _
-        rcases l with _ | ⟨ll, lu, lr⟩
+        rcases l with _ | ⟨lu, ll, lr⟩
         · simp [descendLeft]
         · simp only [descendLeft]
           rw [← List.cons_append]
           exact ihl (r :: a1) a2 (by simp)
 
     have h_splay_app_tail :
-        ∀ (n : ℕ) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (p : List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit)) (r tl : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+        ∀ (n : ℕ) (c : _root_.BinaryTree Unit) (p : List (_root_.BinaryTree Unit)) (r tl : _root_.BinaryTree Unit),
           p.length ≤ n →
           splayLeftSpine c (p ++ [twAppendRightmost r tl]) =
             twAppendRightmost (splayLeftSpine c (p ++ [r])) tl := by
@@ -4522,28 +4524,28 @@ by
         · rfl
         · rfl
         · have hrest : rest.length ≤ n := by simp at hlen; omega
-          simpa [splayLeftSpine] using ih (.node c () (.node r1 () r2)) rest r tl hrest
+          simpa [splayLeftSpine] using ih (.node () c (.node () r1 r2)) rest r tl hrest
 
     have h_pop_app :
-        ∀ (u tl : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
-          u ≠ .empty →
-          twAppendRightmost u tl ≠ .empty ∧
+        ∀ (u tl : _root_.BinaryTree Unit),
+          u ≠ .nil →
+          twAppendRightmost u tl ≠ .nil ∧
           leftSpineLen (twAppendRightmost u tl) = leftSpineLen u ∧
           popUnlabeled (twAppendRightmost u tl) = twAppendRightmost (popUnlabeled u) tl := by
       intro u tl hne
-      rcases u with _ | ⟨l, _, r⟩
+      rcases u with _ | ⟨_, l, r⟩
       · exact absurd rfl hne
       · refine ⟨by simp [twAppendRightmost], by simp [twAppendRightmost, leftSpineLen], ?_⟩
-        rcases l with _ | ⟨ll, lu, lr⟩
+        rcases l with _ | ⟨lu, ll, lr⟩
         · simp [popUnlabeled, descendLeft, splayLeftSpine, twAppendRightmost]
         · unfold popUnlabeled
-          have ha1 := h_desc_append (.node ll lu lr) [] [twAppendRightmost r tl] (by simp)
-          have ha2 := h_desc_append (.node ll lu lr) [] [r] (by simp)
+          have ha1 := h_desc_append (.node lu ll lr) [] [twAppendRightmost r tl] (by simp)
+          have ha2 := h_desc_append (.node lu ll lr) [] [r] (by simp)
           simp only [List.nil_append] at ha1 ha2
           simp only [twAppendRightmost, descendLeft]
           rw [ha1, ha2]
-          exact h_splay_app_tail (descendLeft (.node ll lu lr) []).2.length
-            (descendLeft (.node ll lu lr) []).1 (descendLeft (.node ll lu lr) []).2 r tl le_rfl
+          exact h_splay_app_tail (descendLeft (.node lu ll lr) []).2.length
+            (descendLeft (.node lu ll lr) []).1 (descendLeft (.node lu ll lr) []).2 r tl le_rfl
 
     have h_pullUp_all_rslr :
         ∀ β : ℕ, ∀ op ∈ twPullUpSeq β, ∃ d : ℕ, op = .rslr d := by
@@ -4567,10 +4569,10 @@ by
         rfl
 
     have h_shift_rslr_run :
-        ∀ (ops : List CoreOp) (l r1 r2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+        ∀ (ops : List CoreOp) (l r1 r2 : _root_.BinaryTree Unit),
           (∀ op ∈ ops, ∃ d : ℕ, op = .rslr d) →
           TwValidCoreSteps r1 ops r2 →
-          coreRun (.node l () r1) (ops.map twShiftCoreOp) (.node l () r2) 0 0 0 := by
+          coreRun (.node () l r1) (ops.map twShiftCoreOp) (.node () l r2) 0 0 0 := by
       intro ops
       induction ops with
       | nil =>
@@ -4590,111 +4592,111 @@ by
             coreCascadeStepCost, execCoreOp, rotateLeftAtRightDepth] using hcs tail
 
     have h_pullUp_run :
-        ∀ (u tl : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
-          coreRun (twAppendRightmost u (.node .empty () tl))
-            (twPullUpSeq (rightSpineLen u)) (.node u () tl) 0 0 0 := by
+        ∀ (u tl : _root_.BinaryTree Unit),
+          coreRun (twAppendRightmost u (.node () .nil tl))
+            (twPullUpSeq (rightSpineLen u)) (.node () u tl) 0 0 0 := by
       intro u
       induction u with
-      | empty =>
+      | nil =>
         intro tl
         refine ⟨rfl, rfl, rfl, fun tail => ?_⟩
-        change coreCascadeCostAux (.node .empty () tl) ([] ++ tail) = 0 + coreCascadeCostAux (.node .empty () tl) tail
+        change coreCascadeCostAux (.node () .nil tl) ([] ++ tail) = 0 + coreCascadeCostAux (.node () .nil tl) tail
         simp
-      | node l u0 r _ ihr =>
+      | node u0 l r _ ihr =>
         intro tl
         cases u0
         have hr_run := ihr tl
         have hshift := h_shift_rslr_run (twPullUpSeq (rightSpineLen r)) l
-          (twAppendRightmost r (.node .empty () tl)) (.node r () tl)
+          (twAppendRightmost r (.node () .nil tl)) (.node () r tl)
           (h_pullUp_all_rslr (rightSpineLen r)) hr_run.1
-        have hrot0 : coreRun (.node l () (.node r () tl)) [.rslr 0]
-            (.node (.node l () r) () tl) 0 0 0 := by
+        have hrot0 : coreRun (.node () l (.node () r tl)) [.rslr 0]
+            (.node () (.node () l r) tl) 0 0 0 := by
           refine ⟨⟨by simp [rightSpineLen]; omega, rfl⟩, rfl, rfl, ?_⟩
           intro tail
           simp [coreCascadeCostAux, coreCascadeStepCost, execCoreOp,
-            rotateLeftAtRightDepth, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft]
+            rotateLeftAtRightDepth, _root_.BinaryTree.rotateLeft]
         have hcomb := h_run_trans hshift hrot0
         simp only [Nat.add_zero] at hcomb
         rw [h_pullUp_shift (rightSpineLen r)] at hcomb
         simpa [twAppendRightmost, rightSpineLen, Nat.add_comm 1] using hcomb
 
-    have h_rsl_le_nodes : ∀ u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit, rightSpineLen u ≤ u.num_nodes := by
+    have h_rsl_le_nodes : ∀ u : _root_.BinaryTree Unit, rightSpineLen u ≤ u.num_nodes := by
       intro u
       induction u with
-      | empty => rfl
-      | node l _ r _ ihr => simp [rightSpineLen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega
+      | nil => rfl
+      | node _ l r _ ihr => simp [rightSpineLen, _root_.BinaryTree.num_nodes]; omega
 
     have h_build_aux :
-        ∀ (fuel : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+        ∀ (fuel : ℕ) (t : _root_.BinaryTree Unit),
           2 * t.num_nodes - rightSpineLen t ≤ fuel →
-          coreRun .empty (twBuildFromEmptyAux fuel t) t t.num_nodes 0 0 := by
+          coreRun .nil (twBuildFromEmptyAux fuel t) t t.num_nodes 0 0 := by
       intro fuel
       induction fuel with
       | zero =>
         intro t hle
         cases t with
-        | empty => exact ⟨rfl, rfl, rfl, fun _ => by simp [twBuildFromEmptyAux]⟩
-        | node l _ r =>
+        | nil => exact ⟨rfl, rfl, rfl, fun _ => by simp [twBuildFromEmptyAux]⟩
+        | node _ l r =>
           have hr := h_rsl_le_nodes r
-          simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, rightSpineLen] at hle
+          simp only [_root_.BinaryTree.num_nodes, rightSpineLen] at hle
           omega
       | succ fuel ih =>
         intro t hle
-        rcases t with _ | ⟨l, u0, r⟩
+        rcases t with _ | ⟨u0, l, r⟩
         · exact ⟨rfl, rfl, rfl, fun _ => by simp [twBuildFromEmptyAux]⟩
         · cases u0
-          rcases l with _ | ⟨a, u1, b⟩
+          rcases l with _ | ⟨u1, a, b⟩
           · have hr := h_rsl_le_nodes r
             have hfuel : 2 * r.num_nodes - rightSpineLen r ≤ fuel := by
-              simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, rightSpineLen] at hle
+              simp only [_root_.BinaryTree.num_nodes, rightSpineLen] at hle
               omega
             have h1 := ih r hfuel
-            have h2 : coreRun r [.push] (.node .empty () r) 1 0 0 :=
+            have h2 : coreRun r [.push] (.node () .nil r) 1 0 0 :=
               ⟨rfl, rfl, rfl, fun _ => by simp [coreCascadeCostAux, coreCascadeStepCost, execCoreOp]⟩
             have hcomb := h_run_trans h1 h2
-            simp only [twBuildFromEmptyAux, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, Nat.add_zero]
+            simp only [twBuildFromEmptyAux, _root_.BinaryTree.num_nodes, Nat.add_zero]
             have hn_eq : r.num_nodes + 1 = 1 + 0 + r.num_nodes := by omega
             rw [← hn_eq]
             exact hcomb
           · cases u1
-            let t' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit := .node a () (.node b () r)
+            let t' : _root_.BinaryTree Unit := .node () a (.node () b r)
             have hr := h_rsl_le_nodes r
-            have ht'_nodes : t'.num_nodes = (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node (.node a () b) () r).num_nodes := by
-              simp [t', _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega
+            have ht'_nodes : t'.num_nodes = (_root_.BinaryTree.node () (.node () a b) r).num_nodes := by
+              simp [t', _root_.BinaryTree.num_nodes]; omega
             have hfuel : 2 * t'.num_nodes - rightSpineLen t' ≤ fuel := by
-              simp only [t', _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, rightSpineLen] at hle ⊢
+              simp only [t', _root_.BinaryTree.num_nodes, rightSpineLen] at hle ⊢
               omega
             have h1 := ih t' hfuel
-            have h2 : coreRun t' [.rslr 0] (.node (.node a () b) () r) 0 0 0 := by
+            have h2 : coreRun t' [.rslr 0] (.node () (.node () a b) r) 0 0 0 := by
               refine ⟨⟨by simp [t', rightSpineLen]; omega, rfl⟩, rfl, rfl, ?_⟩
               intro tail
               simp [t', coreCascadeCostAux, coreCascadeStepCost, execCoreOp,
-                rotateLeftAtRightDepth, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft]
+                rotateLeftAtRightDepth, _root_.BinaryTree.rotateLeft]
             have hcomb := h_run_trans h1 h2
             simp only [Nat.add_zero, ht'_nodes] at hcomb
             exact hcomb
 
     have h_sim_loop :
-        ∀ (eops : List TwExtCoreOp) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+        ∀ (eops : List TwExtCoreOp) (u : _root_.BinaryTree Unit),
           TwValidExtCoreSeq u eops →
           ∃ simOps : List CoreOp,
             coreRun (twAppendRightmost u (twRightChain (twCountExtInject eops)))
-              simOps .empty (twCountExtPush eops) (twCountExtPop eops)
+              simOps .nil (twCountExtPush eops) (twCountExtPop eops)
               (twExtCoreCascadeCost u eops) := by
       intro eops
       induction eops with
       | nil =>
         intro u h; subst h
         refine ⟨[], rfl, rfl, rfl, fun tail => ?_⟩
-        change coreCascadeCostAux .empty ([] ++ tail) = 0 + coreCascadeCostAux .empty tail
+        change coreCascadeCostAux .nil ([] ++ tail) = 0 + coreCascadeCostAux .nil tail
         simp
       | cons op rest ih =>
         intro u hval
         cases op with
         | push =>
-          obtain ⟨simRest, hrest⟩ := ih (.node .empty () u) hval
+          obtain ⟨simRest, hrest⟩ := ih (.node () .nil u) hval
           have hstep : coreRun (twAppendRightmost u (twRightChain (twCountExtInject rest)))
-              [.push] (twAppendRightmost (.node .empty () u) (twRightChain (twCountExtInject rest)))
+              [.push] (twAppendRightmost (.node () .nil u) (twRightChain (twCountExtInject rest)))
               1 0 0 :=
             ⟨rfl, rfl, rfl, fun _ => by simp [twAppendRightmost, coreCascadeCostAux, coreCascadeStepCost, execCoreOp]⟩
           refine ⟨.push :: simRest, ?_⟩
@@ -4727,7 +4729,7 @@ by
           simpa [twCountExtInject, twCountExtPush, twCountExtPop, twExtCoreCascadeCost,
             twExtCascadeStepCost, twExecExtCoreOp] using h_run_trans hstep hrest
         | inject =>
-          obtain ⟨simRest, hrest⟩ := ih (.node u () .empty) hval
+          obtain ⟨simRest, hrest⟩ := ih (.node () u .nil) hval
           have hstep := h_pullUp_run u (twRightChain (twCountExtInject rest))
           refine ⟨twPullUpSeq (rightSpineLen u) ++ simRest, ?_⟩
           simpa [twCountExtInject, Nat.add_comm 1, twCountExtPush, twCountExtPop,
@@ -4738,12 +4740,12 @@ by
     have hcons := h_ext_conservation eops u0 hval
     set k := twCountExtInject eops
     set H0 := twAppendRightmost u0 (twRightChain k)
-    have hbuild : coreRun .empty (twBuildFromEmpty H0) H0 H0.num_nodes 0 0 :=
+    have hbuild : coreRun .nil (twBuildFromEmpty H0) H0 H0.num_nodes 0 0 :=
       h_build_aux (2 * H0.num_nodes - rightSpineLen H0) H0 le_rfl
     obtain ⟨simOps, hsim⟩ := h_sim_loop eops u0 hval
     have htot := h_run_trans hbuild hsim
     rcases htot with ⟨hv_tot, hpush_tot, hpop_tot, hcost_tot⟩
-    refine ⟨twBuildFromEmpty H0 ++ simOps, ⟨?_, ?_, h_steps_empty _ .empty hv_tot⟩, ?_⟩
+    refine ⟨twBuildFromEmpty H0 ++ simOps, ⟨?_, ?_, h_steps_empty _ .nil hv_tot⟩, ?_⟩
     · have hH0_nodes : H0.num_nodes = u0.num_nodes + k := by
         dsimp (config := { failIfUnchanged := false }) [H0]; rw [h_app_nodes, h_chain_nodes]
       omega
@@ -4761,13 +4763,13 @@ by
   rw [hcost_eq, hccL, hccR]
   exact_mod_cast hcost_le
 
-theorem block_and_typeB_cascade_bound (Δ' k M S : ℕ) (init : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (seq : List RightRotOp)
+theorem block_and_typeB_cascade_bound (Δ' k M S : ℕ) (init : _root_.BinaryTree Unit) (seq : List RightRotOp)
     (hk : 2 ≤ k) (hM : 1 ≤ M) (hS : 1 ≤ S)
     (hnodes : init.num_nodes = M * S)
     (hvalid : ValidRightRotSeq Δ' k init seq) :
     (M = 2 ∧ k = 2 →
       countPureInterblockCascades S (labelRange 0 init) seq = 0) ∧
-    ∃ b_seqs : Fin M → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit × List RightRotOp,
+    ∃ b_seqs : Fin M → _root_.BinaryTree Unit × List RightRotOp,
       (∀ m : Fin M,
         (b_seqs m).1.num_nodes = S ∧
         ValidRightRotSeq Δ' k (b_seqs m).1 (b_seqs m).2) ∧
@@ -4778,25 +4780,25 @@ theorem block_and_typeB_cascade_bound (Δ' k M S : ℕ) (init : _root_.SplayDequ
 by
   have _ := And.intro hk hM
 
-  have h_subLD0 : ∀ {β : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree β), subtreeAtLeftDepthGen t 0 = t := by
+  have h_subLD0 : ∀ {β : Type} (t : _root_.BinaryTree β), subtreeAtLeftDepthGen t 0 = t := by
     rintro _ (_ | _) <;> rfl
   have h_appLD0 :
-      ∀ {β : Type} (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree β → _root_.SplayDeque.Legacy.SplayTree.BinaryTree β) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree β),
+      ∀ {β : Type} (f : _root_.BinaryTree β → _root_.BinaryTree β) (t : _root_.BinaryTree β),
         applyAtLeftDepthGen f t 0 = f t := by
     rintro _ _ (_ | _) <;> rfl
-  have h_subPos0 : ∀ {β : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree β), subtreeAtPosGen t [] = t := by
+  have h_subPos0 : ∀ {β : Type} (t : _root_.BinaryTree β), subtreeAtPosGen t [] = t := by
     rintro _ (_ | _) <;> rfl
   have h_appPos0 :
-      ∀ {β : Type} (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree β → _root_.SplayDeque.Legacy.SplayTree.BinaryTree β) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree β),
+      ∀ {β : Type} (f : _root_.BinaryTree β → _root_.BinaryTree β) (t : _root_.BinaryTree β),
         applyAtPosGen f t [] = f t := by
     rintro _ _ (_ | _) <;> rfl
-  have h_off0 : ∀ (a : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), btbSubtreeOffset a t [] = a := by
+  have h_off0 : ∀ (a : ℕ) (t : _root_.BinaryTree ℕ), btbSubtreeOffset a t [] = a := by
     rintro _ (_ | _) <;> rfl
-  have h_proj0 : ∀ (lo hi : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), btbProjectPos lo hi t [] = [] := by
+  have h_proj0 : ∀ (lo hi : ℕ) (t : _root_.BinaryTree ℕ), btbProjectPos lo hi t [] = [] := by
     rintro _ _ (_ | _) <;> rfl
 
   have h_seq_cat :
-      ∀ (k0 : ℕ) (s1 s2 : List RightRotOp) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+      ∀ (k0 : ℕ) (s1 s2 : List RightRotOp) (t : _root_.BinaryTree Unit),
         (ValidRightRotSeq Δ' k0 t (s1 ++ s2) ↔
           ValidRightRotSeq Δ' k0 t s1 ∧ ValidRightRotSeq Δ' k0 (execRightRotSeq t s1) s2) ∧
         execRightRotSeq t (s1 ++ s2) = execRightRotSeq (execRightRotSeq t s1) s2 ∧
@@ -4816,48 +4818,48 @@ by
 
 
 
-  have h_ek_nodes : ∀ {β : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree β), (eraseKeys t).num_nodes = t.num_nodes := by
+  have h_ek_nodes : ∀ {β : Type} (t : _root_.BinaryTree β), (eraseKeys t).num_nodes = t.num_nodes := by
     intro β t
     induction t with
-    | empty => rfl
-    | node l _ r ihl ihr => simp only [eraseKeys, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, ihl, ihr]
+    | nil => rfl
+    | node _ l r ihl ihr => simp only [eraseKeys, _root_.BinaryTree.num_nodes, ihl, ihr]
 
-  have h_ek_rotR : ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), eraseKeys t.rotateRight = (eraseKeys t).rotateRight := by
-    rintro (_ | ⟨_ | ⟨a, x, b⟩, y, c⟩) <;> rfl
+  have h_ek_rotR : ∀ (t : _root_.BinaryTree ℕ), eraseKeys t.rotateRight = (eraseKeys t).rotateRight := by
+    rintro (_ | ⟨y, _ | ⟨x, a, b⟩, c⟩) <;> rfl
 
   have h_ek_subLD :
-      ∀ (d : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (d : ℕ) (t : _root_.BinaryTree ℕ),
         eraseKeys (subtreeAtLeftDepthGen t d) = subtreeAtLeftDepth (eraseKeys t) d := by
     intro d
     induction d with
     | zero => rintro (_ | _) <;> rfl
     | succ d ih =>
-      rintro (_ | ⟨l, _, _⟩)
+      rintro (_ | ⟨_, l, _⟩)
       · rfl
       · exact ih l
 
   have h_ek_applyLD :
-      ∀ (d : ℕ) (fN : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (fU : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit)
-        (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (d : ℕ) (fN : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (fU : _root_.BinaryTree Unit → _root_.BinaryTree Unit)
+        (t : _root_.BinaryTree ℕ),
         (∀ s, eraseKeys (fN s) = fU (eraseKeys s)) →
         eraseKeys (applyAtLeftDepthGen fN t d) = applyAtLeftDepth fU (eraseKeys t) d := by
     intro d
     induction d with
     | zero => intro fN fU t hf; cases t <;> exact hf _
     | succ d ih =>
-      rintro fN fU (_ | ⟨l, k0, r⟩) hf
+      rintro fN fU (_ | ⟨k0, l, r⟩) hf
       · rfl
       · simp only [applyAtLeftDepthGen, eraseKeys, applyAtLeftDepth, ih fN fU l hf]
 
   have h_ek_cascRoot :
-      ∀ (gaps : List ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (gaps : List ℕ) (t : _root_.BinaryTree ℕ),
         eraseKeys (execGappedCascadeAtRootGen t gaps) =
           execGappedCascadeAtRoot (eraseKeys t) gaps := by
     intro gaps
     induction gaps with
     | nil => intro t; exact h_ek_rotR t
     | cons g rest ih =>
-      rintro (_ | ⟨_ | ⟨a, k1, b⟩, k2, c⟩)
+      rintro (_ | ⟨k2, _ | ⟨k1, a, b⟩, c⟩)
       · rfl
       · rfl
       · simp only [execGappedCascadeAtRootGen, eraseKeys, execGappedCascadeAtRoot]
@@ -4865,74 +4867,74 @@ by
           (fun s => execGappedCascadeAtRoot s rest) a ih]
 
   have h_ek_subPos :
-      ∀ (pos : List Dir) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (pos : List Dir) (t : _root_.BinaryTree ℕ),
         eraseKeys (subtreeAtPosGen t pos) = subtreeAtPos (eraseKeys t) pos := by
     intro pos
     induction pos with
     | nil => rintro (_ | _) <;> rfl
     | cons dir rest ih =>
-      rintro (_ | ⟨l, _, r⟩)
+      rintro (_ | ⟨_, l, r⟩)
       · rfl
       · cases dir <;> exact ih _
 
   have h_ek_applyPos :
-      ∀ (pos : List Dir) (fN : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)
-        (fU : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (pos : List Dir) (fN : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ)
+        (fU : _root_.BinaryTree Unit → _root_.BinaryTree Unit) (t : _root_.BinaryTree ℕ),
         (∀ s, eraseKeys (fN s) = fU (eraseKeys s)) →
         eraseKeys (applyAtPosGen fN t pos) = applyAtPos fU (eraseKeys t) pos := by
     intro pos
     induction pos with
     | nil => intro fN fU t hf; cases t <;> exact hf _
     | cons dir rest ih =>
-      rintro fN fU (_ | ⟨l, k0, r⟩) hf
+      rintro fN fU (_ | ⟨k0, l, r⟩) hf
       · rfl
       · cases dir <;> simp only [applyAtPosGen, eraseKeys, applyAtPos, ih fN fU _ hf]
 
   have h_ek_op :
-      ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (op : RightRotOp),
+      ∀ (t : _root_.BinaryTree ℕ) (op : RightRotOp),
         eraseKeys (execRightRotOpGen t op) = execRightRotOp (eraseKeys t) op := by
     intro t op
     cases op with
     | single pos =>
-      exact h_ek_applyPos pos _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight t h_ek_rotR
+      exact h_ek_applyPos pos _root_.BinaryTree.rotateRight _root_.BinaryTree.rotateRight t h_ek_rotR
     | cascade pos gaps =>
       exact h_ek_applyPos pos (fun s => execGappedCascadeAtRootGen s gaps)
         (fun s => execGappedCascadeAtRoot s gaps) t (h_ek_cascRoot gaps)
 
   have h_labelRange_spec :
-      ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (a : ℕ),
+      ∀ (u : _root_.BinaryTree Unit) (a : ℕ),
         IsRangeBST a (labelRange a u) ∧
         (labelRange a u).num_nodes = u.num_nodes ∧
         eraseKeys (labelRange a u) = u := by
     intro u
     induction u with
-    | empty => intro a; exact ⟨trivial, rfl, rfl⟩
-    | node l _ r ihl ihr =>
+    | nil => intro a; exact ⟨trivial, rfl, rfl⟩
+    | node _ l r ihl ihr =>
       intro a
       obtain ⟨hb_l, hn_l, he_l⟩ := ihl a
       obtain ⟨hb_r, hn_r, he_r⟩ := ihr (a + l.num_nodes + 1)
       refine ⟨⟨?_, hb_l, hb_r⟩, ?_, ?_⟩
       · simp only [hn_l]
-      · simp only [labelRange, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, hn_l, hn_r]
+      · simp only [labelRange, _root_.BinaryTree.num_nodes, hn_l, hn_r]
       · simp only [labelRange, eraseKeys, he_l, he_r]
 
   have h_bst_rotR :
-      ∀ (a : ℕ) (s : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (a : ℕ) (s : _root_.BinaryTree ℕ),
         IsRangeBST a s → IsRangeBST a s.rotateRight ∧ s.rotateRight.num_nodes = s.num_nodes := by
     intro a s hs
-    rcases s with _ | ⟨_ | ⟨A, x, B⟩, y, C⟩
+    rcases s with _ | ⟨y, _ | ⟨x, A, B⟩, C⟩
     · exact ⟨trivial, rfl⟩
     · exact ⟨hs, rfl⟩
     · obtain ⟨hy, ⟨hx, hA, hB⟩, hC⟩ := hs
-      simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hy
+      simp only [_root_.BinaryTree.num_nodes] at hy
       refine ⟨⟨hx, hA, ⟨?_, hB, hC⟩⟩, ?_⟩
       · omega
-      · simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega
+      · simp only [_root_.BinaryTree.rotateRight, _root_.BinaryTree.num_nodes]; omega
 
   have h_bst_applyLD :
-      ∀ (d : ℕ) (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (d : ℕ) (f : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ),
         (∀ a0 u, IsRangeBST a0 u → IsRangeBST a0 (f u) ∧ (f u).num_nodes = u.num_nodes) →
-        ∀ (a : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+        ∀ (a : ℕ) (t : _root_.BinaryTree ℕ),
           IsRangeBST a t →
           IsRangeBST a (applyAtLeftDepthGen f t d) ∧
             (applyAtLeftDepthGen f t d).num_nodes = t.num_nodes := by
@@ -4941,16 +4943,16 @@ by
     | zero => intro f hf a t ht; rw [h_appLD0]; exact hf a t ht
     | succ d ih =>
       intro f hf a t ht
-      rcases t with _ | ⟨l, k0, r⟩
+      rcases t with _ | ⟨k0, l, r⟩
       · exact ⟨trivial, rfl⟩
       · obtain ⟨hk0, hl, hr⟩ := ht
         obtain ⟨hl', hn'⟩ := ih f hf a l hl
         refine ⟨⟨?_, hl', hr⟩, ?_⟩
         · rw [hn']; exact hk0
-        · simp only [applyAtLeftDepthGen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, hn']
+        · simp only [applyAtLeftDepthGen, _root_.BinaryTree.num_nodes, hn']
 
   have h_bst_cascRoot :
-      ∀ (gaps : List ℕ) (a : ℕ) (s : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (gaps : List ℕ) (a : ℕ) (s : _root_.BinaryTree ℕ),
         IsRangeBST a s →
         IsRangeBST a (execGappedCascadeAtRootGen s gaps) ∧
           (execGappedCascadeAtRootGen s gaps).num_nodes = s.num_nodes := by
@@ -4959,21 +4961,21 @@ by
     | nil => intro a s hs; exact h_bst_rotR a s hs
     | cons g rest ih =>
       intro a s hs
-      rcases s with _ | ⟨_ | ⟨A, x, B⟩, y, C⟩
+      rcases s with _ | ⟨y, _ | ⟨x, A, B⟩, C⟩
       · exact ⟨trivial, rfl⟩
       · exact ⟨hs, rfl⟩
       · obtain ⟨hy, ⟨hx, hA, hB⟩, hC⟩ := hs
         obtain ⟨hA', hnA'⟩ := h_bst_applyLD g (fun u => execGappedCascadeAtRootGen u rest) ih a A hA
-        simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hy
+        simp only [_root_.BinaryTree.num_nodes] at hy
         refine ⟨⟨?_, hA', ⟨?_, hB, hC⟩⟩, ?_⟩
         · rw [hnA']; exact hx
         · omega
-        · simp only [execGappedCascadeAtRootGen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, hnA']; omega
+        · simp only [execGappedCascadeAtRootGen, _root_.BinaryTree.num_nodes, hnA']; omega
 
   have h_bst_applyPos :
-      ∀ (pos : List Dir) (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (pos : List Dir) (f : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ),
         (∀ a0 u, IsRangeBST a0 u → IsRangeBST a0 (f u) ∧ (f u).num_nodes = u.num_nodes) →
-        ∀ (a : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+        ∀ (a : ℕ) (t : _root_.BinaryTree ℕ),
           IsRangeBST a t →
           IsRangeBST a (applyAtPosGen f t pos) ∧
             (applyAtPosGen f t pos).num_nodes = t.num_nodes := by
@@ -4982,7 +4984,7 @@ by
     | nil => intro f hf a t ht; rw [h_appPos0]; exact hf a t ht
     | cons dir rest ih =>
       intro f hf a t ht
-      rcases t with _ | ⟨l, k0, r⟩
+      rcases t with _ | ⟨k0, l, r⟩
       · exact ⟨trivial, rfl⟩
       · obtain ⟨hk0, hl, hr⟩ := ht
         cases dir with
@@ -4990,25 +4992,25 @@ by
           obtain ⟨hl', hn'⟩ := ih f hf a l hl
           refine ⟨⟨?_, hl', hr⟩, ?_⟩
           · rw [hn']; exact hk0
-          · simp only [applyAtPosGen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, hn']
+          · simp only [applyAtPosGen, _root_.BinaryTree.num_nodes, hn']
         | R =>
           obtain ⟨hr', hn'⟩ := ih f hf (k0 + 1) r hr
-          exact ⟨⟨hk0, hl, hr'⟩, by simp only [applyAtPosGen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, hn']⟩
+          exact ⟨⟨hk0, hl, hr'⟩, by simp only [applyAtPosGen, _root_.BinaryTree.num_nodes, hn']⟩
 
   have h_bst_op :
-      ∀ (op : RightRotOp) (a : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (op : RightRotOp) (a : ℕ) (t : _root_.BinaryTree ℕ),
         IsRangeBST a t →
         IsRangeBST a (execRightRotOpGen t op) ∧
           (execRightRotOpGen t op).num_nodes = t.num_nodes := by
     intro op a t ht
     cases op with
-    | single pos => exact h_bst_applyPos pos _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight h_bst_rotR a t ht
+    | single pos => exact h_bst_applyPos pos _root_.BinaryTree.rotateRight h_bst_rotR a t ht
     | cascade pos gaps =>
       exact h_bst_applyPos pos (fun u => execGappedCascadeAtRootGen u gaps)
         (h_bst_cascRoot gaps) a t ht
 
   have h_subLD_bst :
-      ∀ (d : ℕ) (a : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (d : ℕ) (a : ℕ) (t : _root_.BinaryTree ℕ),
         IsRangeBST a t →
         IsRangeBST a (subtreeAtLeftDepthGen t d) ∧
           (subtreeAtLeftDepthGen t d).num_nodes ≤ t.num_nodes := by
@@ -5017,14 +5019,14 @@ by
     | zero => intro a t ht; rw [h_subLD0]; exact ⟨ht, le_rfl⟩
     | succ d ih =>
       intro a t ht
-      rcases t with _ | ⟨l, _, r⟩
+      rcases t with _ | ⟨_, l, r⟩
       · exact ⟨trivial, le_rfl⟩
       · obtain ⟨_, hl, _⟩ := ht
         obtain ⟨hl', hn'⟩ := ih a l hl
-        exact ⟨hl', by simp only [subtreeAtLeftDepthGen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega⟩
+        exact ⟨hl', by simp only [subtreeAtLeftDepthGen, _root_.BinaryTree.num_nodes]; omega⟩
 
   have h_subPos_bst :
-      ∀ (pos : List Dir) (a : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (pos : List Dir) (a : ℕ) (t : _root_.BinaryTree ℕ),
         IsRangeBST a t →
         IsRangeBST (btbSubtreeOffset a t pos) (subtreeAtPosGen t pos) ∧
           a ≤ btbSubtreeOffset a t pos ∧
@@ -5034,62 +5036,62 @@ by
     | nil => intro a t ht; rw [h_off0, h_subPos0]; exact ⟨ht, le_rfl, le_rfl⟩
     | cons dir rest ih =>
       intro a t ht
-      rcases t with _ | ⟨l, k0, r⟩
-      · exact ⟨trivial, le_rfl, by simp [btbSubtreeOffset, subtreeAtPosGen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]⟩
+      rcases t with _ | ⟨k0, l, r⟩
+      · exact ⟨trivial, le_rfl, by simp [btbSubtreeOffset, subtreeAtPosGen, _root_.BinaryTree.num_nodes]⟩
       · obtain ⟨hk0, hl, hr⟩ := ht
         cases dir with
         | L =>
           obtain ⟨hs, hlo, hhi⟩ := ih a l hl
           refine ⟨hs, hlo, ?_⟩
-          simp only [btbSubtreeOffset, subtreeAtPosGen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hhi ⊢
+          simp only [btbSubtreeOffset, subtreeAtPosGen, _root_.BinaryTree.num_nodes] at hhi ⊢
           omega
         | R =>
           obtain ⟨hs, hlo, hhi⟩ := ih (k0 + 1) r hr
           refine ⟨hs, ?_, ?_⟩
           · simp only [btbSubtreeOffset] at hlo ⊢; omega
-          · simp only [btbSubtreeOffset, subtreeAtPosGen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hhi ⊢
+          · simp only [btbSubtreeOffset, subtreeAtPosGen, _root_.BinaryTree.num_nodes] at hhi ⊢
             omega
 
   have h_offset_applyPos :
-      ∀ (pos : List Dir) (h : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (pos : List Dir) (h : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (a : ℕ) (t : _root_.BinaryTree ℕ),
         btbSubtreeOffset a (applyAtPosGen h t pos) pos = btbSubtreeOffset a t pos := by
     intro pos
     induction pos with
     | nil => intro h a t; rw [h_off0, h_off0]
     | cons dir rest ih =>
-      rintro h a (_ | ⟨l, k0, r⟩)
+      rintro h a (_ | ⟨k0, l, r⟩)
       · rfl
       · cases dir <;> exact ih h _ _
 
   have h_offset_append :
-      ∀ (pos suf : List Dir) (a : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (pos suf : List Dir) (a : ℕ) (t : _root_.BinaryTree ℕ),
         btbSubtreeOffset a t (pos ++ suf) =
           btbSubtreeOffset (btbSubtreeOffset a t pos) (subtreeAtPosGen t pos) suf := by
     intro pos
     induction pos with
     | nil => intro suf a t; rw [List.nil_append, h_off0, h_subPos0]
     | cons dir rest ih =>
-      rintro suf a (_ | ⟨l, k0, r⟩)
+      rintro suf a (_ | ⟨k0, l, r⟩)
       · cases suf <;> rfl
       · cases dir <;> exact ih suf _ _
 
   have h_offset_repL :
-      ∀ (n a : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (n a : ℕ) (t : _root_.BinaryTree ℕ),
         btbSubtreeOffset a t (List.replicate n Dir.L) = a := by
     intro n
     induction n with
     | zero => intro a t; exact h_off0 a t
     | succ n ih =>
-      rintro a (_ | ⟨l, _, _⟩)
+      rintro a (_ | ⟨_, l, _⟩)
       · rfl
       · exact ih a l
 
   have h_casc_keys :
-      ∀ (gaps : List ℕ) (a0 : ℕ) (s : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (gaps : List ℕ) (a0 : ℕ) (s : _root_.BinaryTree ℕ),
         IsRangeBST a0 s →
         validGappedCascadeAtRoot Δ' (eraseKeys s) gaps →
         2 ≤ leftSpineLen (eraseKeys s) ∧
-          s ≠ .empty ∧
+          s ≠ .nil ∧
           a0 ≤ btbCascadeBotKey s gaps ∧
           btbCascadeBotKey s gaps ≤ btbCascadeBotKey s [] ∧
           btbCascadeBotKey s [] < btbCascadeTopKey s ∧
@@ -5097,17 +5099,17 @@ by
     intro gaps
     induction gaps with
     | nil =>
-      rintro a0 (_ | ⟨_ | ⟨A, x, B⟩, y, C⟩) hs hv
+      rintro a0 (_ | ⟨y, _ | ⟨x, A, B⟩, C⟩) hs hv
       · simp [eraseKeys, validGappedCascadeAtRoot, leftSpineLen] at hv
       · simp [eraseKeys, validGappedCascadeAtRoot, leftSpineLen] at hv
       · obtain ⟨hy, ⟨hx, _, _⟩, _⟩ := hs
-        simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hy
+        simp only [_root_.BinaryTree.num_nodes] at hy
         refine ⟨hv, by simp, ?_, le_rfl, ?_, ?_⟩
         · simp only [btbCascadeBotKey]; omega
         · simp only [btbCascadeBotKey, btbCascadeTopKey]; omega
-        · simp only [btbCascadeTopKey, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega
+        · simp only [btbCascadeTopKey, _root_.BinaryTree.num_nodes]; omega
     | cons g rest ih =>
-      rintro a0 (_ | ⟨_ | ⟨A, x, B⟩, y, C⟩) hs hv
+      rintro a0 (_ | ⟨y, _ | ⟨x, A, B⟩, C⟩) hs hv
       · exact False.elim hv
       · exact False.elim hv
       · obtain ⟨_, hv_rest⟩ := hv
@@ -5115,14 +5117,14 @@ by
         obtain ⟨hy, ⟨hx, hA, _⟩, _⟩ := hs
         obtain ⟨hA_sub_bst, hA_sub_n⟩ := h_subLD_bst g a0 A hA
         obtain ⟨_, _, h1, h2, h3, h4⟩ := ih a0 (subtreeAtLeftDepthGen A g) hA_sub_bst hv_rest
-        simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hy
+        simp only [_root_.BinaryTree.num_nodes] at hy
         refine ⟨by simp only [eraseKeys, leftSpineLen]; omega, by simp, h1, ?_, ?_, ?_⟩
         · simp only [btbCascadeBotKey]; omega
         · simp only [btbCascadeBotKey, btbCascadeTopKey]; omega
-        · simp only [btbCascadeTopKey, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega
+        · simp only [btbCascadeTopKey, _root_.BinaryTree.num_nodes]; omega
 
   have h_pure_2x2_false :
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (pos : List Dir) (gaps : List ℕ),
+      ∀ (T : _root_.BinaryTree ℕ) (pos : List Dir) (gaps : List ℕ),
         IsRangeBST 0 T →
         T.num_nodes = 2 * S →
         validRightRotOp Δ' 2 (eraseKeys T) (.cascade pos gaps) →
@@ -5132,7 +5134,7 @@ by
     · simp at hlen
     · rw [← h_ek_subPos pos T] at hv
       obtain ⟨hs_bst, _, hs_ub⟩ := h_subPos_bst pos 0 T hbst
-      rcases hs_eq : subtreeAtPosGen T pos with _ | ⟨_ | ⟨A, x2, B⟩, y2, C⟩
+      rcases hs_eq : subtreeAtPosGen T pos with _ | ⟨y2, _ | ⟨x2, A, B⟩, C⟩
       · rw [hs_eq] at hv; exact False.elim hv
       · rw [hs_eq] at hv; exact False.elim hv
       · rw [hs_eq] at hv hs_bst hs_ub
@@ -5142,20 +5144,20 @@ by
         obtain ⟨hs1_bst, hs1_n⟩ := h_subLD_bst g (btbSubtreeOffset 0 T pos) A hA
         obtain ⟨_, _, _, _, hx1_lt_y1, hy1_ub⟩ :=
           h_casc_keys [] (btbSubtreeOffset 0 T pos) (subtreeAtLeftDepthGen A g) hs1_bst hv1
-        rcases hs1_eq : subtreeAtLeftDepthGen A g with _ | ⟨_ | ⟨A1, x1, B1⟩, y1, C1⟩
+        rcases hs1_eq : subtreeAtLeftDepthGen A g with _ | ⟨y1, _ | ⟨x1, A1, B1⟩, C1⟩
         · rw [hs1_eq] at hv1; simp [eraseKeys, validGappedCascadeAtRoot, leftSpineLen] at hv1
         · rw [hs1_eq] at hv1; simp [eraseKeys, validGappedCascadeAtRoot, leftSpineLen] at hv1
         · rw [hs1_eq] at hx1_lt_y1 hy1_ub hs1_n
           simp only [btbCascadeBotKey, btbCascadeTopKey] at hx1_lt_y1 hy1_ub
-          simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hy2 hs_ub
+          simp only [_root_.BinaryTree.num_nodes] at hy2 hs_ub
           have hy1_lt_x2 : y1 < x2 := by omega
           have hy2_lt_2S : y2 < 2 * S := by omega
           have hy1_div_le : y1 / S ≤ x2 / S := Nat.div_le_div_right (le_of_lt hy1_lt_x2)
           have hy2_div_lt : y2 / S < 2 := (Nat.div_lt_iff_lt_mul hS).mpr hy2_lt_2S
           by_contra h_not_f
           have h_tr : allPairsInterblock S
-              (.node (.node A x2 B) y2 C) [g] = true := by
-            cases hall : allPairsInterblock S (.node (.node A x2 B) y2 C) [g]
+              (.node y2 (.node x2 A B) C) [g] = true := by
+            cases hall : allPairsInterblock S (.node y2 (.node x2 A B) C) [g]
             · exact absurd hall h_not_f
             · rfl
           simp only [allPairsInterblock, hs1_eq, Bool.and_eq_true, decide_eq_true_eq] at h_tr
@@ -5168,69 +5170,69 @@ by
 
 
   have h_applyPos_comp :
-      ∀ (pos q : List Dir) (f h : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (pos q : List Dir) (f h : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (W : _root_.BinaryTree ℕ),
         applyAtPosGen f (applyAtPosGen h W pos) (pos ++ q) =
           applyAtPosGen (fun u => applyAtPosGen f (h u) q) W pos := by
     intro pos
     induction pos with
     | nil => intro q f h W; rw [List.nil_append, h_appPos0, h_appPos0]
     | cons dir rest ih =>
-      rintro q f h (_ | ⟨l, k0, r⟩)
+      rintro q f h (_ | ⟨k0, l, r⟩)
       · rfl
       · cases dir <;> simp only [List.cons_append, applyAtPosGen, ih]
 
   have h_subPos_after_apply :
-      ∀ (pos q : List Dir) (h : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        h .empty = .empty →
+      ∀ (pos q : List Dir) (h : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (W : _root_.BinaryTree ℕ),
+        h .nil = .nil →
         subtreeAtPosGen (applyAtPosGen h W pos) (pos ++ q) =
           subtreeAtPosGen (h (subtreeAtPosGen W pos)) q := by
     intro pos
     induction pos with
     | nil => intro q h W _; rw [List.nil_append, h_appPos0, h_subPos0]
     | cons dir rest ih =>
-      rintro q h (_ | ⟨l, k0, r⟩) h_emp
+      rintro q h (_ | ⟨k0, l, r⟩) h_emp
       · simp only [List.cons_append, applyAtPosGen, subtreeAtPosGen, h_emp]
         cases q <;> rfl
       · cases dir <;> exact ih q h _ h_emp
 
   have h_subPos_repL :
-      ∀ (g : ℕ) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (g : ℕ) (W : _root_.BinaryTree ℕ),
         subtreeAtPosGen W (List.replicate g Dir.L) = subtreeAtLeftDepthGen W g := by
     intro g
     induction g with
     | zero => intro W; simp only [List.replicate_zero, h_subPos0, h_subLD0]
     | succ g ih =>
-      rintro (_ | ⟨l, _, _⟩)
+      rintro (_ | ⟨_, l, _⟩)
       · rfl
       · exact ih l
 
   have h_applyPos_repL :
-      ∀ (g : ℕ) (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (g : ℕ) (f : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (W : _root_.BinaryTree ℕ),
         applyAtPosGen f W (List.replicate g Dir.L) = applyAtLeftDepthGen f W g := by
     intro g
     induction g with
     | zero => intro f W; simp only [List.replicate_zero, h_appPos0, h_appLD0]
     | succ g ih =>
-      rintro f (_ | ⟨l, k0, r⟩)
+      rintro f (_ | ⟨k0, l, r⟩)
       · rfl
       · simp only [List.replicate_succ, applyAtPosGen, applyAtLeftDepthGen, ih]
 
   have h_applyPos_congr :
-      ∀ (pos : List Dir) (f1 f2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (pos : List Dir) (f1 f2 : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (W : _root_.BinaryTree ℕ),
         f1 (subtreeAtPosGen W pos) = f2 (subtreeAtPosGen W pos) →
         applyAtPosGen f1 W pos = applyAtPosGen f2 W pos := by
     intro pos
     induction pos with
     | nil => intro f1 f2 W h; rw [h_subPos0] at h; rw [h_appPos0, h_appPos0]; exact h
     | cons dir rest ih =>
-      rintro f1 f2 (_ | ⟨l, k0, r⟩) h
+      rintro f1 f2 (_ | ⟨k0, l, r⟩) h
       · rfl
       · cases dir with
-        | L => exact congrArg (fun x => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node x k0 r) (ih f1 f2 l h)
-        | R => exact congrArg (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node l k0) (ih f1 f2 r h)
+        | L => exact congrArg (fun x => _root_.BinaryTree.node k0 x r) (ih f1 f2 l h)
+        | R => exact congrArg (_root_.BinaryTree.node k0 l) (ih f1 f2 r h)
 
   have h_peel_cascade :
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (pos : List Dir) (g : ℕ) (rest : List ℕ),
+      ∀ (T : _root_.BinaryTree ℕ) (pos : List Dir) (g : ℕ) (rest : List ℕ),
         validGappedCascadeAtRoot Δ' (eraseKeys (subtreeAtPosGen T pos)) (g :: rest) →
         let T1 := execRightRotOpGen T (.single pos)
         let pos' := pos ++ List.replicate (g + 1) Dir.L
@@ -5249,25 +5251,25 @@ by
     have hT1_pos :
         subtreeAtPosGen (execRightRotOpGen T (.single pos)) pos =
           (subtreeAtPosGen T pos).rotateRight := by
-      have h1 := h_subPos_after_apply pos [] _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight T rfl
+      have h1 := h_subPos_after_apply pos [] _root_.BinaryTree.rotateRight T rfl
       rw [List.append_nil, h_subPos0] at h1
       exact h1
     have hT1_pos' :
         subtreeAtPosGen (execRightRotOpGen T (.single pos))
             (pos ++ List.replicate (g + 1) Dir.L) =
           subtreeAtPosGen (subtreeAtPosGen T pos).rotateRight (List.replicate (g + 1) Dir.L) :=
-      h_subPos_after_apply pos (List.replicate (g + 1) Dir.L) _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight T rfl
-    rcases hs_eq : subtreeAtPosGen T pos with _ | ⟨_ | ⟨A, x, B⟩, y, C⟩
+      h_subPos_after_apply pos (List.replicate (g + 1) Dir.L) _root_.BinaryTree.rotateRight T rfl
+    rcases hs_eq : subtreeAtPosGen T pos with _ | ⟨y, _ | ⟨x, A, B⟩, C⟩
     · rw [hs_eq] at hv; exact False.elim hv
     · rw [hs_eq] at hv; exact False.elim hv
     · rw [hs_eq] at hv hT1_pos hT1_pos'
       obtain ⟨hg, hv_rest⟩ := hv
       rw [← h_ek_subLD g A] at hv_rest
       have hsub_A :
-          subtreeAtPosGen (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node (.node A x B) y C).rotateRight
+          subtreeAtPosGen (_root_.BinaryTree.node y (.node x A B) C).rotateRight
               (List.replicate (g + 1) Dir.L) =
             subtreeAtLeftDepthGen A g := by
-        simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, List.replicate_succ, subtreeAtPosGen]
+        simp only [_root_.BinaryTree.rotateRight, List.replicate_succ, subtreeAtPosGen]
         exact h_subPos_repL g A
       rw [hsub_A] at hT1_pos'
       refine ⟨?_, hg, hT1_pos, ?_, ?_, ?_⟩
@@ -5276,10 +5278,10 @@ by
       · rw [hT1_pos']; rfl
       · simp only [execRightRotOpGen]
         rw [h_applyPos_comp pos (List.replicate (g + 1) Dir.L)
-          (fun u => execGappedCascadeAtRootGen u rest) _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight T]
+          (fun u => execGappedCascadeAtRootGen u rest) _root_.BinaryTree.rotateRight T]
         apply h_applyPos_congr pos _ _ T
         rw [hs_eq]
-        simp only [execGappedCascadeAtRootGen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, List.replicate_succ,
+        simp only [execGappedCascadeAtRootGen, _root_.BinaryTree.rotateRight, List.replicate_succ,
           applyAtPosGen, h_applyPos_repL]
 
 
@@ -5287,31 +5289,31 @@ by
 
   have h_restrict_nodes_gen :
       ∀ (lo hi : ℕ), lo ≤ hi →
-        ∀ (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a : ℕ),
+        ∀ (W : _root_.BinaryTree ℕ) (a : ℕ),
           IsRangeBST a W →
           (restrictInterval lo hi W).num_nodes = min hi (a + W.num_nodes) - max lo a := by
     intro lo hi hlohi W
     induction W with
-    | empty =>
+    | nil =>
       intro a _
-      simp only [restrictInterval, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, Nat.add_zero]
+      simp only [restrictInterval, _root_.BinaryTree.num_nodes, Nat.add_zero]
       omega
-    | node l w r ihl ihr =>
+    | node w l r ihl ihr =>
       intro a ⟨hw, hl, hr⟩
       have hn_l := ihl a hl
       have hn_r := ihr (w + 1) hr
-      simp only [restrictInterval, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+      simp only [restrictInterval, _root_.BinaryTree.num_nodes]
       by_cases h1 : w < lo
       · rw [if_pos h1, hn_r]; omega
       · rw [if_neg h1]
         by_cases h2 : hi ≤ w
         · rw [if_pos h2, hn_l]; omega
         · rw [if_neg h2]
-          simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, hn_l, hn_r]
+          simp only [_root_.BinaryTree.num_nodes, hn_l, hn_r]
           omega
 
   have h_restrict_congr_pos :
-      ∀ (lo hi : ℕ) (pos : List Dir) (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (lo hi : ℕ) (pos : List Dir) (f : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (W : _root_.BinaryTree ℕ),
         restrictInterval lo hi (f (subtreeAtPosGen W pos)) =
           restrictInterval lo hi (subtreeAtPosGen W pos) →
         restrictInterval lo hi (applyAtPosGen f W pos) = restrictInterval lo hi W := by
@@ -5319,7 +5321,7 @@ by
     induction pos with
     | nil => intro f W h; rw [h_subPos0] at h; rw [h_appPos0]; exact h
     | cons dir rest ih =>
-      rintro f (_ | ⟨l, k0, r⟩) h
+      rintro f (_ | ⟨k0, l, r⟩) h
       · rfl
       · cases dir with
         | L =>
@@ -5339,14 +5341,14 @@ by
 
   have h_restrict_active_pos :
       ∀ (lo hi : ℕ), lo < hi →
-        ∀ (pos : List Dir) (a : ℕ) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+        ∀ (pos : List Dir) (a : ℕ) (W : _root_.BinaryTree ℕ),
           IsRangeBST a W →
-          subtreeAtPosGen W pos ≠ .empty →
+          subtreeAtPosGen W pos ≠ .nil →
           btbSubtreeOffset a W pos < hi →
           lo < btbSubtreeOffset a W pos + (subtreeAtPosGen W pos).num_nodes →
           subtreeAtPosGen (restrictInterval lo hi W) (btbProjectPos lo hi W pos) =
             restrictInterval lo hi (subtreeAtPosGen W pos) ∧
-          ∀ (f g_fn : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+          ∀ (f g_fn : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ),
             restrictInterval lo hi (f (subtreeAtPosGen W pos)) =
               g_fn (restrictInterval lo hi (subtreeAtPosGen W pos)) →
             restrictInterval lo hi (applyAtPosGen f W pos) =
@@ -5362,7 +5364,7 @@ by
         rw [h_proj0, h_appPos0, h_appPos0]
         exact hfg
     | cons dir rest ih =>
-      rintro a (_ | ⟨l, k0, r⟩) hbst hne ha_lt hlo_lt
+      rintro a (_ | ⟨k0, l, r⟩) hbst hne ha_lt hlo_lt
       · exact absurd rfl hne
       · obtain ⟨hk0, hl, hr⟩ := hbst
         cases dir with
@@ -5378,7 +5380,7 @@ by
             exact ⟨hsub_ih, fun f g_fn hfg => happ_ih f g_fn hfg⟩
           · simp only [if_neg hhi_le, subtreeAtPosGen, applyAtPosGen]
             exact ⟨hsub_ih, fun f g_fn hfg =>
-              congrArg (fun x => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node x k0 (restrictInterval lo hi r))
+              congrArg (fun x => _root_.BinaryTree.node k0 x (restrictInterval lo hi r))
                 (happ_ih f g_fn hfg)⟩
         | R =>
           simp only [subtreeAtPosGen, btbSubtreeOffset] at hne ha_lt hlo_lt
@@ -5392,12 +5394,12 @@ by
             exact ⟨hsub_ih, fun f g_fn hfg => happ_ih f g_fn hfg⟩
           · simp only [if_neg hk0_lt_lo, subtreeAtPosGen, applyAtPosGen]
             exact ⟨hsub_ih, fun f g_fn hfg =>
-              congrArg (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node (restrictInterval lo hi l) k0)
+              congrArg (_root_.BinaryTree.node k0 (restrictInterval lo hi l))
                 (happ_ih f g_fn hfg)⟩
 
   have h_restrict_rotR_cases :
       ∀ (lo hi : ℕ), lo < hi →
-        ∀ (a0 : ℕ) (s : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+        ∀ (a0 : ℕ) (s : _root_.BinaryTree ℕ),
           IsRangeBST a0 s →
           2 ≤ leftSpineLen (eraseKeys s) →
           let u := btbCascadeBotKey s []
@@ -5407,11 +5409,11 @@ by
             restrictInterval lo hi s.rotateRight = (restrictInterval lo hi s).rotateRight) ∧
           (¬ (lo ≤ u ∧ v < hi) →
             restrictInterval lo hi s.rotateRight = restrictInterval lo hi s) := by
-    rintro lo hi hlohi a0 (_ | ⟨_ | ⟨A, u, B⟩, v, C⟩) hs hv
+    rintro lo hi hlohi a0 (_ | ⟨v, _ | ⟨u, A, B⟩, C⟩) hs hv
     · simp [eraseKeys, leftSpineLen] at hv
     · simp [eraseKeys, leftSpineLen] at hv
     · obtain ⟨hv_eq, ⟨hu_eq, _, _⟩, _⟩ := hs
-      simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hv_eq
+      simp only [_root_.BinaryTree.num_nodes] at hv_eq
       have huv : u < v := by omega
       dsimp (config := { failIfUnchanged := false }) only [btbCascadeBotKey, btbCascadeTopKey]
       refine ⟨?_, ?_⟩
@@ -5420,25 +5422,25 @@ by
         have h2 : ¬ hi ≤ v := by omega
         have h3 : ¬ u < lo := by omega
         have h4 : ¬ hi ≤ u := by omega
-        simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, restrictInterval,
+        simp only [_root_.BinaryTree.rotateRight, restrictInterval,
           if_neg h1, if_neg h2, if_neg h3, if_neg h4, eraseKeys, leftSpineLen]
         exact ⟨by omega, trivial⟩
       · intro h_out
-        simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight]
+        simp only [_root_.BinaryTree.rotateRight]
         by_cases hu1 : u < lo <;> by_cases hu2 : hi ≤ u <;>
           by_cases hv1 : v < lo <;> by_cases hv2 : hi ≤ v <;>
           try omega
         all_goals simp only [restrictInterval, if_pos, if_neg, hu1, hu2, hv1, hv2, not_false_eq_true]
 
   have h_restrict_LD_active :
-      ∀ (lo hi d : ℕ) (a0 : ℕ) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (lo hi d : ℕ) (a0 : ℕ) (W : _root_.BinaryTree ℕ),
         IsRangeBST a0 W →
-        subtreeAtLeftDepthGen W d ≠ .empty →
+        subtreeAtLeftDepthGen W d ≠ .nil →
         lo < a0 + (subtreeAtLeftDepthGen W d).num_nodes →
         a0 + W.num_nodes ≤ hi →
         subtreeAtLeftDepthGen (restrictInterval lo hi W) d =
           restrictInterval lo hi (subtreeAtLeftDepthGen W d) ∧
-        ∀ (f g_fn : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+        ∀ (f g_fn : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ),
           restrictInterval lo hi (f (subtreeAtLeftDepthGen W d)) =
             g_fn (restrictInterval lo hi (subtreeAtLeftDepthGen W d)) →
           restrictInterval lo hi (applyAtLeftDepthGen f W d) =
@@ -5453,11 +5455,11 @@ by
       rw [h_appLD0, h_appLD0]
       exact hfg
     | succ d ih =>
-      rintro a0 (_ | ⟨l, w, r⟩) hbst hne hlo_lt hhi_ge
+      rintro a0 (_ | ⟨w, l, r⟩) hbst hne hlo_lt hhi_ge
       · exact absurd rfl hne
       · obtain ⟨hw, hl, _⟩ := hbst
         simp only [subtreeAtLeftDepthGen] at hne hlo_lt
-        simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hhi_ge
+        simp only [_root_.BinaryTree.num_nodes] at hhi_ge
         obtain ⟨_, hl_sub_n⟩ := h_subLD_bst d a0 l hl
         have hw1 : ¬ w < lo := by omega
         have hw2 : ¬ hi ≤ w := by omega
@@ -5465,11 +5467,11 @@ by
         simp only [restrictInterval, applyAtLeftDepthGen, subtreeAtLeftDepthGen,
           if_neg hw1, if_neg hw2]
         exact ⟨hsub_ih, fun f g_fn hfg =>
-          congrArg (fun x => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node x w (restrictInterval lo hi r))
+          congrArg (fun x => _root_.BinaryTree.node w x (restrictInterval lo hi r))
             (happ_ih f g_fn hfg)⟩
 
   have h_restrict_cascRoot_active :
-      ∀ (lo hi : ℕ) (gaps : List ℕ) (a0 : ℕ) (s : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (lo hi : ℕ) (gaps : List ℕ) (a0 : ℕ) (s : _root_.BinaryTree ℕ),
         IsRangeBST a0 s →
         validGappedCascadeAtRoot Δ' (eraseKeys s) gaps →
         lo ≤ btbCascadeBotKey s gaps →
@@ -5485,13 +5487,13 @@ by
       have hlohi : lo < hi := by omega
       exact (h_restrict_rotR_cases lo hi hlohi a0 s hs hv).1 ⟨hlo_b, hhi_t⟩
     | cons g rest ih =>
-      rintro a0 (_ | ⟨_ | ⟨A, x, B⟩, y, C⟩) hs hv hlo_b hhi_t
+      rintro a0 (_ | ⟨y, _ | ⟨x, A, B⟩, C⟩) hs hv hlo_b hhi_t
       · exact False.elim hv
       · exact False.elim hv
       · obtain ⟨hg, hv_rest⟩ := hv
         rw [← h_ek_subLD g A] at hv_rest
         obtain ⟨hy, ⟨hx, hA, _⟩, _⟩ := hs
-        simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hy
+        simp only [_root_.BinaryTree.num_nodes] at hy
         obtain ⟨hA_sub_bst, hA_sub_n⟩ := h_subLD_bst g a0 A hA
         obtain ⟨_, hs_low_ne, hlow1, hlow2, hlow3, hlow4⟩ :=
           h_casc_keys rest a0 (subtreeAtLeftDepthGen A g) hA_sub_bst hv_rest
@@ -5515,7 +5517,7 @@ by
 
   have h_restrict_single_sim :
       ∀ (lo hi : ℕ), lo < hi →
-        ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (pos : List Dir),
+        ∀ (T : _root_.BinaryTree ℕ) (pos : List Dir),
           IsRangeBST 0 T →
           2 ≤ leftSpineLen (subtreeAtPos (eraseKeys T) pos) →
           ∃ b_ops : List RightRotOp,
@@ -5540,15 +5542,15 @@ by
       · simp only [validRightRotOp, ← h_ek_subPos p_proj (restrictInterval lo hi T), hsub_proj]
         exact hlsl'
       · simp only [execRightRotSeq, execRightRotOp, execRightRotOpGen]
-        rw [happ_proj _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight hrot',
-          h_ek_applyPos p_proj _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight
+        rw [happ_proj _root_.BinaryTree.rotateRight _root_.BinaryTree.rotateRight hrot',
+          h_ek_applyPos p_proj _root_.BinaryTree.rotateRight _root_.BinaryTree.rotateRight
             (restrictInterval lo hi T) h_ek_rotR]
-    · have h_noop := h_restrict_congr_pos lo hi pos _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight T (h_out_case h_in)
+    · have h_noop := h_restrict_congr_pos lo hi pos _root_.BinaryTree.rotateRight T (h_out_case h_in)
       exact ⟨[], trivial, by simp only [execRightRotSeq, execRightRotOpGen, h_noop], rfl⟩
 
   have h_restrict_casc_intrablock :
       ∀ (lo hi : ℕ), lo < hi →
-        ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (pos : List Dir) (gaps : List ℕ),
+        ∀ (T : _root_.BinaryTree ℕ) (pos : List Dir) (gaps : List ℕ),
           IsRangeBST 0 T →
           validRightRotOp Δ' k (eraseKeys T) (.cascade pos gaps) →
           lo ≤ btbCascadeBotKey (subtreeAtPosGen T pos) gaps →
@@ -5581,7 +5583,7 @@ by
 
   have h_restrict_casc_fallback :
       ∀ (lo hi : ℕ), lo < hi →
-        ∀ (gaps : List ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (pos : List Dir),
+        ∀ (gaps : List ℕ) (T : _root_.BinaryTree ℕ) (pos : List Dir),
           IsRangeBST 0 T →
           validGappedCascadeAtRoot Δ' (eraseKeys (subtreeAtPosGen T pos)) gaps →
           ∃ b_ops : List RightRotOp,
@@ -5616,29 +5618,29 @@ by
   obtain ⟨D, hD_def⟩ : ∃ D : ℕ, D = Δ' + 2 := ⟨Δ' + 2, rfl⟩
 
   have h_lsl_le_nodes :
-      ∀ (B : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), leftSpineLen (eraseKeys B) ≤ B.num_nodes := by
+      ∀ (B : _root_.BinaryTree ℕ), leftSpineLen (eraseKeys B) ≤ B.num_nodes := by
     intro B
     induction B with
-    | empty => exact le_rfl
-    | node l _ r ihl _ =>
-      simp only [eraseKeys, leftSpineLen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+    | nil => exact le_rfl
+    | node _ l r ihl _ =>
+      simp only [eraseKeys, leftSpineLen, _root_.BinaryTree.num_nodes]
       omega
 
   have h_sumTrunc_le :
-      ∀ (B : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (ld : ℕ), btbSumTruncLD ld D B ≤ D * B.num_nodes := by
+      ∀ (B : _root_.BinaryTree ℕ) (ld : ℕ), btbSumTruncLD ld D B ≤ D * B.num_nodes := by
     intro B
     induction B with
-    | empty => intro _; simp [btbSumTruncLD, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
-    | node l _ r ihl ihr =>
+    | nil => intro _; simp [btbSumTruncLD, _root_.BinaryTree.num_nodes]
+    | node _ l r ihl ihr =>
       intro ld
       have hmin : min ld D ≤ D := Nat.min_le_right ld D
       have hl := ihl (ld + 1)
       have hr := ihr ld
-      simp only [btbSumTruncLD, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+      simp only [btbSumTruncLD, _root_.BinaryTree.num_nodes]
       nlinarith
 
   have h_psi_init_bound :
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (T : _root_.BinaryTree ℕ),
         IsRangeBST 0 T →
         T.num_nodes = M * S →
         btbTotalBlockPsi D M S T ≤ (D + 1) * (M * S) := by
@@ -5665,23 +5667,23 @@ by
       _ = (D + 1) * (M * S) := by ring
 
   have h_lsl_rotR_pos :
-      ∀ (p : List Dir) (B : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (p : List Dir) (B : _root_.BinaryTree ℕ),
         2 ≤ leftSpineLen (eraseKeys (subtreeAtPosGen B p)) →
-        let B' := applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight B p
+        let B' := applyAtPosGen _root_.BinaryTree.rotateRight B p
         leftSpineLen (eraseKeys B') ≤ leftSpineLen (eraseKeys B) ∧
         ((∀ d ∈ p, d = Dir.L) → leftSpineLen (eraseKeys B') + 1 = leftSpineLen (eraseKeys B)) := by
     intro p
     induction p with
     | nil =>
-      rintro (_ | ⟨_ | ⟨A, u0, M0⟩, v0, R0⟩) hv
+      rintro (_ | ⟨v0, _ | ⟨u0, A, M0⟩, R0⟩) hv
       · simp [h_subPos0, eraseKeys, leftSpineLen] at hv
       · simp [h_subPos0, eraseKeys, leftSpineLen] at hv
       · dsimp (config := { failIfUnchanged := false }) only
         rw [h_appPos0]
-        simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, eraseKeys, leftSpineLen]
+        simp only [_root_.BinaryTree.rotateRight, eraseKeys, leftSpineLen]
         exact ⟨by omega, fun _ => by omega⟩
     | cons dir rest ih =>
-      rintro (_ | ⟨l, k0, r⟩) hv
+      rintro (_ | ⟨k0, l, r⟩) hv
       · simp [subtreeAtPosGen, eraseKeys, leftSpineLen] at hv
       · cases dir with
         | L =>
@@ -5701,12 +5703,12 @@ by
           cases h_abs
 
   have h_sumTrunc_mono_ld :
-      ∀ (A : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (ld : ℕ),
+      ∀ (A : _root_.BinaryTree ℕ) (ld : ℕ),
         btbSumTruncLD ld D A ≤ btbSumTruncLD (ld + 1) D A := by
     intro A
     induction A with
-    | empty => intro _; exact le_rfl
-    | node l _ r ihl ihr =>
+    | nil => intro _; exact le_rfl
+    | node _ l r ihl ihr =>
       intro ld
       have hl := ihl (ld + 1)
       have hr := ihr ld
@@ -5714,24 +5716,24 @@ by
       omega
 
   have h_sumTrunc_rotR_pos :
-      ∀ (p : List Dir) (B : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (ld : ℕ),
+      ∀ (p : List Dir) (B : _root_.BinaryTree ℕ) (ld : ℕ),
         2 ≤ leftSpineLen (eraseKeys (subtreeAtPosGen B p)) →
-        let B' := applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight B p
+        let B' := applyAtPosGen _root_.BinaryTree.rotateRight B p
         btbSumTruncLD ld D B' ≤ btbSumTruncLD ld D B ∧
         (ld + btbCountDirL p < D → btbSumTruncLD ld D B' + 1 ≤ btbSumTruncLD ld D B) := by
     intro p
     induction p with
     | nil =>
-      rintro (_ | ⟨_ | ⟨A, u0, M0⟩, v0, R0⟩) ld hv
+      rintro (_ | ⟨v0, _ | ⟨u0, A, M0⟩, R0⟩) ld hv
       · simp [h_subPos0, eraseKeys, leftSpineLen] at hv
       · simp [h_subPos0, eraseKeys, leftSpineLen] at hv
       · dsimp (config := { failIfUnchanged := false }) only
         rw [h_appPos0]
         have hA_mono := h_sumTrunc_mono_ld A (ld + 1)
-        simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, btbSumTruncLD, btbCountDirL, Nat.add_zero]
+        simp only [_root_.BinaryTree.rotateRight, btbSumTruncLD, btbCountDirL, Nat.add_zero]
         exact ⟨by omega, fun hlt => by omega⟩
     | cons dir rest ih =>
-      rintro (_ | ⟨l, k0, r⟩) ld hv
+      rintro (_ | ⟨k0, l, r⟩) ld hv
       · simp [subtreeAtPosGen, eraseKeys, leftSpineLen] at hv
       · cases dir with
         | L =>
@@ -5750,7 +5752,7 @@ by
           omega
 
   have h_psi_single_props :
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (pos : List Dir),
+      ∀ (T : _root_.BinaryTree ℕ) (pos : List Dir),
         IsRangeBST 0 T →
         2 ≤ leftSpineLen (subtreeAtPos (eraseKeys T) pos) →
         let s := subtreeAtPosGen T pos
@@ -5798,9 +5800,9 @@ by
             (by omega) (by omega)
         have hbt_eq :
             blockTree S m (execRightRotOpGen T (.single pos)) =
-              applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight (blockTree S m T)
+              applyAtPosGen _root_.BinaryTree.rotateRight (blockTree S m T)
                 (btbProjectPos (m * S) ((m + 1) * S) T pos) :=
-          happ_m _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight hrot_m
+          happ_m _root_.BinaryTree.rotateRight _root_.BinaryTree.rotateRight hrot_m
         have hlsl_sub :
             2 ≤ leftSpineLen (eraseKeys (subtreeAtPosGen (blockTree S m T)
               (btbProjectPos (m * S) ((m + 1) * S) T pos))) := by
@@ -5820,7 +5822,7 @@ by
         · have hd := hsum_drop hcnt; omega
       · have h_noop :
             blockTree S m (execRightRotOpGen T (.single pos)) = blockTree S m T :=
-          h_restrict_congr_pos (m * S) ((m + 1) * S) pos _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight T (h_out_c h_in)
+          h_restrict_congr_pos (m * S) ((m + 1) * S) pos _root_.BinaryTree.rotateRight T (h_out_c h_in)
         dsimp (config := { failIfUnchanged := false }) only [btbBlockPsi]
         rw [h_noop]
         exact ⟨le_rfl, fun hc => absurd hc h_in⟩
@@ -5867,7 +5869,7 @@ by
 
 
   have h_psi_casc_mono :
-      ∀ (gaps : List ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (pos : List Dir),
+      ∀ (gaps : List ℕ) (T : _root_.BinaryTree ℕ) (pos : List Dir),
         IsRangeBST 0 T →
         validGappedCascadeAtRoot Δ' (eraseKeys (subtreeAtPosGen T pos)) gaps →
         btbTotalBlockPsi D M S (execRightRotOpGen T (.cascade pos gaps)) ≤
@@ -5889,9 +5891,9 @@ by
       exact le_trans h2 h1
 
   have h_proj_P1 :
-      ∀ (lo hi : ℕ) (p : List Dir) (a : ℕ) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (lo hi : ℕ) (p : List Dir) (a : ℕ) (W : _root_.BinaryTree ℕ),
         IsRangeBST a W →
-        subtreeAtPosGen W p ≠ .empty →
+        subtreeAtPosGen W p ≠ .nil →
         btbSubtreeOffset a W p ≤ lo →
         ∀ d ∈ btbProjectPos lo hi W p, d = Dir.L := by
     intro lo hi p
@@ -5901,7 +5903,7 @@ by
       rw [h_proj0] at hd
       simp at hd
     | cons dir rest ih =>
-      rintro a (_ | ⟨l, k0, r⟩) hbst hne ha_le d hd
+      rintro a (_ | ⟨k0, l, r⟩) hbst hne ha_le d hd
       · exact absurd rfl hne
       · obtain ⟨hk0, hl, hr⟩ := hbst
         cases dir with
@@ -5932,13 +5934,13 @@ by
       (cases d <;> simp only [List.cons_append, btbCountDirL, ih]); omega
 
   have h_countDirL_proj_le :
-      ∀ (lo hi : ℕ) (suf : List Dir) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (lo hi : ℕ) (suf : List Dir) (W : _root_.BinaryTree ℕ),
         btbCountDirL (btbProjectPos lo hi W suf) ≤ suf.length := by
     intro lo hi suf
     induction suf with
     | nil => intro W; rw [h_proj0]; exact le_rfl
     | cons dir rest ih =>
-      rintro (_ | ⟨l, k0, r⟩)
+      rintro (_ | ⟨k0, l, r⟩)
       · simp [btbProjectPos, btbCountDirL]
       · cases dir with
         | L =>
@@ -5956,9 +5958,9 @@ by
 
   have h_proj_P2 :
       ∀ (lo hi : ℕ), lo < hi →
-        ∀ (p suf : List Dir) (a : ℕ) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+        ∀ (p suf : List Dir) (a : ℕ) (W : _root_.BinaryTree ℕ),
           IsRangeBST a W →
-          subtreeAtPosGen W p ≠ .empty →
+          subtreeAtPosGen W p ≠ .nil →
           btbSubtreeOffset a W p < hi →
           hi ≤ btbSubtreeOffset a W p + (subtreeAtPosGen W p).num_nodes →
           btbProjectPos lo hi W (p ++ suf) =
@@ -5971,7 +5973,7 @@ by
       rw [List.nil_append, h_proj0, List.nil_append, h_subPos0]
       exact ⟨rfl, rfl⟩
     | cons dir rest ih =>
-      rintro suf a (_ | ⟨l, k0, r⟩) hbst hne ha_lt hhi_le
+      rintro suf a (_ | ⟨k0, l, r⟩) hbst hne ha_lt hhi_le
       · exact absurd rfl hne
       · obtain ⟨hk0, hl, hr⟩ := hbst
         cases dir with
@@ -5995,7 +5997,7 @@ by
             exact ⟨congrArg (List.cons Dir.R) happ_ih, hcnt_ih⟩
 
   have h_psi_typeB_drop :
-      ∀ (gaps : List ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (pos : List Dir),
+      ∀ (gaps : List ℕ) (T : _root_.BinaryTree ℕ) (pos : List Dir),
         IsRangeBST 0 T →
         T.num_nodes = M * S →
         validGappedCascadeAtRoot Δ' (eraseKeys (subtreeAtPosGen T pos)) gaps →
@@ -6006,7 +6008,7 @@ by
     induction gaps with
     | nil =>
       intro T pos _ _ hv htypeB
-      rcases hs_eq : subtreeAtPosGen T pos with _ | ⟨_ | ⟨A, x, B⟩, y, C⟩
+      rcases hs_eq : subtreeAtPosGen T pos with _ | ⟨y, _ | ⟨x, A, B⟩, C⟩
       · rw [hs_eq] at hv; simp [eraseKeys, validGappedCascadeAtRoot, leftSpineLen] at hv
       · rw [hs_eq] at hv; simp [eraseKeys, validGappedCascadeAtRoot, leftSpineLen] at hv
       · rw [hs_eq] at htypeB
@@ -6025,7 +6027,7 @@ by
       obtain ⟨hs'_bst, _, hs'_ub⟩ := h_subPos_bst pos' 0 T1 hT1_bst
       have hoff_T1_pos : btbSubtreeOffset 0 T1 pos = btbSubtreeOffset 0 T pos := by
         rw [hT1_def]
-        exact h_offset_applyPos pos _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight 0 T
+        exact h_offset_applyPos pos _root_.BinaryTree.rotateRight 0 T
       have hoff_T1_pos' : btbSubtreeOffset 0 T1 pos' = btbSubtreeOffset 0 T pos := by
         rw [hpos'_def, h_offset_append pos (List.replicate (g + 1) Dir.L) 0 T1,
           h_offset_repL (g + 1), hoff_T1_pos]
@@ -6035,15 +6037,15 @@ by
 
       have hy'_lt_x : btbCascadeTopKey (subtreeAtPosGen T1 pos') <
           btbCascadeBotKey (subtreeAtPosGen T pos) [] := by
-        rcases hs_eq : subtreeAtPosGen T pos with _ | ⟨_ | ⟨A, x0, B⟩, y0, C⟩
+        rcases hs_eq : subtreeAtPosGen T pos with _ | ⟨y0, _ | ⟨x0, A, B⟩, C⟩
         · rw [hs_eq] at hv; exact False.elim hv
         · rw [hs_eq] at hv; exact False.elim hv
         · have hs'_A : subtreeAtPosGen T1 pos' = subtreeAtLeftDepthGen A g := by
             rw [hT1_def, hpos'_def]
             dsimp (config := { failIfUnchanged := false }) only [execRightRotOpGen]
-            rw [h_subPos_after_apply pos (List.replicate (g + 1) Dir.L) _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight T rfl,
+            rw [h_subPos_after_apply pos (List.replicate (g + 1) Dir.L) _root_.BinaryTree.rotateRight T rfl,
               hs_eq]
-            simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, List.replicate_succ, subtreeAtPosGen]
+            simp only [_root_.BinaryTree.rotateRight, List.replicate_succ, subtreeAtPosGen]
             exact h_subPos_repL g A
           rw [hs_eq] at hs_bst
           obtain ⟨_, ⟨hx_eq, hA, _⟩, _⟩ := hs_bst
@@ -6073,15 +6075,15 @@ by
       ·
         have hx_div_lt_y : x / S < y / S := by omega
         have hall'_false : allPairsInterblock S (subtreeAtPosGen T1 pos') rest = false := by
-          rcases hs_eq : subtreeAtPosGen T pos with _ | ⟨_ | ⟨A, x0, B⟩, y0, C⟩
+          rcases hs_eq : subtreeAtPosGen T pos with _ | ⟨y0, _ | ⟨x0, A, B⟩, C⟩
           · rw [hs_eq] at hv; exact False.elim hv
           · rw [hs_eq] at hv; exact False.elim hv
           · have hs'_A : subtreeAtPosGen T1 pos' = subtreeAtLeftDepthGen A g := by
               rw [hT1_def, hpos'_def]
               dsimp (config := { failIfUnchanged := false }) only [execRightRotOpGen]
               rw [h_subPos_after_apply pos (List.replicate (g + 1) Dir.L)
-                _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight T rfl, hs_eq]
-              simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, List.replicate_succ, subtreeAtPosGen]
+                _root_.BinaryTree.rotateRight T rfl, hs_eq]
+              simp only [_root_.BinaryTree.rotateRight, List.replicate_succ, subtreeAtPosGen]
               exact h_subPos_repL g A
             have hx_eq0 : x = x0 := by rw [hx_def, hs_eq]; rfl
             have hy_eq0 : y = y0 := by rw [hy_def, hs_eq]; rfl
@@ -6129,11 +6131,11 @@ by
           have hhi_le_y : (q + 1) * S ≤ y :=
             (Nat.le_div_iff_mul_le hS).mp (by omega)
           obtain ⟨_, hs_rot_n⟩ := h_bst_rotR (btbSubtreeOffset 0 T pos) (subtreeAtPosGen T pos) hs_bst
-          have hs1_ne : subtreeAtPosGen T1 pos ≠ .empty := by
+          have hs1_ne : subtreeAtPosGen T1 pos ≠ .nil := by
             rw [hT1_pos]
             intro hemp
             rw [hemp] at hs_rot_n
-            simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hs_rot_n
+            simp only [_root_.BinaryTree.num_nodes] at hs_rot_n
             omega
           have hhi_le_s1 :
               (q + 1) * S ≤ btbSubtreeOffset 0 T1 pos + (subtreeAtPosGen T1 pos).num_nodes := by
@@ -6185,7 +6187,7 @@ by
       M = 2 ∧ k = 2 → countPureInterblockCascades S T0 seq = 0 := by
     rintro ⟨hM2, hk2⟩
     have h_ind_a :
-        ∀ (ops : List RightRotOp) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+        ∀ (ops : List RightRotOp) (T : _root_.BinaryTree ℕ),
           IsRangeBST 0 T →
           T.num_nodes = 2 * S →
           ValidRightRotSeq Δ' 2 (eraseKeys T) ops →
@@ -6233,7 +6235,7 @@ by
       have : (m.val + 1) * S = m.val * S + S := by ring
       omega
     have h_ind_blk :
-        ∀ (ops : List RightRotOp) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+        ∀ (ops : List RightRotOp) (T : _root_.BinaryTree ℕ),
           IsRangeBST 0 T →
           ValidRightRotSeq Δ' k (eraseKeys T) ops →
           ∃ b_seq : List RightRotOp,
@@ -6297,7 +6299,7 @@ by
 
 
   have h_typeB_seq_bound :
-      ∀ (ops : List RightRotOp) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (ops : List RightRotOp) (T : _root_.BinaryTree ℕ),
         IsRangeBST 0 T →
         T.num_nodes = M * S →
         ValidRightRotSeq Δ' k (eraseKeys T) ops →
@@ -6333,7 +6335,7 @@ by
 
 
   have h_three_way_sum :
-      ∀ (ops : List RightRotOp) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (ops : List RightRotOp) (T : _root_.BinaryTree ℕ),
         IsRangeBST 0 T →
         T.num_nodes = M * S →
         ValidRightRotSeq Δ' k (eraseKeys T) ops →
@@ -6405,7 +6407,7 @@ by
             simp only [htb, ↓reduceIte]
             omega
 
-  let b_seqs : Fin M → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit × List RightRotOp :=
+  let b_seqs : Fin M → _root_.BinaryTree Unit × List RightRotOp :=
     fun m => (eraseKeys (blockTree S m.val T0), (h_per_block_seq m).choose)
   refine ⟨h_part_a, b_seqs, ?_, ?_⟩
   · intro m
@@ -6426,7 +6428,7 @@ by
     rw [h_sum_eq]
     omega
 
-theorem preorder_global_single_dominance (Δ' M S : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)
+theorem preorder_global_single_dominance (Δ' M S : ℕ) (T : _root_.BinaryTree ℕ)
     (hM : 1 ≤ M) (hS : Δ' + 2 ≤ S)
     (hbst : IsRangeBST 0 T) (hnodes : T.num_nodes = M * S) :
     (globalTree (Δ' + 2) S T).num_nodes = (Δ' + 2) * M ∧
@@ -6516,48 +6518,48 @@ by
     · rintro rfl
       exact ⟨h_lo_self, h_hi_self⟩
 
-  have h_nodes_eq_zero : ∀ {β : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree β), t.num_nodes = 0 ↔ t = .empty := by
+  have h_nodes_eq_zero : ∀ {β : Type} (t : _root_.BinaryTree β), t.num_nodes = 0 ↔ t = .nil := by
     intro β t
-    cases t <;> simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+    cases t <;> simp [_root_.BinaryTree.num_nodes]
 
-  have h_ek_nodes : ∀ {β : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree β), (eraseKeys t).num_nodes = t.num_nodes := by
+  have h_ek_nodes : ∀ {β : Type} (t : _root_.BinaryTree β), (eraseKeys t).num_nodes = t.num_nodes := by
     intro β t
     induction t with
-    | empty => rfl
-    | node l _ r ihl ihr =>
-      simp only [eraseKeys, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, ihl, ihr]
+    | nil => rfl
+    | node _ l r ihl ihr =>
+      simp only [eraseKeys, _root_.BinaryTree.num_nodes, ihl, ihr]
 
-  have h_pre_len : ∀ {β : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree β), (preorderList t).length = t.num_nodes := by
+  have h_pre_len : ∀ {β : Type} (t : _root_.BinaryTree β), (preorderList t).length = t.num_nodes := by
     intro β t
     induction t with
-    | empty => rfl
-    | node l _ r ihl ihr =>
-      simp only [preorderList, List.length_cons, List.length_append, ihl, ihr, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+    | nil => rfl
+    | node _ l r ihl ihr =>
+      simp only [preorderList, List.length_cons, List.length_append, ihl, ihr, _root_.BinaryTree.num_nodes]
       omega
 
   have h_bst_pre_mem :
-      ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a x : ℕ),
+      ∀ (t : _root_.BinaryTree ℕ) (a x : ℕ),
         IsRangeBST a t → (x ∈ preorderList t ↔ a ≤ x ∧ x < a + t.num_nodes) := by
     intro t
     induction t with
-    | empty =>
+    | nil =>
       intro a x _
-      simp only [preorderList, List.not_mem_nil, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, false_iff]
+      simp only [preorderList, List.not_mem_nil, _root_.BinaryTree.num_nodes, false_iff]
       omega
-    | node l k r ihl ihr =>
+    | node k l r ihl ihr =>
       intro a x ⟨hk, hl, hr⟩
       simp only [preorderList, List.mem_cons, List.mem_append, ihl a x hl, ihr (k + 1) x hr,
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+        _root_.BinaryTree.num_nodes]
       omega
 
   have h_bst_pre_nodup :
-      ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a : ℕ), IsRangeBST a t → (preorderList t).Nodup := by
+      ∀ (t : _root_.BinaryTree ℕ) (a : ℕ), IsRangeBST a t → (preorderList t).Nodup := by
     intro t
     induction t with
-    | empty =>
+    | nil =>
       intro _ _
       exact List.nodup_nil
-    | node l k r ihl ihr =>
+    | node k l r ihl ihr =>
       intro a ⟨hk, hl, hr⟩
       simp only [preorderList]
       rw [List.nodup_cons, List.nodup_append]
@@ -6571,33 +6573,33 @@ by
         omega
 
   have h_restrict_bst :
-      ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a lo hi : ℕ),
+      ∀ (t : _root_.BinaryTree ℕ) (a lo hi : ℕ),
         lo ≤ hi →
         IsRangeBST a t →
         IsRangeBST (max a lo) (restrictInterval lo hi t) ∧
         (restrictInterval lo hi t).num_nodes = min hi (a + t.num_nodes) - max a lo := by
     intro t
     induction t with
-    | empty =>
+    | nil =>
       intro a lo hi _ _
-      simp only [restrictInterval, IsRangeBST, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+      simp only [restrictInterval, IsRangeBST, _root_.BinaryTree.num_nodes]
       refine ⟨trivial, ?_⟩
       omega
-    | node l k r ihl ihr =>
+    | node k l r ihl ihr =>
       intro a lo hi hlohi ⟨hk, hl, hr⟩
       simp only [restrictInterval]
       split_ifs with h1 h2
       · obtain ⟨hr_bst, hr_n⟩ := ihr (k + 1) lo hi hlohi hr
         have hmax : max (k + 1) lo = max a lo := by omega
-        have hend : k + 1 + r.num_nodes = a + (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node l k r).num_nodes := by
-          simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+        have hend : k + 1 + r.num_nodes = a + (_root_.BinaryTree.node k l r).num_nodes := by
+          simp only [_root_.BinaryTree.num_nodes]
           omega
         rw [hmax] at hr_bst hr_n
         rw [hend] at hr_n
         exact ⟨hr_bst, hr_n⟩
       · obtain ⟨hl_bst, hl_n⟩ := ihl a lo hi hlohi hl
-        have hmin : min hi (a + l.num_nodes) = min hi (a + (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node l k r).num_nodes) := by
-          simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+        have hmin : min hi (a + l.num_nodes) = min hi (a + (_root_.BinaryTree.node k l r).num_nodes) := by
+          simp only [_root_.BinaryTree.num_nodes]
           omega
         rw [hmin] at hl_n
         exact ⟨hl_bst, hl_n⟩
@@ -6607,18 +6609,18 @@ by
         rw [hmax_r] at hr_bst hr_n
         refine ⟨⟨?_, hl_bst, hr_bst⟩, ?_⟩
         · omega
-        · simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hl_n hr_n ⊢
+        · simp only [_root_.BinaryTree.num_nodes] at hl_n hr_n ⊢
           omega
 
   have h_extract_nonempty :
-      ∀ (p : ℕ → Bool) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        extractGlobalTree p t ≠ .empty → ∃ x ∈ preorderList t, p x = true := by
+      ∀ (p : ℕ → Bool) (t : _root_.BinaryTree ℕ),
+        extractGlobalTree p t ≠ .nil → ∃ x ∈ preorderList t, p x = true := by
     intro p t
     induction t with
-    | empty =>
+    | nil =>
       intro h
       exact absurd rfl h
-    | node l k r ihl ihr =>
+    | node k l r ihl ihr =>
       intro hne
       simp only [extractGlobalTree] at hne
       cases hpk : p k with
@@ -6628,17 +6630,17 @@ by
         rw [hpk] at hne
         simp only [Bool.false_eq_true, ↓reduceIte] at hne
         cases hlG : extractGlobalTree p l with
-        | empty =>
+        | nil =>
           rw [hlG] at hne
           obtain ⟨z, hz, hpz⟩ := ihr hne
           exact ⟨z, by simp [preorderList, hz], hpz⟩
-        | node ll lk lr =>
+        | node lk ll lr =>
           obtain ⟨y, hy, hpy⟩ := ihl (by simp [hlG])
           exact ⟨y, by simp [preorderList, hy], hpy⟩
 
 
   have h_s1 :
-      ∀ (D M0 S0 : ℕ) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (D M0 S0 : ℕ) (U : _root_.BinaryTree ℕ),
         1 ≤ D → D ≤ S0 → IsRangeBST 0 U → U.num_nodes = M0 * S0 →
         (globalTree D S0 U).num_nodes = D * M0 ∧
         (rightReachList 0 (globalTree D S0 U)).map (· + 1) =
@@ -6705,7 +6707,7 @@ by
         ring
 
     have h_nonsplit_sub :
-        ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a : ℕ),
+        ∀ (t : _root_.BinaryTree ℕ) (a : ℕ),
           IsRangeBST a t →
           (∀ lo hi, a ≤ lo → hi ≤ a + t.num_nodes → lo < hi →
             restrictInterval lo hi U = restrictInterval lo hi t) →
@@ -6715,15 +6717,15 @@ by
           pgsdNonSplitting isG t := by
       intro t
       induction t with
-      | empty =>
+      | nil =>
         intro _ _ _ _
         exact trivial
-      | node l k r ihl ihr =>
+      | node k l r ihl ihr =>
         intro a ⟨hk, hl, hr⟩ hP1 hP2
         have hP1_l : ∀ lo hi, a ≤ lo → hi ≤ a + l.num_nodes → lo < hi →
             restrictInterval lo hi U = restrictInterval lo hi l := by
           intro lo hi hlo hhi hlt
-          have h1 := hP1 lo hi hlo (by simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega) hlt
+          have h1 := hP1 lo hi hlo (by simp [_root_.BinaryTree.num_nodes]; omega) hlt
           rw [h1]
           simp only [restrictInterval]
           have hn1 : ¬ k < lo := by omega
@@ -6732,7 +6734,7 @@ by
         have hP1_r : ∀ lo hi, k + 1 ≤ lo → hi ≤ k + 1 + r.num_nodes → lo < hi →
             restrictInterval lo hi U = restrictInterval lo hi r := by
           intro lo hi hlo hhi hlt
-          have h1 := hP1 lo hi (by omega) (by simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega) hlt
+          have h1 := hP1 lo hi (by omega) (by simp [_root_.BinaryTree.num_nodes]; omega) hlt
           rw [h1]
           simp only [restrictInterval]
           have hn1 : k < lo := by omega
@@ -6744,7 +6746,7 @@ by
           obtain ⟨pfx, sfx, hpfx⟩ := hP2 lo hi hlohi
           simp only [restrictInterval] at hpfx
           split_ifs at hpfx with h1 h2
-          · have hl_emp : restrictInterval lo hi l = .empty := by
+          · have hl_emp : restrictInterval lo hi l = .nil := by
               obtain ⟨_, hn⟩ := h_restrict_bst l a lo hi hlohi hl
               exact (h_nodes_eq_zero _).mp (by omega)
             rw [hl_emp]
@@ -6761,7 +6763,7 @@ by
           simp only [restrictInterval] at hpfx
           split_ifs at hpfx with h1 h2
           · exact ⟨pfx, sfx, hpfx⟩
-          · have hr_emp : restrictInterval lo hi r = .empty := by
+          · have hr_emp : restrictInterval lo hi r = .nil := by
               obtain ⟨_, hn⟩ := h_restrict_bst r (k + 1) lo hi hlohi hr
               exact (h_nodes_eq_zero _).mp (by omega)
             rw [hr_emp]
@@ -6780,8 +6782,8 @@ by
         let hi := (m + 1) * S0
         have hk_int : lo ≤ k ∧ k < hi := (h_div_eq_iff hS_pos).mpr rfl
         have hlohi : lo ≤ hi := by omega
-        have ht_int : restrictInterval lo hi (.node l k r) =
-            .node (restrictInterval lo hi l) k (restrictInterval lo hi r) := by
+        have ht_int : restrictInterval lo hi (.node k l r) =
+            .node k (restrictInterval lo hi l) (restrictInterval lo hi r) := by
           simp only [restrictInterval]
           have hn1 : ¬ k < lo := by omega
           have hn2 : ¬ hi ≤ k := by omega
@@ -6834,8 +6836,8 @@ by
           rcases hd_pos with ⟨d, hd⟩
           rw [hd]
           simp
-        · have h1 : restrictInterval lo hi U = restrictInterval lo hi (.node l k r) :=
-            hP1 lo hi (by omega) (by simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega) (by omega)
+        · have h1 : restrictInterval lo hi U = restrictInterval lo hi (.node k l r) :=
+            hP1 lo hi (by omega) (by simp [_root_.BinaryTree.num_nodes]; omega) (by omega)
           dsimp (config := { failIfUnchanged := false }) only [isG, isGlobalKey]
           change decide (k ∈ (preorderList (restrictInterval lo hi U)).take D) = true
           rw [decide_eq_true_eq, h1, ht_int]
@@ -6847,7 +6849,7 @@ by
         (fun lo hi _ => ⟨[], [], by simp⟩)
 
     have h_ind_s1 :
-        ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a : ℕ),
+        ∀ (t : _root_.BinaryTree ℕ) (a : ℕ),
           IsRangeBST a t →
           pgsdNonSplitting isG t →
           (extractGlobalTree isG t).num_nodes = ((List.range' a t.num_nodes).filter isG).length ∧
@@ -6856,18 +6858,18 @@ by
               (fun x => pgsdCountGlobalLt isG (pgsdMaxSubtreeKey t x + 1)) := by
       intro t
       induction t with
-      | empty =>
+      | nil =>
         intro a _ _
-        simp [extractGlobalTree, eraseKeys, rightReachList, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
-      | node l k r ihl ihr =>
+        simp [extractGlobalTree, eraseKeys, rightReachList, _root_.BinaryTree.num_nodes]
+      | node k l r ihl ihr =>
         intro a ⟨hk, hl, hr⟩ ⟨hns_l, hns_r, hns_k⟩
         obtain ⟨ihl_n, ihl_rr⟩ := ihl a hl hns_l
         obtain ⟨ihr_n, ihr_rr⟩ := ihr (k + 1) hr hns_r
         have h_rng_split :
-            List.range' a (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node l k r).num_nodes =
+            List.range' a (_root_.BinaryTree.node k l r).num_nodes =
               List.range' a l.num_nodes ++ [k] ++ List.range' (k + 1) r.num_nodes := by
-          have h1 : (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node l k r).num_nodes = l.num_nodes + (1 + r.num_nodes) := by
-            simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+          have h1 : (_root_.BinaryTree.node k l r).num_nodes = l.num_nodes + (1 + r.num_nodes) := by
+            simp only [_root_.BinaryTree.num_nodes]
             omega
           rw [h1, ← @List.range'_append a l.num_nodes (1 + r.num_nodes) 1]
           have h2 : a + 1 * l.num_nodes = k := by omega
@@ -6878,7 +6880,7 @@ by
           rw [h3, List.append_assoc]
         have h_map_l :
             ((List.range' a l.num_nodes).filter isG).map
-              (fun x => pgsdCountGlobalLt isG (pgsdMaxSubtreeKey (.node l k r) x + 1)) =
+              (fun x => pgsdCountGlobalLt isG (pgsdMaxSubtreeKey (.node k l r) x + 1)) =
             ((List.range' a l.num_nodes).filter isG).map
               (fun x => pgsdCountGlobalLt isG (pgsdMaxSubtreeKey l x + 1)) := by
           apply List.map_congr_left
@@ -6888,7 +6890,7 @@ by
           simp [pgsdMaxSubtreeKey, hxk]
         have h_map_r :
             ((List.range' (k + 1) r.num_nodes).filter isG).map
-              (fun x => pgsdCountGlobalLt isG (pgsdMaxSubtreeKey (.node l k r) x + 1)) =
+              (fun x => pgsdCountGlobalLt isG (pgsdMaxSubtreeKey (.node k l r) x + 1)) =
             ((List.range' (k + 1) r.num_nodes).filter isG).map
               (fun x => pgsdCountGlobalLt isG (pgsdMaxSubtreeKey r x + 1)) := by
           apply List.map_congr_left
@@ -6900,14 +6902,14 @@ by
         cases hgk : isG k with
         | true =>
           have h_ext_true :
-              extractGlobalTree isG (.node l k r) =
-                .node (extractGlobalTree isG l) k (extractGlobalTree isG r) := by
+              extractGlobalTree isG (.node k l r) =
+                .node k (extractGlobalTree isG l) (extractGlobalTree isG r) := by
             simp [extractGlobalTree, hgk]
           rw [h_ext_true]
           refine ⟨?_, ?_⟩
           · rw [h_rng_split]
             simp only [List.filter_append, List.filter_cons, hgk, ↓reduceIte, List.filter_nil,
-              List.length_append, List.length_singleton, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, ihl_n, ihr_n]
+              List.length_append, List.length_singleton, _root_.BinaryTree.num_nodes, ihl_n, ihr_n]
             omega
           · rw [h_rng_split]
             simp only [eraseKeys, rightReachList, List.map_append, List.map_cons, List.map_nil,
@@ -6924,8 +6926,8 @@ by
             have hxG_succ : pgsdCountGlobalLt isG k + 1 = pgsdCountGlobalLt isG (k + 1) := hck1.symm
             have hmid_eq :
                 pgsdCountGlobalLt isG k + (eraseKeys (extractGlobalTree isG r)).num_nodes + 1 =
-                  pgsdCountGlobalLt isG (pgsdMaxSubtreeKey (.node l k r) k + 1) := by
-              have hmsk_k : pgsdMaxSubtreeKey (.node l k r) k = k + r.num_nodes := by
+                  pgsdCountGlobalLt isG (pgsdMaxSubtreeKey (.node k l r) k + 1) := by
+              have hmsk_k : pgsdMaxSubtreeKey (.node k l r) k = k + r.num_nodes := by
                 simp [pgsdMaxSubtreeKey]
               rw [hmsk_k, h_ek_nodes, ihr_n]
               have h1 := h_cnt_add isG (k + 1) r.num_nodes
@@ -6935,16 +6937,16 @@ by
             rw [hmid_eq, hxG_succ, ihr_rr]
         | false =>
           have h_ext_false :
-              extractGlobalTree isG (.node l k r) =
-                if extractGlobalTree isG l = .empty then extractGlobalTree isG r
+              extractGlobalTree isG (.node k l r) =
+                if extractGlobalTree isG l = .nil then extractGlobalTree isG r
                 else extractGlobalTree isG l := by
             simp only [extractGlobalTree, hgk, Bool.false_eq_true, ↓reduceIte]
             cases extractGlobalTree isG l <;> rfl
           rw [h_ext_false]
-          by_cases hlG : extractGlobalTree isG l = .empty
+          by_cases hlG : extractGlobalTree isG l = .nil
           · simp only [hlG, ↓reduceIte]
             have hl_flt_nil : (List.range' a l.num_nodes).filter isG = [] := by
-              rw [← List.length_eq_zero_iff, ← ihl_n, hlG, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+              rw [← List.length_eq_zero_iff, ← ihl_n, hlG, _root_.BinaryTree.num_nodes]
             have hca_eq : pgsdCountGlobalLt isG a = pgsdCountGlobalLt isG (k + 1) := by
               have h1 := h_cnt_add isG a l.num_nodes
               rw [hl_flt_nil, List.length_nil, Nat.add_zero, ← hk] at h1
@@ -6960,13 +6962,13 @@ by
                 ↓reduceIte, List.filter_nil, List.nil_append, h_map_r]
               rw [hca_eq, ihr_rr]
           · simp only [hlG, ↓reduceIte]
-            have hrG : extractGlobalTree isG r = .empty := by
+            have hrG : extractGlobalTree isG r = .nil := by
               by_contra hr_ne
               have := hns_k hlG hr_ne
               rw [hgk] at this
               exact Bool.noConfusion this
             have hr_flt_nil : (List.range' (k + 1) r.num_nodes).filter isG = [] := by
-              rw [← List.length_eq_zero_iff, ← ihr_n, hrG, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+              rw [← List.length_eq_zero_iff, ← ihr_n, hrG, _root_.BinaryTree.num_nodes]
             refine ⟨?_, ?_⟩
             · rw [h_rng_split]
               simp [hr_flt_nil, hgk, ihl_n]
@@ -6986,20 +6988,20 @@ by
 
 
   have h_rotR_bst :
-      ∀ (s : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a : ℕ),
+      ∀ (s : _root_.BinaryTree ℕ) (a : ℕ),
         IsRangeBST a s → IsRangeBST a s.rotateRight ∧ s.rotateRight.num_nodes = s.num_nodes := by
-    rintro (_ | ⟨_ | ⟨A, u, B⟩, v, C⟩) a hs
+    rintro (_ | ⟨v, _ | ⟨u, A, B⟩, C⟩) a hs
     · exact ⟨trivial, rfl⟩
     · exact ⟨hs, rfl⟩
     · rcases hs with ⟨hv, ⟨hu, hA, hB⟩, hC⟩
-      simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, IsRangeBST, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hv ⊢
+      simp only [_root_.BinaryTree.rotateRight, IsRangeBST, _root_.BinaryTree.num_nodes] at hv ⊢
       refine ⟨⟨hu, hA, ⟨by omega, hB, hC⟩⟩, by omega⟩
 
   have h_applyPos_rotR_bst :
-      ∀ (pos : List Dir) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a : ℕ),
+      ∀ (pos : List Dir) (U : _root_.BinaryTree ℕ) (a : ℕ),
         IsRangeBST a U →
-        IsRangeBST a (applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U pos) ∧
-        (applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U pos).num_nodes = U.num_nodes := by
+        IsRangeBST a (applyAtPosGen _root_.BinaryTree.rotateRight U pos) ∧
+        (applyAtPosGen _root_.BinaryTree.rotateRight U pos).num_nodes = U.num_nodes := by
     intro pos
     induction pos with
     | nil =>
@@ -7007,43 +7009,43 @@ by
       cases U <;> exact h_rotR_bst _ a hU
     | cons dir rest ih =>
       intro U a hU
-      rcases U with _ | ⟨l, k, r⟩
+      rcases U with _ | ⟨k, l, r⟩
       · exact ⟨trivial, rfl⟩
       · rcases hU with ⟨hk, hl, hr⟩
         cases dir with
         | L =>
           obtain ⟨hl', hln⟩ := ih l a hl
-          simp only [applyAtPosGen, IsRangeBST, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, hln]
+          simp only [applyAtPosGen, IsRangeBST, _root_.BinaryTree.num_nodes, hln]
           exact ⟨⟨hk, hl', hr⟩, trivial⟩
         | R =>
           obtain ⟨hr', hrn⟩ := ih r (k + 1) hr
-          simp only [applyAtPosGen, IsRangeBST, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, hrn]
+          simp only [applyAtPosGen, IsRangeBST, _root_.BinaryTree.num_nodes, hrn]
           exact ⟨⟨hk, hl, hr'⟩, trivial⟩
 
   have h_ek_subPos :
-      ∀ (pos : List Dir) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (pos : List Dir) (U : _root_.BinaryTree ℕ),
         eraseKeys (subtreeAtPosGen U pos) = subtreeAtPos (eraseKeys U) pos := by
     intro pos
     induction pos with
     | nil => intro U; cases U <;> rfl
     | cons dir rest ih =>
-      rintro (_ | ⟨l, k, r⟩)
+      rintro (_ | ⟨k, l, r⟩)
       · rfl
       · cases dir <;> exact ih _
 
   have h_ek_subLD :
-      ∀ (g : ℕ) (s : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (g : ℕ) (s : _root_.BinaryTree ℕ),
         eraseKeys (subtreeAtLeftDepthGen s g) = subtreeAtLeftDepth (eraseKeys s) g := by
     intro g
     induction g with
     | zero => intro s; cases s <;> rfl
     | succ g ih =>
-      rintro (_ | ⟨l, k, r⟩)
+      rintro (_ | ⟨k, l, r⟩)
       · rfl
       · exact ih l
 
   have h_applyPos_comp :
-      ∀ (p1 p2 : List Dir) (f1 f2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (p1 p2 : List Dir) (f1 f2 : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (U : _root_.BinaryTree ℕ),
         applyAtPosGen f2 (applyAtPosGen f1 U p1) (p1 ++ p2) =
           applyAtPosGen (fun s => applyAtPosGen f2 (f1 s) p2) U p1 := by
     intro p1
@@ -7053,13 +7055,13 @@ by
       cases U <;> rfl
     | cons dir rest ih =>
       intro p2 f1 f2 U
-      rcases U with _ | ⟨l, k, r⟩
+      rcases U with _ | ⟨k, l, r⟩
       · rfl
       · cases dir <;> simp only [List.cons_append, applyAtPosGen, ih]
 
   have h_subPos_applyPos :
-      ∀ (p1 p2 : List Dir) (f1 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        subtreeAtPosGen U p1 ≠ .empty →
+      ∀ (p1 p2 : List Dir) (f1 : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (U : _root_.BinaryTree ℕ),
+        subtreeAtPosGen U p1 ≠ .nil →
         subtreeAtPosGen (applyAtPosGen f1 U p1) (p1 ++ p2) =
           subtreeAtPosGen (f1 (subtreeAtPosGen U p1)) p2 := by
     intro p1
@@ -7069,12 +7071,12 @@ by
       cases U <;> rfl
     | cons dir rest ih =>
       intro p2 f1 U hne
-      rcases U with _ | ⟨l, k, r⟩
+      rcases U with _ | ⟨k, l, r⟩
       · exact absurd rfl hne
       · cases dir <;> exact ih p2 f1 _ hne
 
   have h_repL_spec :
-      ∀ (g : ℕ) (fn : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (g : ℕ) (fn : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (a : _root_.BinaryTree ℕ),
         subtreeAtPosGen a (List.replicate g Dir.L) = subtreeAtLeftDepthGen a g ∧
         applyAtPosGen fn a (List.replicate g Dir.L) = applyAtLeftDepthGen fn a g := by
     intro g
@@ -7084,13 +7086,13 @@ by
       cases a <;> exact ⟨rfl, rfl⟩
     | succ g ih =>
       intro fn a
-      rcases a with _ | ⟨l, k, r⟩
+      rcases a with _ | ⟨k, l, r⟩
       · exact ⟨rfl, rfl⟩
       · obtain ⟨ih1, ih2⟩ := ih fn l
-        exact ⟨ih1, congrArg (fun x => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node x k r) ih2⟩
+        exact ⟨ih1, congrArg (fun x => _root_.BinaryTree.node k x r) ih2⟩
 
   have h_applyPos_congr :
-      ∀ (pos : List Dir) (f1 f2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (pos : List Dir) (f1 f2 : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (U : _root_.BinaryTree ℕ),
         f1 (subtreeAtPosGen U pos) = f2 (subtreeAtPosGen U pos) →
         applyAtPosGen f1 U pos = applyAtPosGen f2 U pos := by
     intro pos
@@ -7100,21 +7102,21 @@ by
       cases U <;> exact h
     | cons dir rest ih =>
       intro f1 f2 U h
-      rcases U with _ | ⟨l, k, r⟩
+      rcases U with _ | ⟨k, l, r⟩
       · rfl
       · cases dir with
-        | L => exact congrArg (fun x => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node x k r) (ih f1 f2 l h)
-        | R => exact congrArg (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node l k) (ih f1 f2 r h)
+        | L => exact congrArg (fun x => _root_.BinaryTree.node k x r) (ih f1 f2 l h)
+        | R => exact congrArg (_root_.BinaryTree.node k l) (ih f1 f2 r h)
 
   have h_s2 :
-      ∀ (N : ℕ) (Rel : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → Prop),
+      ∀ (N : ℕ) (Rel : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ → Prop),
         (∀ U, Rel U U) →
         (∀ U1 U2 U3, Rel U1 U2 → Rel U2 U3 → Rel U1 U3) →
-        (∀ (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (pos : List Dir),
+        (∀ (U : _root_.BinaryTree ℕ) (pos : List Dir),
           IsRangeBST 0 U → U.num_nodes = N →
           2 ≤ leftSpineLen (subtreeAtPos (eraseKeys U) pos) →
-          Rel U (applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U pos)) →
-        ∀ (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), IsRangeBST 0 U → U.num_nodes = N →
+          Rel U (applyAtPosGen _root_.BinaryTree.rotateRight U pos)) →
+        ∀ (U : _root_.BinaryTree ℕ), IsRangeBST 0 U → U.num_nodes = N →
         ∀ (k : ℕ) (op : RightRotOp),
           validRightRotOp Δ' k (eraseKeys U) op →
           IsRangeBST 0 (execRightRotOpGen U op) ∧
@@ -7128,7 +7130,7 @@ by
       exact ⟨hbst', hn', hstep U pos hU_bst hU_n hop⟩
     | cascade pos gaps =>
       have h_casc :
-          ∀ (gs : List ℕ) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (p : List Dir),
+          ∀ (gs : List ℕ) (W : _root_.BinaryTree ℕ) (p : List Dir),
             IsRangeBST 0 W →
             W.num_nodes = N →
             validGappedCascadeAtRoot Δ' (subtreeAtPos (eraseKeys W) p) gs →
@@ -7145,7 +7147,7 @@ by
         | cons g rest ih =>
           intro W p hW_bst hW_n hv
           rw [← h_ek_subPos p W] at hv
-          rcases hsub : subtreeAtPosGen W p with _ | ⟨_ | ⟨a, k1, b⟩, k2, c⟩
+          rcases hsub : subtreeAtPosGen W p with _ | ⟨k2, _ | ⟨k1, a, b⟩, c⟩
           · rw [hsub] at hv
             exact False.elim hv
           · rw [hsub] at hv
@@ -7156,17 +7158,17 @@ by
               rw [← h_ek_subPos p W, hsub]
               simp only [eraseKeys, leftSpineLen]
               omega
-            let W1 := applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight W p
+            let W1 := applyAtPosGen _root_.BinaryTree.rotateRight W p
             obtain ⟨hW1_bst, hW1_n⟩ := h_applyPos_rotR_bst p W 0 hW_bst
             rw [hW_n] at hW1_n
             have hrel1 : Rel W1 W1 → Rel W W1 := fun _ => hstep W p hW_bst hW_n hp_lsl
             let p' := p ++ (Dir.L :: List.replicate g Dir.L)
             have hsub_W1 : subtreeAtPosGen W1 p' = subtreeAtLeftDepthGen a g := by
               dsimp (config := { failIfUnchanged := false }) only [W1, p']
-              rw [h_subPos_applyPos p (Dir.L :: List.replicate g Dir.L) _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight W
+              rw [h_subPos_applyPos p (Dir.L :: List.replicate g Dir.L) _root_.BinaryTree.rotateRight W
                 (by simp [hsub])]
               rw [hsub]
-              simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, subtreeAtPosGen]
+              simp only [_root_.BinaryTree.rotateRight, subtreeAtPosGen]
               exact (h_repL_spec g id a).1
             have hv_W1 : validGappedCascadeAtRoot Δ' (subtreeAtPos (eraseKeys W1) p') rest := by
               rw [← h_ek_subPos p' W1, hsub_W1, h_ek_subLD g a]
@@ -7179,7 +7181,7 @@ by
               rw [h_applyPos_comp]
               apply h_applyPos_congr
               rw [hsub]
-              simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, applyAtPosGen, execGappedCascadeAtRootGen]
+              simp only [_root_.BinaryTree.rotateRight, applyAtPosGen, execGappedCascadeAtRootGen]
               rw [(h_repL_spec g (fun x => execGappedCascadeAtRootGen x rest) a).2]
             rw [heq_exec] at hW2_bst hW2_n hrel2
             exact ⟨hW2_bst, hW2_n, htrans W W1 _ (hrel1 (hrefl W1)) hrel2⟩
@@ -7187,18 +7189,18 @@ by
 
 
   have h_msk_bounds :
-      ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a x : ℕ),
+      ∀ (t : _root_.BinaryTree ℕ) (a x : ℕ),
         IsRangeBST a t → a ≤ x → x < a + t.num_nodes →
         x ≤ pgsdMaxSubtreeKey t x ∧ pgsdMaxSubtreeKey t x < a + t.num_nodes := by
     intro t
     induction t with
-    | empty =>
+    | nil =>
       intro a x _ h1 h2
-      simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at h2
+      simp [_root_.BinaryTree.num_nodes] at h2
       omega
-    | node l k r ihl ihr =>
+    | node k l r ihl ihr =>
       intro a x ⟨hk, hl, hr⟩ hax hlt
-      simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hlt ⊢
+      simp only [_root_.BinaryTree.num_nodes] at hlt ⊢
       simp only [pgsdMaxSubtreeKey]
       split_ifs with h1 h2
       · obtain ⟨b1, b2⟩ := ihl a x hl hax (by omega)
@@ -7208,14 +7210,14 @@ by
         exact ⟨b1, by omega⟩
 
   have h_s3 :
-      ∀ (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (pos : List Dir),
+      ∀ (U : _root_.BinaryTree ℕ) (pos : List Dir),
         IsRangeBST 0 U →
         2 ≤ leftSpineLen (subtreeAtPos (eraseKeys U) pos) →
-        let U' := applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U pos
+        let U' := applyAtPosGen _root_.BinaryTree.rotateRight U pos
         IsRangeBST 0 U' ∧
         U'.num_nodes = U.num_nodes ∧
-        ∃ (A_T B_T C_T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (u v : ℕ),
-          subtreeAtPosGen U pos = .node (.node A_T u B_T) v C_T ∧
+        ∃ (A_T B_T C_T : _root_.BinaryTree ℕ) (u v : ℕ),
+          subtreeAtPosGen U pos = .node v (.node u A_T B_T) C_T ∧
           u < v ∧ v < U.num_nodes ∧
           (∀ x < U.num_nodes,
             x ≤ pgsdMaxSubtreeKey U x ∧ pgsdMaxSubtreeKey U x < U.num_nodes ∧
@@ -7225,12 +7227,12 @@ by
           pgsdMaxSubtreeKey U' u = pgsdMaxSubtreeKey U v := by
     intro U pos hU_bst hpos
     have h_ind_s3 :
-        ∀ (p : List Dir) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a : ℕ),
+        ∀ (p : List Dir) (W : _root_.BinaryTree ℕ) (a : ℕ),
           IsRangeBST a W →
           2 ≤ leftSpineLen (subtreeAtPos (eraseKeys W) p) →
-          let W' := applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight W p
-          ∃ (A_T B_T C_T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (u v : ℕ),
-            subtreeAtPosGen W p = .node (.node A_T u B_T) v C_T ∧
+          let W' := applyAtPosGen _root_.BinaryTree.rotateRight W p
+          ∃ (A_T B_T C_T : _root_.BinaryTree ℕ) (u v : ℕ),
+            subtreeAtPosGen W p = .node v (.node u A_T B_T) C_T ∧
             a ≤ u ∧ u < v ∧ v < a + W.num_nodes ∧
             (∀ x, x ≠ u → pgsdMaxSubtreeKey W' x = pgsdMaxSubtreeKey W x) ∧
             pgsdMaxSubtreeKey W u + 1 = v ∧
@@ -7238,32 +7240,32 @@ by
       intro p
       induction p with
       | nil =>
-        rintro (_ | ⟨_ | ⟨A_T, u, B_T⟩, v, C_T⟩) a hW hp
+        rintro (_ | ⟨v, _ | ⟨u, A_T, B_T⟩, C_T⟩) a hW hp
         · simp [eraseKeys, subtreeAtPos, leftSpineLen] at hp
         · simp [eraseKeys, subtreeAtPos, leftSpineLen] at hp
         · rcases hW with ⟨hv, ⟨hu, hA, hB⟩, hC⟩
-          simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hv ⊢
+          simp only [_root_.BinaryTree.num_nodes] at hv ⊢
           refine ⟨A_T, B_T, C_T, u, v, rfl, by omega, by omega, by omega, ?_, ?_, ?_⟩
           · intro x hxu
-            simp only [applyAtPosGen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, pgsdMaxSubtreeKey]
+            simp only [applyAtPosGen, _root_.BinaryTree.rotateRight, pgsdMaxSubtreeKey]
             split_ifs <;> omega
           · simp only [pgsdMaxSubtreeKey]
             split_ifs <;> omega
-          · simp only [applyAtPosGen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, pgsdMaxSubtreeKey,
-              _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+          · simp only [applyAtPosGen, _root_.BinaryTree.rotateRight, pgsdMaxSubtreeKey,
+              _root_.BinaryTree.num_nodes]
             split_ifs <;> omega
       | cons dir rest ih =>
-        rintro (_ | ⟨l, k, r⟩) a hW hp
+        rintro (_ | ⟨k, l, r⟩) a hW hp
         · cases dir <;> simp [eraseKeys, subtreeAtPos, leftSpineLen] at hp
         · rcases hW with ⟨hk, hl, hr⟩
           cases dir with
           | L =>
             obtain ⟨A_T, B_T, C_T, u, v, hsub, hau, huv, hvk, heq, hRu, hR'u⟩ :=
               ih l a hl hp
-            have hln : (applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight l rest).num_nodes = l.num_nodes :=
+            have hln : (applyAtPosGen _root_.BinaryTree.rotateRight l rest).num_nodes = l.num_nodes :=
               (h_applyPos_rotR_bst rest l a hl).2
             refine ⟨A_T, B_T, C_T, u, v, hsub, hau, huv, ?_, ?_, ?_, ?_⟩
-            · simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+            · simp only [_root_.BinaryTree.num_nodes]
               omega
             · intro x hxu
               simp only [applyAtPosGen, pgsdMaxSubtreeKey]
@@ -7279,10 +7281,10 @@ by
           | R =>
             obtain ⟨A_T, B_T, C_T, u, v, hsub, hku, huv, hvr, heq, hRu, hR'u⟩ :=
               ih r (k + 1) hr hp
-            have hrn : (applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight r rest).num_nodes = r.num_nodes :=
+            have hrn : (applyAtPosGen _root_.BinaryTree.rotateRight r rest).num_nodes = r.num_nodes :=
               (h_applyPos_rotR_bst rest r (k + 1) hr).2
             refine ⟨A_T, B_T, C_T, u, v, hsub, by omega, huv, ?_, ?_, ?_, ?_⟩
-            · simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+            · simp only [_root_.BinaryTree.num_nodes]
               omega
             · intro x hxu
               simp only [applyAtPosGen, pgsdMaxSubtreeKey, hrn]
@@ -7311,7 +7313,7 @@ by
 
 
   have h_msk_restrict :
-      ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (b lo hi z : ℕ),
+      ∀ (t : _root_.BinaryTree ℕ) (b lo hi z : ℕ),
         lo ≤ hi →
         IsRangeBST b t →
         b + t.num_nodes ≤ hi →
@@ -7320,13 +7322,13 @@ by
         pgsdMaxSubtreeKey (restrictInterval lo hi t) z = pgsdMaxSubtreeKey t z := by
     intro t
     induction t with
-    | empty =>
+    | nil =>
       intro b lo hi z _ _ _ h1 h2
-      simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at h2
+      simp [_root_.BinaryTree.num_nodes] at h2
       omega
-    | node L K R ihL ihR =>
+    | node K L R ihL ihR =>
       intro b lo hi z hlohi ⟨hK, hL, hR⟩ hhi hz_lo hz_hi
-      simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hhi hz_hi
+      simp only [_root_.BinaryTree.num_nodes] at hhi hz_hi
       have hK_lt_hi : ¬ hi ≤ K := by omega
       simp only [restrictInterval]
       split_ifs with hK_lo
@@ -7342,7 +7344,7 @@ by
         · exact ihR (K + 1) lo hi z hlohi hR (by omega) (by omega) (by omega)
 
   have h_pre_right_empty :
-      ∀ (bt : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (b m z y : ℕ),
+      ∀ (bt : _root_.BinaryTree ℕ) (b m z y : ℕ),
         IsRangeBST b bt →
         (hm : m < (preorderList bt).length) →
         z ∈ (preorderList bt).take m →
@@ -7352,10 +7354,10 @@ by
         y ∉ (preorderList bt).take m := by
     intro bt
     induction bt with
-    | empty =>
+    | nil =>
       intro _ m _ _ _ hm
       simp [preorderList] at hm
-    | node L k R ihL ihR =>
+    | node k L R ihL ihR =>
       intro b m z y ⟨hk, hL, hR⟩ hm hz_mem hx0_lt hzy hy_max
       rcases m with _ | m'
       · simp at hz_mem
@@ -7433,7 +7435,7 @@ by
           · exact ihR (k + 1) (m' - (preorderList L).length) z y hR hm''_R hz_R hx0_lt hzy hy_max hy_R
 
   have h_applyPos_restrict_eq :
-      ∀ (p : List Dir) (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (lo hi : ℕ),
+      ∀ (p : List Dir) (f : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (W : _root_.BinaryTree ℕ) (lo hi : ℕ),
         restrictInterval lo hi (f (subtreeAtPosGen W p)) =
           restrictInterval lo hi (subtreeAtPosGen W p) →
         restrictInterval lo hi (applyAtPosGen f W p) = restrictInterval lo hi W := by
@@ -7444,7 +7446,7 @@ by
       cases W <;> exact h
     | cons dir rest ih =>
       intro f W lo hi h
-      rcases W with _ | ⟨l, K, r⟩
+      rcases W with _ | ⟨K, l, r⟩
       · rfl
       · cases dir with
         | L =>
@@ -7455,12 +7457,12 @@ by
           simp only [applyAtPosGen, restrictInterval, h_r]
 
   have h_s4 :
-      ∀ (D M0 S0 : ℕ) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (pos : List Dir)
-        (A_T B_T C_T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (u v : ℕ),
+      ∀ (D M0 S0 : ℕ) (U : _root_.BinaryTree ℕ) (pos : List Dir)
+        (A_T B_T C_T : _root_.BinaryTree ℕ) (u v : ℕ),
         1 ≤ D → D ≤ S0 →
         IsRangeBST 0 U → U.num_nodes = M0 * S0 →
-        subtreeAtPosGen U pos = .node (.node A_T u B_T) v C_T →
-        let U' := applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U pos
+        subtreeAtPosGen U pos = .node v (.node u A_T B_T) C_T →
+        let U' := applyAtPosGen _root_.BinaryTree.rotateRight U pos
         let isG := isGlobalKey D S0 U
         let isG' := isGlobalKey D S0 U'
         (∀ x < M0 * S0, isG' x = isG x) ∨
@@ -7475,14 +7477,14 @@ by
             ∀ y, z < y → y ≤ pgsdMaxSubtreeKey U z → isG y = false)) := by
     intro D M0 S0 U pos A_T B_T C_T u v hD hS0 hU_bst hU_n hsub
     have hS_pos : 0 < S0 := by omega
-    let s := _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node (.node A_T u B_T) v C_T
-    let s' := _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node A_T u (.node B_T v C_T)
-    let U' := applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U pos
+    let s := _root_.BinaryTree.node v (.node u A_T B_T) C_T
+    let s' := _root_.BinaryTree.node u A_T (.node v B_T C_T)
+    let U' := applyAtPosGen _root_.BinaryTree.rotateRight U pos
     let isG := isGlobalKey D S0 U
     let isG' := isGlobalKey D S0 U'
 
     have h_sub_loc :
-        ∀ (p : List Dir) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a0 : ℕ),
+        ∀ (p : List Dir) (W : _root_.BinaryTree ℕ) (a0 : ℕ),
           IsRangeBST a0 W →
           subtreeAtPosGen W p = s →
           ∃ a_sub : ℕ,
@@ -7499,20 +7501,20 @@ by
         subst hWs
         exact ⟨a0, le_rfl, le_rfl, hW, fun _ _ _ => rfl⟩
       | cons dir rest ih =>
-        rintro (_ | ⟨l, K, r⟩) a0 hW hp
+        rintro (_ | ⟨K, l, r⟩) a0 hW hp
         · cases dir <;> simp [subtreeAtPosGen, s] at hp
         · rcases hW with ⟨hK, hl, hr⟩
           cases dir with
           | L =>
             obtain ⟨a_sub, ha1, ha2, hs_bst, hmsk⟩ := ih l a0 hl hp
-            refine ⟨a_sub, ha1, by simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega, hs_bst, ?_⟩
+            refine ⟨a_sub, ha1, by simp [_root_.BinaryTree.num_nodes]; omega, hs_bst, ?_⟩
             intro z hz1 hz2
             have hzK : z < K := by omega
             simp only [pgsdMaxSubtreeKey, hzK, ↓reduceIte]
             exact hmsk z hz1 hz2
           | R =>
             obtain ⟨a_sub, ha1, ha2, hs_bst, hmsk⟩ := ih r (K + 1) hr hp
-            refine ⟨a_sub, by omega, by simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega, hs_bst, ?_⟩
+            refine ⟨a_sub, by omega, by simp [_root_.BinaryTree.num_nodes]; omega, hs_bst, ?_⟩
             intro z hz1 hz2
             have hzn1 : ¬ z < K := by omega
             have hzn2 : z ≠ K := by omega
@@ -7521,9 +7523,9 @@ by
 
     obtain ⟨a_sub, _, hasub_end, hs_bst, hmsk_s⟩ := h_sub_loc pos U 0 hU_bst hsub
     rcases hs_bst with ⟨hv_eq, ⟨hu_eq, hA_bst, hB_bst⟩, hC_bst⟩
-    have huv : u < v := by simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hv_eq; omega
+    have huv : u < v := by simp [_root_.BinaryTree.num_nodes] at hv_eq; omega
     have hv_lt_N : v < M0 * S0 := by
-      simp only [s, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hasub_end hv_eq
+      simp only [s, _root_.BinaryTree.num_nodes] at hasub_end hv_eq
       omega
 
     have h_rot_restrict_eq :
@@ -7537,7 +7539,7 @@ by
     have h_blk_eq_of_not :
         ∀ m : ℕ, ¬(u / S0 = m ∧ v / S0 = m) → blockTree S0 m U' = blockTree S0 m U := by
       intro m hnot_m
-      apply h_applyPos_restrict_eq pos _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U (m * S0) ((m + 1) * S0)
+      apply h_applyPos_restrict_eq pos _root_.BinaryTree.rotateRight U (m * S0) ((m + 1) * S0)
       rw [hsub]
       apply h_rot_restrict_eq
       rintro ⟨h1, h2⟩
@@ -7559,13 +7561,13 @@ by
         rw [h_blk_eq_of_not (y / S0) (by omega)]
 
       have h_infix_pos :
-          ∀ (p : List Dir) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a0 : ℕ),
+          ∀ (p : List Dir) (W : _root_.BinaryTree ℕ) (a0 : ℕ),
             IsRangeBST a0 W →
             subtreeAtPosGen W p = s →
             ∃ P_pre S_pre : List ℕ,
               preorderList (restrictInterval lo hi W) =
                 P_pre ++ preorderList (restrictInterval lo hi s) ++ S_pre ∧
-              preorderList (restrictInterval lo hi (applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight W p)) =
+              preorderList (restrictInterval lo hi (applyAtPosGen _root_.BinaryTree.rotateRight W p)) =
                 P_pre ++ preorderList (restrictInterval lo hi s') ++ S_pre := by
         intro p
         induction p with
@@ -7573,9 +7575,9 @@ by
           intro W _ _ hp
           have hWs : W = s := by cases W <;> exact hp
           subst hWs
-          exact ⟨[], [], by simp, by simp [applyAtPosGen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, s, s']⟩
+          exact ⟨[], [], by simp, by simp [applyAtPosGen, _root_.BinaryTree.rotateRight, s, s']⟩
         | cons dir rest ih =>
-          rintro (_ | ⟨l, K, r⟩) a0 hW hp
+          rintro (_ | ⟨K, l, r⟩) a0 hW hp
           · cases dir <;> simp [subtreeAtPosGen, s] at hp
           · rcases hW with ⟨hK, hl, hr⟩
             cases dir with
@@ -7583,7 +7585,7 @@ by
               obtain ⟨a1, _, ha1_end, hs1, _⟩ := h_sub_loc rest l a0 hl hp
               have hv_lt_K : v < K := by
                 rcases hs1 with ⟨hv1, _, _⟩
-                simp only [s, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at ha1_end hv1
+                simp only [s, _root_.BinaryTree.num_nodes] at ha1_end hv1
                 omega
               have hnK_lo : ¬ K < lo := by omega
               obtain ⟨P_pre, S_pre, hP1, hP2⟩ := ih l a0 hl hp
@@ -7613,11 +7615,11 @@ by
       let C_q := restrictInterval lo hi C_T
       let UA := u :: preorderList A_q
       let Rest := preorderList B_q ++ preorderList C_q ++ S_pre
-      have hs_int : restrictInterval lo hi s = .node (.node A_q u B_q) v C_q := by
+      have hs_int : restrictInterval lo hi s = .node v (.node u A_q B_q) C_q := by
         dsimp (config := { failIfUnchanged := false }) only [s, A_q, B_q, C_q]
         simp only [restrictInterval]
         split_ifs <;> first | rfl | omega
-      have hs'_int : restrictInterval lo hi s' = .node A_q u (.node B_q v C_q) := by
+      have hs'_int : restrictInterval lo hi s' = .node u A_q (.node v B_q C_q) := by
         dsimp (config := { failIfUnchanged := false }) only [s', A_q, B_q, C_q]
         simp only [restrictInterval]
         split_ifs <;> first | rfl | omega
@@ -7776,7 +7778,7 @@ by
             obtain ⟨hBq_bst, hBq_n⟩ := h_restrict_bst B_T (u + 1) lo hi hlohi hB_bst
             have hBq_mem : y ∈ preorderList B_q := by
               rw [h_bst_pre_mem B_q _ y hBq_bst, hBq_n]
-              simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hv_eq
+              simp only [_root_.BinaryTree.num_nodes] at hv_eq
               omega
             dsimp (config := { failIfUnchanged := false }) only [isG, isGlobalKey]
             rw [hy_div, htake_old, decide_eq_false_iff_not]
@@ -7800,12 +7802,12 @@ by
           intro z hxz hzu hzG y hzy hy_max
           rcases eq_or_lt_of_le hzu with rfl | hzu_lt
           · have hmsk_u : pgsdMaxSubtreeKey U z = z + B_T.num_nodes := by
-              rw [hmsk_s z (by omega) (by simp [s, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega)]
+              rw [hmsk_s z (by omega) (by simp [s, _root_.BinaryTree.num_nodes]; omega)]
               dsimp (config := { failIfUnchanged := false }) only [s]
               simp only [pgsdMaxSubtreeKey]
               split_ifs <;> omega
             have hyv_lt : y < v := by
-              simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hv_eq
+              simp only [_root_.BinaryTree.num_nodes] at hv_eq
               omega
             exact hisG_mid_false y hzy hyv_lt
           · rcases r with _ | m
@@ -7835,7 +7837,7 @@ by
                 · omega
                 · exact hzm
               have hmsk_z_eq : pgsdMaxSubtreeKey U z = pgsdMaxSubtreeKey A_q z := by
-                rw [hmsk_s z (by omega) (by simp [s, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega)]
+                rw [hmsk_s z (by omega) (by simp [s, _root_.BinaryTree.num_nodes]; omega)]
                 have h1 : pgsdMaxSubtreeKey s z = pgsdMaxSubtreeKey A_T z := by
                   dsimp (config := { failIfUnchanged := false }) only [s]
                   simp only [pgsdMaxSubtreeKey]
@@ -8252,31 +8254,31 @@ by
   have h_part1 : (globalTree D S T).num_nodes = D * M :=
     (h_s1 D M S T hD1 hDS hbst hnodes).1
 
-  let Rel : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → Prop := fun U1 U2 =>
+  let Rel : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ → Prop := fun U1 U2 =>
     List.Forall₂ (· ≤ ·)
       (rightReachList 0 (globalTree D S U1))
       (rightReachList 0 (globalTree D S U2))
 
   have h_single_step :
-      ∀ (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (pos : List Dir),
+      ∀ (U : _root_.BinaryTree ℕ) (pos : List Dir),
         IsRangeBST 0 U → U.num_nodes = M * S →
         2 ≤ leftSpineLen (subtreeAtPos (eraseKeys U) pos) →
-        Rel U (applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U pos) := by
+        Rel U (applyAtPosGen _root_.BinaryTree.rotateRight U pos) := by
     intro U pos hU_bst hU_n hpos
     obtain ⟨hU'_bst, hU'_n_eq, A_T, B_T, C_T, u, v, hsub, huv, hvU, hbds, heq, hRu, hR'u⟩ :=
       h_s3 U pos hU_bst hpos
-    have hU'_n : (applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U pos).num_nodes = M * S := by
+    have hU'_n : (applyAtPosGen _root_.BinaryTree.rotateRight U pos).num_nodes = M * S := by
       rw [hU'_n_eq, hU_n]
     have hvN : v < M * S := by rw [← hU_n]; exact hvU
     have hbds' : ∀ x < M * S,
         x ≤ pgsdMaxSubtreeKey U x ∧ pgsdMaxSubtreeKey U x < M * S ∧
-        x ≤ pgsdMaxSubtreeKey (applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U pos) x ∧
-        pgsdMaxSubtreeKey (applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U pos) x < M * S := by
+        x ≤ pgsdMaxSubtreeKey (applyAtPosGen _root_.BinaryTree.rotateRight U pos) x ∧
+        pgsdMaxSubtreeKey (applyAtPosGen _root_.BinaryTree.rotateRight U pos) x < M * S := by
       intro x hx
       rw [← hU_n] at hx ⊢
       exact hbds x hx
     have heq' : ∀ x < M * S, x ≠ u →
-        pgsdMaxSubtreeKey (applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U pos) x =
+        pgsdMaxSubtreeKey (applyAtPosGen _root_.BinaryTree.rotateRight U pos) x =
           pgsdMaxSubtreeKey U x := by
       intro x hx hxu
       rw [← hU_n] at hx
@@ -8284,12 +8286,12 @@ by
     have hdich := h_s4 D M S U pos A_T B_T C_T u v hD1 hDS hU_bst hU_n hsub
     have hdom_succ := h_s5 (M * S) u v
       (isGlobalKey D S U)
-      (isGlobalKey D S (applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U pos))
+      (isGlobalKey D S (applyAtPosGen _root_.BinaryTree.rotateRight U pos))
       (pgsdMaxSubtreeKey U)
-      (pgsdMaxSubtreeKey (applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U pos))
+      (pgsdMaxSubtreeKey (applyAtPosGen _root_.BinaryTree.rotateRight U pos))
       ⟨huv, hvN⟩ hbds' heq' hRu hR'u hdich
     have hrr1 := (h_s1 D M S U hD1 hDS hU_bst hU_n).2
-    have hrr2 := (h_s1 D M S (applyAtPosGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U pos) hD1 hDS hU'_bst hU'_n).2
+    have hrr2 := (h_s1 D M S (applyAtPosGen _root_.BinaryTree.rotateRight U pos) hD1 hDS hU'_bst hU'_n).2
     rw [← hrr1, ← hrr2] at hdom_succ
     exact h_forall2_of_map_succ hdom_succ
 
@@ -8298,7 +8300,7 @@ by
   exact h_s2 (M * S) Rel (fun _ => h_forall2_refl _) (fun _ _ _ => h_forall2_trans)
     h_single_step T hbst hnodes k op hop
 
-theorem preorder_global_interblock_cascade_proj (Δ' k' M S : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (pos : List Dir) (gaps : List ℕ)
+theorem preorder_global_interblock_cascade_proj (Δ' k' M S : ℕ) (T : _root_.BinaryTree ℕ) (pos : List Dir) (gaps : List ℕ)
     (hk' : 1 ≤ k') (hM : 1 ≤ M) (hS : Δ' + 2 ≤ S)
     (hbst : IsRangeBST 0 T) (hnodes : T.num_nodes = M * S)
     (hvalid : validRightRotOp Δ' (k' + 2) (eraseKeys T) (.cascade pos gaps))
@@ -8312,29 +8314,29 @@ by
   have _ := And.intro hM hnodes
   let gapsLeftOffset : List ℕ → ℕ := fun xs =>
     xs.foldr (fun g acc => (g + 1) + acc) 0
-  let NonSplittingGlobal : (ℕ → Bool) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → Prop := fun isG t =>
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rec True
-      (fun l k r ihl ihr =>
-        (isG k = false → extractGlobalTree isG l = .empty ∨ extractGlobalTree isG r = .empty) ∧
+  let NonSplittingGlobal : (ℕ → Bool) → _root_.BinaryTree ℕ → Prop := fun isG t =>
+    _root_.BinaryTree.rec True
+      (fun k l r ihl ihr =>
+        (isG k = false → extractGlobalTree isG l = .nil ∨ extractGlobalTree isG r = .nil) ∧
         ihl ∧ ihr) t
-  let projGlobalPos : (ℕ → Bool) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List Dir → List Dir := fun isG t =>
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rec (fun _ => [])
-      (fun _ k _ ihl ihr p =>
+  let projGlobalPos : (ℕ → Bool) → _root_.BinaryTree ℕ → List Dir → List Dir := fun isG t =>
+    _root_.BinaryTree.rec (fun _ => [])
+      (fun k _ _ ihl ihr p =>
         match p with
         | [] => []
         | .L :: rest => if isG k then .L :: ihl rest else ihl rest
         | .R :: rest => if isG k then .R :: ihr rest else ihr rest) t
-  let leftPrefixGlobal : (ℕ → Bool) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → ℕ → Prop := fun isG t =>
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rec
+  let leftPrefixGlobal : (ℕ → Bool) → _root_.BinaryTree ℕ → ℕ → Prop := fun isG t =>
+    _root_.BinaryTree.rec
       (fun d => match d with | 0 => True | _ + 1 => False)
-      (fun _ k _ ihl _ d => match d with | 0 => True | d' + 1 => isG k = true ∧ ihl d') t
-  let allCascadeSpineGlobal : (ℕ → Bool) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → List ℕ → Prop := fun isG s gs =>
+      (fun k _ _ ihl _ d => match d with | 0 => True | d' + 1 => isG k = true ∧ ihl d') t
+  let allCascadeSpineGlobal : (ℕ → Bool) → _root_.BinaryTree ℕ → List ℕ → Prop := fun isG s gs =>
     List.rec
       (fun s => match s with
-        | .node (.node _ x _) y _ => isG x = true ∧ isG y = true
+        | .node y (.node x _ _) _ => isG x = true ∧ isG y = true
         | _ => False)
       (fun g _ ih s => match s with
-        | .node (.node a x _) y _ =>
+        | .node y (.node x a _) _ =>
             isG x = true ∧ isG y = true ∧ leftPrefixGlobal isG a g ∧ ih (subtreeAtLeftDepthGen a g)
         | _ => False)
       gs s
@@ -8342,66 +8344,66 @@ by
   have hS_pos : 0 < S := by omega
 
 
-  have h_subPos_nil : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α), subtreeAtPosGen t [] = t := by
+  have h_subPos_nil : ∀ {α : Type} (t : _root_.BinaryTree α), subtreeAtPosGen t [] = t := by
     intro _; rintro (_ | ⟨_, _, _⟩) <;> rfl
-  have h_subPosU_nil : ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit), subtreeAtPos t [] = t := by
+  have h_subPosU_nil : ∀ (t : _root_.BinaryTree Unit), subtreeAtPos t [] = t := by
     rintro (_ | ⟨_, _, _⟩) <;> rfl
-  have h_appPos_nil : ∀ {α : Type} (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+  have h_appPos_nil : ∀ {α : Type} (f : _root_.BinaryTree α → _root_.BinaryTree α) (t : _root_.BinaryTree α),
       applyAtPosGen f t [] = f t := by
     intro _ _; rintro (_ | ⟨_, _, _⟩) <;> rfl
-  have h_appPosU_nil : ∀ (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+  have h_appPosU_nil : ∀ (f : _root_.BinaryTree Unit → _root_.BinaryTree Unit) (t : _root_.BinaryTree Unit),
       applyAtPos f t [] = f t := by
     intro _; rintro (_ | ⟨_, _, _⟩) <;> rfl
-  have h_subLD_zero : ∀ {α : Type} (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α), subtreeAtLeftDepthGen t 0 = t := by
+  have h_subLD_zero : ∀ {α : Type} (t : _root_.BinaryTree α), subtreeAtLeftDepthGen t 0 = t := by
     intro _; rintro (_ | ⟨_, _, _⟩) <;> rfl
-  have h_subLDU_zero : ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit), subtreeAtLeftDepth t 0 = t := by
+  have h_subLDU_zero : ∀ (t : _root_.BinaryTree Unit), subtreeAtLeftDepth t 0 = t := by
     rintro (_ | ⟨_, _, _⟩) <;> rfl
-  have h_appLD_zero : ∀ {α : Type} (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α → _root_.SplayDeque.Legacy.SplayTree.BinaryTree α) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree α),
+  have h_appLD_zero : ∀ {α : Type} (f : _root_.BinaryTree α → _root_.BinaryTree α) (t : _root_.BinaryTree α),
       applyAtLeftDepthGen f t 0 = f t := by
     intro _ _; rintro (_ | ⟨_, _, _⟩) <;> rfl
-  have h_appLDU_zero : ∀ (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+  have h_appLDU_zero : ∀ (f : _root_.BinaryTree Unit → _root_.BinaryTree Unit) (t : _root_.BinaryTree Unit),
       applyAtLeftDepth f t 0 = f t := by
     intro _; rintro (_ | ⟨_, _, _⟩) <;> rfl
-  have h_projPos_nil : ∀ (isG : ℕ → Bool) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), projGlobalPos isG t [] = [] := by
+  have h_projPos_nil : ∀ (isG : ℕ → Bool) (t : _root_.BinaryTree ℕ), projGlobalPos isG t [] = [] := by
     intro _; rintro (_ | ⟨_, _, _⟩) <;> rfl
 
 
   have h_ek_subPos :
-      ∀ (p : List Dir) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (p : List Dir) (t : _root_.BinaryTree ℕ),
         eraseKeys (subtreeAtPosGen t p) = subtreeAtPos (eraseKeys t) p := by
     intro p
     induction p with
     | nil => intro t; rw [h_subPos_nil, h_subPosU_nil]
     | cons dir rest ih =>
-      rintro (_ | ⟨l, k, r⟩)
+      rintro (_ | ⟨k, l, r⟩)
       · rfl
       · cases dir <;> exact ih _
 
   have h_ek_subLD :
-      ∀ (d : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (d : ℕ) (t : _root_.BinaryTree ℕ),
         eraseKeys (subtreeAtLeftDepthGen t d) = subtreeAtLeftDepth (eraseKeys t) d := by
     intro d
     induction d with
     | zero => intro t; rw [h_subLD_zero, h_subLDU_zero]
     | succ d ih =>
-      rintro (_ | ⟨l, k, r⟩)
+      rintro (_ | ⟨k, l, r⟩)
       · rfl
       · exact ih l
 
   have h_subPos_app :
-      ∀ (p1 p2 : List Dir) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (p1 p2 : List Dir) (t : _root_.BinaryTree ℕ),
         subtreeAtPosGen t (p1 ++ p2) = subtreeAtPosGen (subtreeAtPosGen t p1) p2 := by
     intro p1
     induction p1 with
     | nil => intro p2 t; simp only [List.nil_append, h_subPos_nil]
     | cons dir rest ih =>
       intro p2 t
-      rcases t with _ | ⟨l, k, r⟩
+      rcases t with _ | ⟨k, l, r⟩
       · cases p2 <;> rfl
       · cases dir <;> exact ih p2 _
 
   have h_appPos_app :
-      ∀ (p1 p2 : List Dir) (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (p1 p2 : List Dir) (f : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (t : _root_.BinaryTree ℕ),
         applyAtPosGen f t (p1 ++ p2) =
           applyAtPosGen (fun s => applyAtPosGen f s p2) t p1 := by
     intro p1
@@ -8409,12 +8411,12 @@ by
     | nil => intro p2 f t; simp only [List.nil_append, h_appPos_nil]
     | cons dir rest ih =>
       intro p2 f t
-      rcases t with _ | ⟨l, k, r⟩
+      rcases t with _ | ⟨k, l, r⟩
       · rfl
       · cases dir <;> simp only [List.cons_append, applyAtPosGen, ih]
 
   have h_appPos_congr :
-      ∀ (p : List Dir) (f1 f2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (p : List Dir) (f1 f2 : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (t : _root_.BinaryTree ℕ),
         f1 (subtreeAtPosGen t p) = f2 (subtreeAtPosGen t p) →
         applyAtPosGen f1 t p = applyAtPosGen f2 t p := by
     intro p
@@ -8422,63 +8424,63 @@ by
     | nil => intro f1 f2 t h; simpa only [h_subPos_nil, h_appPos_nil] using h
     | cons dir rest ih =>
       intro f1 f2 t h
-      rcases t with _ | ⟨l, k, r⟩
+      rcases t with _ | ⟨k, l, r⟩
       · rfl
       · cases dir with
-        | L => exact congrArg (fun x => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node x k r) (ih f1 f2 l h)
-        | R => exact congrArg (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node l k) (ih f1 f2 r h)
+        | L => exact congrArg (fun x => _root_.BinaryTree.node k x r) (ih f1 f2 l h)
+        | R => exact congrArg (_root_.BinaryTree.node k l) (ih f1 f2 r h)
 
   have h_appPos_same :
-      ∀ (p : List Dir) (g f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        f .empty = .empty →
+      ∀ (p : List Dir) (g f : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (t : _root_.BinaryTree ℕ),
+        f .nil = .nil →
         applyAtPosGen g (applyAtPosGen f t p) p = applyAtPosGen (fun s => g (f s)) t p := by
     intro p
     induction p with
     | nil => intro g f t _; simp only [h_appPos_nil]
     | cons dir rest ih =>
       intro g f t hf0
-      rcases t with _ | ⟨l, k, r⟩
+      rcases t with _ | ⟨k, l, r⟩
       · rfl
       · cases dir <;> simp only [applyAtPosGen, ih g f _ hf0]
 
   have h_subPos_after_app :
-      ∀ (p : List Dir) (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        subtreeAtPosGen t p ≠ .empty →
+      ∀ (p : List Dir) (f : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (t : _root_.BinaryTree ℕ),
+        subtreeAtPosGen t p ≠ .nil →
         subtreeAtPosGen (applyAtPosGen f t p) p = f (subtreeAtPosGen t p) := by
     intro p
     induction p with
     | nil => intro f t _; simp only [h_appPos_nil, h_subPos_nil]
     | cons dir rest ih =>
       intro f t hne
-      rcases t with _ | ⟨l, k, r⟩
+      rcases t with _ | ⟨k, l, r⟩
       · exact absurd rfl hne
       · cases dir <;> exact ih f _ hne
 
   have h_subLD_eq_pos :
-      ∀ (d : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (d : ℕ) (t : _root_.BinaryTree ℕ),
         subtreeAtLeftDepthGen t d = subtreeAtPosGen t (List.replicate d .L) := by
     intro d
     induction d with
     | zero => intro t; simp only [List.replicate_zero, h_subLD_zero, h_subPos_nil]
     | succ d ih =>
-      rintro (_ | ⟨l, k, r⟩)
+      rintro (_ | ⟨k, l, r⟩)
       · rfl
       · exact ih l
 
   have h_appLD_eq_pos :
-      ∀ (d : ℕ) (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (d : ℕ) (f : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (t : _root_.BinaryTree ℕ),
         applyAtLeftDepthGen f t d = applyAtPosGen f t (List.replicate d .L) := by
     intro d
     induction d with
     | zero => intro f t; simp only [List.replicate_zero, h_appLD_zero, h_appPos_nil]
     | succ d ih =>
       intro f t
-      rcases t with _ | ⟨l, k, r⟩
+      rcases t with _ | ⟨k, l, r⟩
       · rfl
       · simp only [applyAtLeftDepthGen, List.replicate_succ, applyAtPosGen, ih]
 
   have h_subLD_add :
-      ∀ (d1 d2 : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (d1 d2 : ℕ) (t : _root_.BinaryTree ℕ),
         subtreeAtLeftDepthGen t (d1 + d2) =
           subtreeAtLeftDepthGen (subtreeAtLeftDepthGen t d1) d2 := by
     intro d1
@@ -8487,12 +8489,12 @@ by
     | succ d1 ih =>
       intro d2 t
       rw [Nat.succ_add]
-      rcases t with _ | ⟨l, k, r⟩
+      rcases t with _ | ⟨k, l, r⟩
       · cases d2 <;> rfl
       · exact ih d2 l
 
   have h_appLD_comp :
-      ∀ (g d : ℕ) (h f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (g d : ℕ) (h f : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (t : _root_.BinaryTree ℕ),
         applyAtLeftDepthGen h (applyAtLeftDepthGen f t g) (g + d) =
           applyAtLeftDepthGen (fun s => applyAtLeftDepthGen h (f s) d) t g := by
     intro g
@@ -8501,12 +8503,12 @@ by
     | succ g ih =>
       intro d h f t
       rw [Nat.succ_add]
-      rcases t with _ | ⟨l, k, r⟩
+      rcases t with _ | ⟨k, l, r⟩
       · rfl
       · simp only [applyAtLeftDepthGen, ih]
 
   have h_appLD_congr :
-      ∀ (g : ℕ) (f1 f2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (g : ℕ) (f1 f2 : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (t : _root_.BinaryTree ℕ),
         f1 (subtreeAtLeftDepthGen t g) = f2 (subtreeAtLeftDepthGen t g) →
         applyAtLeftDepthGen f1 t g = applyAtLeftDepthGen f2 t g := by
     intro g
@@ -8514,13 +8516,13 @@ by
     | zero => intro f1 f2 t h; simpa only [h_subLD_zero, h_appLD_zero] using h
     | succ g ih =>
       intro f1 f2 t h
-      rcases t with _ | ⟨l, k, r⟩
+      rcases t with _ | ⟨k, l, r⟩
       · rfl
-      · exact congrArg (fun x => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node x k r) (ih f1 f2 l h)
+      · exact congrArg (fun x => _root_.BinaryTree.node k x r) (ih f1 f2 l h)
 
   have h_subLD_after_app :
-      ∀ (g d : ℕ) (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        f .empty = .empty →
+      ∀ (g d : ℕ) (f : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (t : _root_.BinaryTree ℕ),
+        f .nil = .nil →
         subtreeAtLeftDepthGen (applyAtLeftDepthGen f t g) (g + d) =
           subtreeAtLeftDepthGen (f (subtreeAtLeftDepthGen t g)) d := by
     intro g
@@ -8529,14 +8531,14 @@ by
     | succ g ih =>
       intro d f t hf0
       rw [Nat.succ_add]
-      rcases t with _ | ⟨l, k, r⟩
+      rcases t with _ | ⟨k, l, r⟩
       · simp only [applyAtLeftDepthGen, subtreeAtLeftDepthGen, hf0]
         cases d <;> rfl
       · exact ih d f l hf0
 
 
   have h_peel_bot_root :
-      ∀ (mid_gaps : List ℕ) (g_bot : ℕ) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (mid_gaps : List ℕ) (g_bot : ℕ) (u : _root_.BinaryTree ℕ),
         validGappedCascadeAtRoot Δ' (eraseKeys u) (mid_gaps ++ [g_bot]) →
         allPairsInterblock S u (mid_gaps ++ [g_bot]) = true →
         let u' := execGappedCascadeAtRootGen u mid_gaps
@@ -8544,21 +8546,21 @@ by
         validGappedCascadeAtRoot Δ' (eraseKeys u) mid_gaps ∧
         allPairsInterblock S u mid_gaps = true ∧
         2 ≤ leftSpineLen (eraseKeys (subtreeAtLeftDepthGen u' δ)) ∧
-        applyAtLeftDepthGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight u' δ =
+        applyAtLeftDepthGen _root_.BinaryTree.rotateRight u' δ =
           execGappedCascadeAtRootGen u (mid_gaps ++ [g_bot]) := by
     intro mid_gaps g_bot
     induction mid_gaps with
     | nil =>
       intro u hvc hp
       simp only [List.nil_append] at hvc hp ⊢
-      rcases u with _ | ⟨_ | ⟨a, x, b⟩, y, c⟩
+      rcases u with _ | ⟨y, _ | ⟨x, a, b⟩, c⟩
       · simp [allPairsInterblock] at hp
       · simp [allPairsInterblock] at hp
       · simp only [allPairsInterblock, Bool.and_eq_true] at hp
         obtain ⟨hxy, hp_bot⟩ := hp
         have h_sub_bot :
             2 ≤ leftSpineLen (eraseKeys (subtreeAtLeftDepthGen a g_bot)) := by
-          rcases hbot : subtreeAtLeftDepthGen a g_bot with _ | ⟨_ | ⟨a1, x1, b1⟩, y1, c1⟩
+          rcases hbot : subtreeAtLeftDepthGen a g_bot with _ | ⟨y1, _ | ⟨x1, a1, b1⟩, c1⟩
           · rw [hbot] at hp_bot; simp [allPairsInterblock] at hp_bot
           · rw [hbot] at hp_bot; simp [allPairsInterblock] at hp_bot
           · simp only [eraseKeys, leftSpineLen]; omega
@@ -8570,7 +8572,7 @@ by
     | cons g rest ih =>
       intro u hvc hp
       simp only [List.cons_append] at hvc hp
-      rcases u with _ | ⟨_ | ⟨a, x, b⟩, y, c⟩
+      rcases u with _ | ⟨y, _ | ⟨x, a, b⟩, c⟩
       · simp [allPairsInterblock] at hp
       · simp [allPairsInterblock] at hp
       · simp only [eraseKeys, validGappedCascadeAtRoot] at hvc
@@ -8581,7 +8583,7 @@ by
         obtain ⟨hvc_mid, hp_mid, hspine_bot, hex_bot⟩ :=
           ih (subtreeAtLeftDepthGen a g) hvc_sub hp_sub
         let δ_rest := gapsLeftOffset (rest ++ [g_bot])
-        have hf0 : (fun s : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ => execGappedCascadeAtRootGen s rest) .empty = .empty := by
+        have hf0 : (fun s : _root_.BinaryTree ℕ => execGappedCascadeAtRootGen s rest) .nil = .nil := by
           cases rest <;> rfl
         have h_add_eq : (g + 1) + δ_rest = (g + δ_rest) + 1 := by omega
         refine ⟨?_, ?_, ?_, ?_⟩
@@ -8590,26 +8592,26 @@ by
         · simp only [allPairsInterblock, Bool.and_eq_true]
           exact ⟨hxy, hp_mid⟩
         · change 2 ≤ leftSpineLen (eraseKeys (subtreeAtLeftDepthGen
-            (.node (applyAtLeftDepthGen (fun s => execGappedCascadeAtRootGen s rest) a g)
-              x (.node b y c)) ((g + 1) + δ_rest)))
+            (.node x
+              (applyAtLeftDepthGen (fun s => execGappedCascadeAtRootGen s rest) a g) (.node y b c)) ((g + 1) + δ_rest)))
           rw [h_add_eq]
           simp only [subtreeAtLeftDepthGen]
           rw [h_subLD_after_app g δ_rest _ a hf0]
           exact hspine_bot
-        · change applyAtLeftDepthGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight
-            (.node (applyAtLeftDepthGen (fun s => execGappedCascadeAtRootGen s rest) a g)
-              x (.node b y c)) ((g + 1) + δ_rest) = _
+        · change applyAtLeftDepthGen _root_.BinaryTree.rotateRight
+            (.node x
+              (applyAtLeftDepthGen (fun s => execGappedCascadeAtRootGen s rest) a g) (.node y b c)) ((g + 1) + δ_rest) = _
           rw [h_add_eq]
           simp only [applyAtLeftDepthGen, List.cons_append, execGappedCascadeAtRootGen]
-          rw [h_appLD_comp g δ_rest _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight
+          rw [h_appLD_comp g δ_rest _root_.BinaryTree.rotateRight
             (fun s => execGappedCascadeAtRootGen s rest) a]
           congr 1
           exact h_appLD_congr g _ _ a hex_bot
 
   have h_single_interblock_inv :
-      ∀ (p : List Dir) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a : ℕ) (A B C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (x y : ℕ),
+      ∀ (p : List Dir) (U : _root_.BinaryTree ℕ) (a : ℕ) (A B C : _root_.BinaryTree ℕ) (x y : ℕ),
         IsRangeBST a U →
-        subtreeAtPosGen U p = .node (.node A x B) y C →
+        subtreeAtPosGen U p = .node y (.node x A B) C →
         x / S < y / S →
         let U' := execRightRotOpGen U (.single p)
         IsRangeBST a U' ∧
@@ -8623,11 +8625,11 @@ by
       rw [h_subPos_nil] at hsub
       subst hsub
       obtain ⟨hy_eq, ⟨hx_eq, hA, hB⟩, hC⟩ := hU
-      simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hy_eq
+      simp only [_root_.BinaryTree.num_nodes] at hy_eq
       refine ⟨?_, ?_, ?_⟩
       · refine ⟨hx_eq, hA, ?_, hB, hC⟩
         omega
-      · simp only [execRightRotOpGen, applyAtPosGen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+      · simp only [execRightRotOpGen, applyAtPosGen, _root_.BinaryTree.rotateRight, _root_.BinaryTree.num_nodes]
         omega
       · intro m
         let lo := m * S
@@ -8639,20 +8641,20 @@ by
           have h1 : m ≤ x / S := (Nat.le_div_iff_mul_le hS_pos).mpr hx_ge
           have h2 : y / S < m + 1 := (Nat.div_lt_iff_lt_mul hS_pos).mpr hy_lt
           omega
-        change restrictInterval lo hi (.node A x (.node B y C)) =
-          restrictInterval lo hi (.node (.node A x B) y C)
+        change restrictInterval lo hi (.node x A (.node y B C)) =
+          restrictInterval lo hi (.node y (.node x A B) C)
         simp only [restrictInterval]
         split_ifs <;> first | rfl | omega
     | cons dir rest ih =>
       intro U a A B C x y hU hsub hxy_div
-      rcases U with _ | ⟨L, K, R⟩
+      rcases U with _ | ⟨K, L, R⟩
       · simp [subtreeAtPosGen] at hsub
       · obtain ⟨hK, hL, hR⟩ := hU
         cases dir with
         | L =>
           obtain ⟨hL', hnL', hriL'⟩ := ih L a A B C x y hL hsub hxy_div
           refine ⟨⟨by simp [execRightRotOpGen] at hnL' ⊢; omega, hL', hR⟩, ?_, ?_⟩
-          · simp only [execRightRotOpGen, applyAtPosGen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hnL' ⊢
+          · simp only [execRightRotOpGen, applyAtPosGen, _root_.BinaryTree.num_nodes] at hnL' ⊢
             omega
           · intro m
             dsimp (config := { failIfUnchanged := false }) only [execRightRotOpGen] at hriL' ⊢
@@ -8660,14 +8662,14 @@ by
         | R =>
           obtain ⟨hR', hnR', hriR'⟩ := ih R (K + 1) A B C x y hR hsub hxy_div
           refine ⟨⟨hK, hL, hR'⟩, ?_, ?_⟩
-          · simp only [execRightRotOpGen, applyAtPosGen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hnR' ⊢
+          · simp only [execRightRotOpGen, applyAtPosGen, _root_.BinaryTree.num_nodes] at hnR' ⊢
             omega
           · intro m
             dsimp (config := { failIfUnchanged := false }) only [execRightRotOpGen] at hriR' ⊢
             simp only [applyAtPosGen, restrictInterval, hriR' m]
 
   have h_casc_interblock_inv :
-      ∀ (gs : List ℕ) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (p : List Dir),
+      ∀ (gs : List ℕ) (U : _root_.BinaryTree ℕ) (p : List Dir),
         IsRangeBST 0 U →
         allPairsInterblock S (subtreeAtPosGen U p) gs = true →
         let U' := execRightRotOpGen U (.cascade p gs)
@@ -8677,7 +8679,7 @@ by
     induction gs with
     | nil =>
       intro U p hU hp
-      rcases hsub : subtreeAtPosGen U p with _ | ⟨_ | ⟨A, x, B⟩, y, C⟩
+      rcases hsub : subtreeAtPosGen U p with _ | ⟨y, _ | ⟨x, A, B⟩, C⟩
       · rw [hsub] at hp; simp [allPairsInterblock] at hp
       · rw [hsub] at hp; simp [allPairsInterblock] at hp
       · rw [hsub] at hp
@@ -8686,7 +8688,7 @@ by
         exact ⟨hU', hri⟩
     | cons g rest ih =>
       intro U p hU hp
-      rcases hsub : subtreeAtPosGen U p with _ | ⟨_ | ⟨A, x, B⟩, y, C⟩
+      rcases hsub : subtreeAtPosGen U p with _ | ⟨y, _ | ⟨x, A, B⟩, C⟩
       · rw [hsub] at hp; simp [allPairsInterblock] at hp
       · rw [hsub] at hp; simp [allPairsInterblock] at hp
       · rw [hsub] at hp
@@ -8697,16 +8699,16 @@ by
         let p' := p ++ List.replicate (g + 1) .L
         have hsub_U1 : subtreeAtPosGen U1 p' = subtreeAtLeftDepthGen A g := by
           dsimp (config := { failIfUnchanged := false }) only [U1, p', execRightRotOpGen]
-          rw [h_subPos_app, h_subPos_after_app p _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U (by simp [hsub]), hsub]
+          rw [h_subPos_app, h_subPos_after_app p _root_.BinaryTree.rotateRight U (by simp [hsub]), hsub]
           rw [← h_subLD_eq_pos (g + 1)]
           rfl
         have hex_eq : execRightRotOpGen U (.cascade p (g :: rest)) =
             execRightRotOpGen U1 (.cascade p' rest) := by
           dsimp (config := { failIfUnchanged := false }) only [U1, p', execRightRotOpGen]
-          rw [h_appPos_app, h_appPos_same p _ _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U rfl]
+          rw [h_appPos_app, h_appPos_same p _ _root_.BinaryTree.rotateRight U rfl]
           refine h_appPos_congr p _ _ U ?_
           rw [hsub]
-          simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, ← h_appLD_eq_pos (g + 1)]
+          simp only [_root_.BinaryTree.rotateRight, ← h_appLD_eq_pos (g + 1)]
           rfl
         rw [hex_eq]
         rw [← hsub_U1] at hp_rest
@@ -8715,27 +8717,27 @@ by
 
 
   have h_mem_pre_bst :
-      ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a x : ℕ),
+      ∀ (t : _root_.BinaryTree ℕ) (a x : ℕ),
         IsRangeBST a t → (x ∈ preorderList t ↔ a ≤ x ∧ x < a + t.num_nodes) := by
     intro t
     induction t with
-    | empty =>
+    | nil =>
       intro a x _
-      simp [preorderList, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
-    | node l k r ihl ihr =>
+      simp [preorderList, _root_.BinaryTree.num_nodes]
+    | node k l r ihl ihr =>
       intro a x ⟨hk, hl, hr⟩
-      simp only [preorderList, List.mem_cons, List.mem_append, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes,
+      simp only [preorderList, List.mem_cons, List.mem_append, _root_.BinaryTree.num_nodes,
         ihl a x hl, ihr (k + 1) x hr]
       omega
 
   have h_mem_subPos :
-      ∀ (p : List Dir) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (x : ℕ),
+      ∀ (p : List Dir) (t : _root_.BinaryTree ℕ) (x : ℕ),
         x ∈ preorderList (subtreeAtPosGen t p) → x ∈ preorderList t := by
     intro p
     induction p with
     | nil => intro t x h; rwa [h_subPos_nil] at h
     | cons dir rest ih =>
-      rintro (_ | ⟨l, k, r⟩) x h
+      rintro (_ | ⟨k, l, r⟩) x h
       · simp [subtreeAtPosGen, preorderList] at h
       · cases dir with
         | L =>
@@ -8746,13 +8748,13 @@ by
           exact Or.inr (Or.inr (ih r x h))
 
   have h_bst_subPos :
-      ∀ (p : List Dir) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a : ℕ),
+      ∀ (p : List Dir) (t : _root_.BinaryTree ℕ) (a : ℕ),
         IsRangeBST a t → ∃ a', IsRangeBST a' (subtreeAtPosGen t p) := by
     intro p
     induction p with
     | nil => intro t a h; rw [h_subPos_nil]; exact ⟨a, h⟩
     | cons dir rest ih =>
-      rintro (_ | ⟨l, k, r⟩) a h
+      rintro (_ | ⟨k, l, r⟩) a h
       · exact ⟨0, trivial⟩
       · obtain ⟨_, hl, hr⟩ := h
         cases dir with
@@ -8760,12 +8762,12 @@ by
         | R => exact ih r (k + 1) hr
 
   have h_mem_restrict_sub :
-      ∀ (lo hi : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (x : ℕ),
+      ∀ (lo hi : ℕ) (t : _root_.BinaryTree ℕ) (x : ℕ),
         x ∈ preorderList (restrictInterval lo hi t) → x ∈ preorderList t := by
     intro lo hi t
     induction t with
-    | empty => intro x h; exact h
-    | node l k r ihl ihr =>
+    | nil => intro x h; exact h
+    | node k l r ihl ihr =>
       intro x h
       simp only [restrictInterval] at h
       split_ifs at h
@@ -8778,7 +8780,7 @@ by
         · exact Or.inr (Or.inr (ihr x hr))
 
   have h_mem_restrict_of_mem :
-      ∀ (lo hi : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a x : ℕ),
+      ∀ (lo hi : ℕ) (t : _root_.BinaryTree ℕ) (a x : ℕ),
         IsRangeBST a t →
         x ∈ preorderList t →
         lo ≤ x →
@@ -8786,8 +8788,8 @@ by
         x ∈ preorderList (restrictInterval lo hi t) := by
     intro lo hi t
     induction t with
-    | empty => intro _ _ _ h _ _; simp [preorderList] at h
-    | node l k r ihl ihr =>
+    | nil => intro _ _ _ h _ _; simp [preorderList] at h
+    | node k l r ihl ihr =>
       intro a x ⟨hk, hl, hr⟩ hx hlo hhi
       simp only [preorderList, List.mem_cons, List.mem_append] at hx
       simp only [restrictInterval]
@@ -8809,12 +8811,12 @@ by
         · exact Or.inr (Or.inr (ihr (k + 1) x hr hxr hlo hhi))
 
   have h_nodup_restrict :
-      ∀ (lo hi : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a : ℕ),
+      ∀ (lo hi : ℕ) (t : _root_.BinaryTree ℕ) (a : ℕ),
         IsRangeBST a t → (preorderList (restrictInterval lo hi t)).Nodup := by
     intro lo hi t
     induction t with
-    | empty => intro _ _; exact List.nodup_nil
-    | node l k r ihl ihr =>
+    | nil => intro _ _; exact List.nodup_nil
+    | node k l r ihl ihr =>
       intro a ⟨hk, hl, hr⟩
       simp only [restrictInterval]
       split_ifs
@@ -8834,7 +8836,7 @@ by
 
   have h_restrict_subPos_eq :
       ∀ (lo hi : ℕ), lo ≤ hi →
-      ∀ (p : List Dir) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (aW : ℕ),
+      ∀ (p : List Dir) (W : _root_.BinaryTree ℕ) (aW : ℕ),
         IsRangeBST aW W →
         (∃ x ∈ preorderList (subtreeAtPosGen W p), x < lo) →
         (∃ z ∈ preorderList (subtreeAtPosGen W p), hi ≤ z) →
@@ -8843,7 +8845,7 @@ by
     induction p with
     | nil => intro W _ _ _ _; rw [h_subPos_nil]
     | cons dir rest ih =>
-      rintro (_ | ⟨L, K, R⟩) aW hW ⟨x, hx_mem, hx_lt⟩ ⟨z, hz_mem, hz_ge⟩
+      rintro (_ | ⟨K, L, R⟩) aW hW ⟨x, hx_mem, hx_lt⟩ ⟨z, hz_mem, hz_ge⟩
       · simp [subtreeAtPosGen, preorderList] at hx_mem
       · obtain ⟨hK, hL, hR⟩ := hW
         cases dir with
@@ -8862,9 +8864,9 @@ by
           exact ih R (K + 1) hR ⟨x, hx_mem, hx_lt⟩ ⟨z, hz_mem, hz_ge⟩
 
   have h_subPos_pre_embed :
-      ∀ (lo hi : ℕ) (p : List Dir) (W : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (aW : ℕ) (l r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ),
+      ∀ (lo hi : ℕ) (p : List Dir) (W : _root_.BinaryTree ℕ) (aW : ℕ) (l r : _root_.BinaryTree ℕ) (k : ℕ),
         IsRangeBST aW W →
-        subtreeAtPosGen W p = .node l k r →
+        subtreeAtPosGen W p = .node k l r →
         lo ≤ k →
         k < hi →
         ∃ pref suff : List ℕ,
@@ -8882,10 +8884,10 @@ by
       refine ⟨[], [], ?_⟩
       simp [restrictInterval, hk1, hk2, preorderList]
     | cons dir rest ih =>
-      rintro (_ | ⟨L, K, R⟩) aW l r k hW hsub hlo hhi
+      rintro (_ | ⟨K, L, R⟩) aW l r k hW hsub hlo hhi
       · simp [subtreeAtPosGen] at hsub
       · obtain ⟨hK, hL, hR⟩ := hW
-        have hk_in : k ∈ preorderList (subtreeAtPosGen (.node L K R) (dir :: rest)) := by
+        have hk_in : k ∈ preorderList (subtreeAtPosGen (.node K L R) (dir :: rest)) := by
           rw [hsub]; exact List.mem_cons_self
         cases dir with
         | L =>
@@ -8910,14 +8912,14 @@ by
             simp [preorderList, h_ih, List.append_assoc]
 
   have h_extract_ne_empty :
-      ∀ (isG : ℕ → Bool) (w : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        extractGlobalTree isG w ≠ .empty → ∃ x ∈ preorderList w, isG x = true := by
+      ∀ (isG : ℕ → Bool) (w : _root_.BinaryTree ℕ),
+        extractGlobalTree isG w ≠ .nil → ∃ x ∈ preorderList w, isG x = true := by
     intro isG w
     induction w with
-    | empty =>
+    | nil =>
       intro h
       exact absurd rfl h
-    | node wl wk wr ihl ihr =>
+    | node wk wl wr ihl ihr =>
       intro h
       cases hwk : isG wk with
       | true =>
@@ -8925,12 +8927,12 @@ by
       | false =>
         simp only [extractGlobalTree, hwk, Bool.false_eq_true, ↓reduceIte] at h
         cases hwl : extractGlobalTree isG wl with
-        | empty =>
+        | nil =>
           rw [hwl] at h
           obtain ⟨x, hx_m, hx_g⟩ := ihr h
           exact ⟨x, List.mem_cons_of_mem wk (List.mem_append_right _ hx_m), hx_g⟩
-        | node a b c =>
-          have hwl_ne : extractGlobalTree isG wl ≠ .empty := by simp [hwl]
+        | node b a c =>
+          have hwl_ne : extractGlobalTree isG wl ≠ .nil := by simp [hwl]
           obtain ⟨x, hx_m, hx_g⟩ := ihl hwl_ne
           exact ⟨x, List.mem_cons_of_mem wk (List.mem_append_left _ hx_m), hx_g⟩
 
@@ -8952,17 +8954,17 @@ by
 
   have h_bst_nonSplitting :
       ∀ (D : ℕ), 1 ≤ D →
-      ∀ (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), IsRangeBST 0 U →
+      ∀ (U : _root_.BinaryTree ℕ), IsRangeBST 0 U →
         NonSplittingGlobal (isGlobalKey D S U) U := by
     intro D hD1 U hU
     let isG := isGlobalKey D S U
     have h_aux :
-        ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (p : List Dir),
+        ∀ (t : _root_.BinaryTree ℕ) (p : List Dir),
           subtreeAtPosGen U p = t → NonSplittingGlobal isG t := by
       intro t
       induction t with
-      | empty => intro _ _; exact trivial
-      | node l k r ihl ihr =>
+      | nil => intro _ _; exact trivial
+      | node k l r ihl ihr =>
         intro p hp_eq
         have hp_l : subtreeAtPosGen U (p ++ [.L]) = l := by
           rw [h_subPos_app, hp_eq]; exact h_subPos_nil l
@@ -9051,18 +9053,18 @@ by
 
 
   have h_bst_subLD :
-      ∀ (d : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a : ℕ),
+      ∀ (d : ℕ) (t : _root_.BinaryTree ℕ) (a : ℕ),
         IsRangeBST a t → IsRangeBST a (subtreeAtLeftDepthGen t d) := by
     intro d
     induction d with
     | zero => intro t a h; rwa [h_subLD_zero]
     | succ d ih =>
-      rintro (_ | ⟨l, k, r⟩) a h
+      rintro (_ | ⟨k, l, r⟩) a h
       · trivial
       · exact ih l a h.2.1
 
   have h_mem_subLD :
-      ∀ (d : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (x : ℕ),
+      ∀ (d : ℕ) (t : _root_.BinaryTree ℕ) (x : ℕ),
         x ∈ preorderList (subtreeAtLeftDepthGen t d) → x ∈ preorderList t := by
     intro d t x h
     rw [h_subLD_eq_pos] at h
@@ -9085,9 +9087,9 @@ by
         · exact Or.inr (ih n x h)
 
   have h_ld_mem_take :
-      ∀ (d D : ℕ) (B bl br : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (v : ℕ),
+      ∀ (d D : ℕ) (B bl br : _root_.BinaryTree ℕ) (v : ℕ),
         d < D →
-        subtreeAtLeftDepthGen B d = .node bl v br →
+        subtreeAtLeftDepthGen B d = .node v bl br →
         v ∈ (preorderList B).take D := by
     intro d
     induction d with
@@ -9098,7 +9100,7 @@ by
         subst hsub
         simp [preorderList, List.take_succ_cons]
     | succ d ih =>
-      rintro (_ | D) (_ | ⟨L, K, R⟩) bl br v hd hsub
+      rintro (_ | D) (_ | ⟨K, L, R⟩) bl br v hd hsub
       · omega
       · omega
       · simp [subtreeAtLeftDepthGen] at hsub
@@ -9109,9 +9111,9 @@ by
 
   have h_restrict_ld_drop_hi :
       ∀ (L0 lo hi : ℕ), lo ≤ hi →
-      ∀ (t pl pr : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a y_anc : ℕ),
+      ∀ (t pl pr : _root_.BinaryTree ℕ) (a y_anc : ℕ),
         IsRangeBST a t →
-        subtreeAtLeftDepthGen t L0 = .node pl y_anc pr →
+        subtreeAtLeftDepthGen t L0 = .node y_anc pl pr →
         hi ≤ y_anc →
         restrictInterval lo hi t = restrictInterval lo hi pl := by
     intro L0 lo hi hlo_hi
@@ -9123,7 +9125,7 @@ by
       have hy_not_lt : ¬ y_anc < lo := by omega
       simp [restrictInterval, hy_not_lt, hy_ge]
     | succ L0 ih =>
-      rintro (_ | ⟨L, K, R⟩) pl pr a y_anc ht hsub hy_ge
+      rintro (_ | ⟨K, L, R⟩) pl pr a y_anc ht hsub hy_ge
       · simp [subtreeAtLeftDepthGen] at hsub
       · obtain ⟨hK, hL, _⟩ := ht
         simp only [subtreeAtLeftDepthGen] at hsub
@@ -9137,13 +9139,13 @@ by
         exact ih L pl pr a y_anc hL hsub hy_ge
 
   have h_restrict_ld_node :
-      ∀ (c lo hi : ℕ) (t vl vr : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a v : ℕ),
+      ∀ (c lo hi : ℕ) (t vl vr : _root_.BinaryTree ℕ) (a v : ℕ),
         IsRangeBST a t →
-        subtreeAtLeftDepthGen t c = .node vl v vr →
+        subtreeAtLeftDepthGen t c = .node v vl vr →
         lo ≤ v →
         v < hi →
         ∃ d ≤ c, ∃ rl rr,
-          subtreeAtLeftDepthGen (restrictInterval lo hi t) d = .node rl v rr := by
+          subtreeAtLeftDepthGen (restrictInterval lo hi t) d = .node v rl rr := by
     intro c lo hi
     induction c with
     | zero =>
@@ -9156,7 +9158,7 @@ by
       rw [h_subLD_zero]
       simp [restrictInterval, hv1, hv2]
     | succ c ih =>
-      rintro (_ | ⟨L, K, R⟩) vl vr a v ht hsub hv_lo hv_hi
+      rintro (_ | ⟨K, L, R⟩) vl vr a v ht hsub hv_lo hv_hi
       · simp [subtreeAtLeftDepthGen] at hsub
       · obtain ⟨hK, hL, _⟩ := ht
         simp only [subtreeAtLeftDepthGen] at hsub
@@ -9177,9 +9179,9 @@ by
 
   have h_spine_node_global :
       ∀ (L0 c : ℕ), c ≤ Δ' + 1 →
-      ∀ (pl pr vl vr : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (y_anc v : ℕ),
-        subtreeAtLeftDepthGen s_top L0 = .node pl y_anc pr →
-        subtreeAtLeftDepthGen pl c = .node vl v vr →
+      ∀ (pl pr vl vr : _root_.BinaryTree ℕ) (y_anc v : ℕ),
+        subtreeAtLeftDepthGen s_top L0 = .node y_anc pl pr →
+        subtreeAtLeftDepthGen pl c = .node v vl vr →
         (∃ x_bot ∈ preorderList s_top, x_bot / S < v / S) →
         v / S < y_anc / S →
         isG v = true := by
@@ -9210,9 +9212,9 @@ by
     exact decide_eq_true hv_take
 
   have h_exists_bot_interblock :
-      ∀ (gs : List ℕ) (g_bot : ℕ) (a b c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a0 x y : ℕ),
-        IsRangeBST a0 (.node (.node a x b) y c) →
-        allPairsInterblock S (.node (.node a x b) y c) (gs ++ [g_bot]) = true →
+      ∀ (gs : List ℕ) (g_bot : ℕ) (a b c : _root_.BinaryTree ℕ) (a0 x y : ℕ),
+        IsRangeBST a0 (.node y (.node x a b) c) →
+        allPairsInterblock S (.node y (.node x a b) c) (gs ++ [g_bot]) = true →
         ∃ x_bot ∈ preorderList a, x_bot / S < x / S := by
     intro gs
     induction gs with
@@ -9220,7 +9222,7 @@ by
       intro g_bot a b c a0 x y hbst_u hp
       simp only [List.nil_append, allPairsInterblock, Bool.and_eq_true] at hp
       obtain ⟨_, hp_bot⟩ := hp
-      rcases hbot : subtreeAtLeftDepthGen a g_bot with _ | ⟨_ | ⟨a1, x1, b1⟩, y1, c1⟩
+      rcases hbot : subtreeAtLeftDepthGen a g_bot with _ | ⟨y1, _ | ⟨x1, a1, b1⟩, c1⟩
       · rw [hbot] at hp_bot; simp [allPairsInterblock] at hp_bot
       · rw [hbot] at hp_bot; simp [allPairsInterblock] at hp_bot
       · rw [hbot] at hp_bot
@@ -9240,7 +9242,7 @@ by
       intro g_bot a b c a0 x y hbst_u hp
       simp only [List.cons_append, allPairsInterblock, Bool.and_eq_true] at hp
       obtain ⟨_, hp_sub⟩ := hp
-      rcases hsub : subtreeAtLeftDepthGen a g with _ | ⟨_ | ⟨a1, x1, b1⟩, y1, c1⟩
+      rcases hsub : subtreeAtLeftDepthGen a g with _ | ⟨y1, _ | ⟨x1, a1, b1⟩, c1⟩
       · rw [hsub] at hp_sub; simp [allPairsInterblock] at hp_sub
       · rw [hsub] at hp_sub; simp [allPairsInterblock] at hp_sub
       · rw [hsub] at hp_sub
@@ -9262,9 +9264,9 @@ by
         exact ⟨x_bot, hx_a, by omega⟩
 
   have h_mk_lpg :
-      ∀ (g : ℕ) (a : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        subtreeAtLeftDepthGen a g ≠ .empty →
-        (∀ j < g, ∀ wl wr w, subtreeAtLeftDepthGen a j = .node wl w wr → isG w = true) →
+      ∀ (g : ℕ) (a : _root_.BinaryTree ℕ),
+        subtreeAtLeftDepthGen a g ≠ .nil →
+        (∀ j < g, ∀ wl wr w, subtreeAtLeftDepthGen a j = .node w wl wr → isG w = true) →
         leftPrefixGlobal isG a g := by
     intro g
     induction g with
@@ -9272,16 +9274,16 @@ by
       intro a _ _
       cases a <;> trivial
     | succ g ih =>
-      rintro (_ | ⟨l, k, r⟩) hne hall
+      rintro (_ | ⟨k, l, r⟩) hne hall
       · exact absurd rfl hne
       · refine ⟨hall 0 (by omega) l r k (h_subLD_zero _), ih l hne ?_⟩
         intro j hj wl wr w hj_eq
         exact hall (j + 1) (by omega) wl wr w hj_eq
 
   have h_mid_casc_global :
-      ∀ (gs : List ℕ) (g_bot L0 g_prev : ℕ) (a_prev b_prev c_prev : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (x_prev y_prev : ℕ),
+      ∀ (gs : List ℕ) (g_bot L0 g_prev : ℕ) (a_prev b_prev c_prev : _root_.BinaryTree ℕ) (x_prev y_prev : ℕ),
         g_prev ≤ Δ' →
-        subtreeAtLeftDepthGen s_top L0 = .node (.node a_prev x_prev b_prev) y_prev c_prev →
+        subtreeAtLeftDepthGen s_top L0 = .node y_prev (.node x_prev a_prev b_prev) c_prev →
         x_prev / S < y_prev / S →
         validGappedCascadeAtRoot Δ' (eraseKeys (subtreeAtLeftDepthGen a_prev g_prev)) (gs ++ [g_bot]) →
         allPairsInterblock S (subtreeAtLeftDepthGen a_prev g_prev) (gs ++ [g_bot]) = true →
@@ -9291,7 +9293,7 @@ by
     | nil =>
       intro g_bot L0 g_prev a_prev b_prev c_prev x_prev y_prev hg_prev h_anc hxy_prev _ hp
       simp only [List.nil_append] at hp
-      rcases hu : subtreeAtLeftDepthGen a_prev g_prev with _ | ⟨_ | ⟨a, x, b⟩, y, c⟩
+      rcases hu : subtreeAtLeftDepthGen a_prev g_prev with _ | ⟨y, _ | ⟨x, a, b⟩, c⟩
       · rw [hu] at hp; simp [allPairsInterblock] at hp
       · rw [hu] at hp; simp [allPairsInterblock] at hp
       · rw [hu] at hp
@@ -9299,7 +9301,7 @@ by
           simp only [allPairsInterblock, Bool.and_eq_true, decide_eq_true_eq] at hp
           exact hp.1
         let L_u := L0 + (g_prev + 2)
-        have hu_stop : subtreeAtLeftDepthGen s_top L_u = .node (.node a x b) y c := by
+        have hu_stop : subtreeAtLeftDepthGen s_top L_u = .node y (.node x a b) c := by
           dsimp (config := { failIfUnchanged := false }) only [L_u]
           rw [h_subLD_add L0 (g_prev + 2) s_top, h_anc]
           exact hu
@@ -9324,17 +9326,17 @@ by
           omega
         have hisG_y : isG y = true :=
           h_spine_node_global L0 (g_prev + 1) (by omega)
-            (.node a_prev x_prev b_prev) c_prev (.node a x b) c y_prev y
+            (.node x_prev a_prev b_prev) c_prev (.node x a b) c y_prev y
             h_anc hu ⟨x_bot, hx_stop, by omega⟩ hy_lt_yprev
         have hisG_x : isG x = true :=
           h_spine_node_global L_u 0 (by omega)
-            (.node a x b) c a b y x
+            (.node x a b) c a b y x
             hu_stop (h_subLD_zero _) ⟨x_bot, hx_stop, hx_div⟩ hxy
         exact ⟨hisG_x, hisG_y⟩
     | cons g rest ih =>
       intro g_bot L0 g_prev a_prev b_prev c_prev x_prev y_prev hg_prev h_anc hxy_prev hvc hp
       simp only [List.cons_append] at hvc hp
-      rcases hu : subtreeAtLeftDepthGen a_prev g_prev with _ | ⟨_ | ⟨a, x, b⟩, y, c⟩
+      rcases hu : subtreeAtLeftDepthGen a_prev g_prev with _ | ⟨y, _ | ⟨x, a, b⟩, c⟩
       · rw [hu] at hp; simp [allPairsInterblock] at hp
       · rw [hu] at hp; simp [allPairsInterblock] at hp
       · rw [hu] at hvc hp
@@ -9344,7 +9346,7 @@ by
         simp only [allPairsInterblock, Bool.and_eq_true, decide_eq_true_eq] at hp
         obtain ⟨hxy, hp_sub⟩ := hp
         let L_u := L0 + (g_prev + 2)
-        have hu_stop : subtreeAtLeftDepthGen s_top L_u = .node (.node a x b) y c := by
+        have hu_stop : subtreeAtLeftDepthGen s_top L_u = .node y (.node x a b) c := by
           dsimp (config := { failIfUnchanged := false }) only [L_u]
           rw [h_subLD_add L0 (g_prev + 2) s_top, h_anc]
           exact hu
@@ -9370,11 +9372,11 @@ by
           omega
         have hisG_y : isG y = true :=
           h_spine_node_global L0 (g_prev + 1) (by omega)
-            (.node a_prev x_prev b_prev) c_prev (.node a x b) c y_prev y
+            (.node x_prev a_prev b_prev) c_prev (.node x a b) c y_prev y
             h_anc hu ⟨x_bot, hx_stop, by omega⟩ hy_lt_yprev
         have hisG_x : isG x = true :=
           h_spine_node_global L_u 0 (by omega)
-            (.node a x b) c a b y x
+            (.node x a b) c a b y x
             hu_stop (h_subLD_zero _) ⟨x_bot, hx_stop, hx_div⟩ hxy
         have hlpg : leftPrefixGlobal isG a g := by
           apply h_mk_lpg g a
@@ -9382,7 +9384,7 @@ by
             rw [he] at hp_sub
             simp [allPairsInterblock] at hp_sub
           · intro j hj_lt wl wr w hj_eq
-            rcases hsub_g : subtreeAtLeftDepthGen a g with _ | ⟨_ | ⟨a1, x1, b1⟩, y1, c1⟩
+            rcases hsub_g : subtreeAtLeftDepthGen a g with _ | ⟨y1, _ | ⟨x1, a1, b1⟩, c1⟩
             · rw [hsub_g] at hp_sub; simp [allPairsInterblock] at hp_sub
             · rw [hsub_g] at hp_sub; simp [allPairsInterblock] at hp_sub
             · have hp_sub' := hp_sub
@@ -9401,7 +9403,7 @@ by
                   (List.mem_append_left _ (List.mem_cons_of_mem x1 (List.mem_append_left _ hx_b1_a1)))
               let rem := g - (j + 1)
               have hg_split : g = (j + 1) + rem := by omega
-              have hwl_rem : subtreeAtLeftDepthGen wl rem = .node (.node a1 x1 b1) y1 c1 := by
+              have hwl_rem : subtreeAtLeftDepthGen wl rem = .node y1 (.node x1 a1 b1) c1 := by
                 have h1 := h_subLD_add (j + 1) rem a
                 rw [← hg_split, h_subLD_add j 1 a, hj_eq] at h1
                 simp only [subtreeAtLeftDepthGen, h_subLD_zero] at h1
@@ -9422,42 +9424,42 @@ by
               have hx_eq := hbst_u.2.1.1
               have hw_div_x : w / S ≤ x / S := Nat.div_le_div_right (by omega)
               exact h_spine_node_global L_u (j + 1) (by omega)
-                (.node a x b) c wl wr y w
+                (.node x a b) c wl wr y w
                 hu_stop hj_eq ⟨x_bot1, hx_b1_stop, by omega⟩ (by omega)
         exact ⟨hisG_x, hisG_y, hlpg, ih g_bot L_u g a b c x y hg_le hu_stop hxy hvc_sub hp_sub⟩
 
 
   have h_ext_left_ne :
-      ∀ (pG : ℕ → Bool) (l r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ),
+      ∀ (pG : ℕ → Bool) (l r : _root_.BinaryTree ℕ) (k : ℕ),
         pG k = false →
-        extractGlobalTree pG l ≠ .empty →
-        extractGlobalTree pG (.node l k r) = extractGlobalTree pG l := by
+        extractGlobalTree pG l ≠ .nil →
+        extractGlobalTree pG (.node k l r) = extractGlobalTree pG l := by
     intro pG l r k hk hne
     simp only [extractGlobalTree, hk, Bool.false_eq_true, ↓reduceIte]
 
   have h_ext_left_emp :
-      ∀ (pG : ℕ → Bool) (l r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ),
+      ∀ (pG : ℕ → Bool) (l r : _root_.BinaryTree ℕ) (k : ℕ),
         pG k = false →
-        extractGlobalTree pG l = .empty →
-        extractGlobalTree pG (.node l k r) = extractGlobalTree pG r := by
+        extractGlobalTree pG l = .nil →
+        extractGlobalTree pG (.node k l r) = extractGlobalTree pG r := by
     intro pG l r k hk hl
     simp [extractGlobalTree, hk, hl]
 
   have h_ns_subPos :
-      ∀ (p : List Dir) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (p : List Dir) (U : _root_.BinaryTree ℕ),
         NonSplittingGlobal isG U → NonSplittingGlobal isG (subtreeAtPosGen U p) := by
     intro p
     induction p with
     | nil => intro U h; rwa [h_subPos_nil]
     | cons dir rest ih =>
-      rintro (_ | ⟨l, k, r⟩) h
+      rintro (_ | ⟨k, l, r⟩) h
       · trivial
       · cases dir with
         | L => exact ih l h.2.1
         | R => exact ih r h.2.2
 
   have h_unchanged_lift :
-      ∀ (p : List Dir) (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (p : List Dir) (f : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (U : _root_.BinaryTree ℕ),
         extractGlobalTree isG (f (subtreeAtPosGen U p)) =
           extractGlobalTree isG (subtreeAtPosGen U p) →
         extractGlobalTree isG (applyAtPosGen f U p) = extractGlobalTree isG U := by
@@ -9468,7 +9470,7 @@ by
       simpa only [h_subPos_nil, h_appPos_nil] using h
     | cons dir rest ih =>
       intro f U h
-      rcases U with _ | ⟨l, k, r⟩
+      rcases U with _ | ⟨k, l, r⟩
       · rfl
       · cases dir with
         | L =>
@@ -9479,14 +9481,14 @@ by
           simp only [applyAtPosGen, extractGlobalTree, ih f r h]
 
   have h_nonempty_anc :
-      ∀ (p : List Dir) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        extractGlobalTree isG (subtreeAtPosGen U p) ≠ .empty →
-        extractGlobalTree isG U ≠ .empty := by
+      ∀ (p : List Dir) (U : _root_.BinaryTree ℕ),
+        extractGlobalTree isG (subtreeAtPosGen U p) ≠ .nil →
+        extractGlobalTree isG U ≠ .nil := by
     intro p
     induction p with
     | nil => intro U h; rwa [h_subPos_nil] at h
     | cons dir rest ih =>
-      rintro (_ | ⟨l, k, r⟩) h
+      rintro (_ | ⟨k, l, r⟩) h
       · simp [subtreeAtPosGen, extractGlobalTree] at h
       · cases dir with
         | L =>
@@ -9504,11 +9506,11 @@ by
           · simp [extractGlobalTree, hk]
 
   have h_nonempty_lift :
-      ∀ (p : List Dir) (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)
-        (fG : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (p : List Dir) (f : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ)
+        (fG : _root_.BinaryTree Unit → _root_.BinaryTree Unit) (U : _root_.BinaryTree ℕ),
         NonSplittingGlobal isG U →
-        extractGlobalTree isG (subtreeAtPosGen U p) ≠ .empty →
-        extractGlobalTree isG (f (subtreeAtPosGen U p)) ≠ .empty →
+        extractGlobalTree isG (subtreeAtPosGen U p) ≠ .nil →
+        extractGlobalTree isG (f (subtreeAtPosGen U p)) ≠ .nil →
         eraseKeys (extractGlobalTree isG (f (subtreeAtPosGen U p))) =
           fG (eraseKeys (extractGlobalTree isG (subtreeAtPosGen U p))) →
         let pG := projGlobalPos isG U p
@@ -9523,59 +9525,59 @@ by
       simp only [h_projPos_nil, h_subPosU_nil, h_subPos_nil, h_appPos_nil, h_appPosU_nil] at hcomm ⊢
       exact ⟨trivial, hcomm⟩
     | cons dir rest ih =>
-      rintro f fG (_ | ⟨l, k, r⟩) hns hne1 hne2 hcomm
+      rintro f fG (_ | ⟨k, l, r⟩) hns hne1 hne2 hcomm
       · simp [subtreeAtPosGen, extractGlobalTree] at hne1
       · obtain ⟨hns_k, hns_l, hns_r⟩ := hns
         cases dir with
         | L =>
           simp only [subtreeAtPosGen] at hne1 hne2 hcomm
-          have hsub_ne : subtreeAtPosGen l rest ≠ .empty := by
+          have hsub_ne : subtreeAtPosGen l rest ≠ .nil := by
             intro he; simp [he, extractGlobalTree] at hne1
-          have hne_l : extractGlobalTree isG l ≠ .empty := h_nonempty_anc rest l hne1
-          have hne_fl : extractGlobalTree isG (applyAtPosGen f l rest) ≠ .empty := by
+          have hne_l : extractGlobalTree isG l ≠ .nil := h_nonempty_anc rest l hne1
+          have hne_fl : extractGlobalTree isG (applyAtPosGen f l rest) ≠ .nil := by
             apply h_nonempty_anc rest (applyAtPosGen f l rest)
             rwa [h_subPos_after_app rest f l hsub_ne]
           obtain ⟨ih1, ih2⟩ := ih f fG l hns_l hne1 hne2 hcomm
           cases hk : isG k with
           | false =>
-            have hpG : projGlobalPos isG (.node l k r) (.L :: rest) = projGlobalPos isG l rest := by
+            have hpG : projGlobalPos isG (.node k l r) (.L :: rest) = projGlobalPos isG l rest := by
               simp [projGlobalPos, hk]
             simp only [hpG, subtreeAtPosGen, applyAtPosGen,
               h_ext_left_ne isG l r k hk hne_l,
               h_ext_left_ne isG (applyAtPosGen f l rest) r k hk hne_fl]
             exact ⟨ih1, ih2⟩
           | true =>
-            have hpG : projGlobalPos isG (.node l k r) (.L :: rest) = .L :: projGlobalPos isG l rest := by
+            have hpG : projGlobalPos isG (.node k l r) (.L :: rest) = .L :: projGlobalPos isG l rest := by
               simp [projGlobalPos, hk]
             simp only [hpG, subtreeAtPosGen, applyAtPosGen, extractGlobalTree, hk, ↓reduceIte,
               eraseKeys, subtreeAtPos, applyAtPos, ih1, ih2]
             exact ⟨trivial, trivial⟩
         | R =>
           simp only [subtreeAtPosGen] at hne1 hne2 hcomm
-          have hne_r : extractGlobalTree isG r ≠ .empty := h_nonempty_anc rest r hne1
+          have hne_r : extractGlobalTree isG r ≠ .nil := h_nonempty_anc rest r hne1
           obtain ⟨ih1, ih2⟩ := ih f fG r hns_r hne1 hne2 hcomm
           cases hk : isG k with
           | false =>
-            have hl_emp : extractGlobalTree isG l = .empty := by
+            have hl_emp : extractGlobalTree isG l = .nil := by
               rcases hns_k hk with hl | hr
               · exact hl
               · exact absurd hr hne_r
-            have hpG : projGlobalPos isG (.node l k r) (.R :: rest) = projGlobalPos isG r rest := by
+            have hpG : projGlobalPos isG (.node k l r) (.R :: rest) = projGlobalPos isG r rest := by
               simp [projGlobalPos, hk]
             simp only [hpG, subtreeAtPosGen, applyAtPosGen,
               h_ext_left_emp isG l r k hk hl_emp,
               h_ext_left_emp isG l (applyAtPosGen f r rest) k hk hl_emp]
             exact ⟨ih1, ih2⟩
           | true =>
-            have hpG : projGlobalPos isG (.node l k r) (.R :: rest) = .R :: projGlobalPos isG r rest := by
+            have hpG : projGlobalPos isG (.node k l r) (.R :: rest) = .R :: projGlobalPos isG r rest := by
               simp [projGlobalPos, hk]
             simp only [hpG, subtreeAtPosGen, applyAtPosGen, extractGlobalTree, hk, ↓reduceIte,
               eraseKeys, subtreeAtPos, applyAtPos, ih1, ih2]
             exact ⟨trivial, trivial⟩
 
   have h_proj_single :
-      ∀ (p : List Dir) (U A B C : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (x y : ℕ),
-        subtreeAtPosGen U p = .node (.node A x B) y C →
+      ∀ (p : List Dir) (U A B C : _root_.BinaryTree ℕ) (x y : ℕ),
+        subtreeAtPosGen U p = .node y (.node x A B) C →
         NonSplittingGlobal isG U →
         NonSplittingGlobal isG (execRightRotOpGen U (.single p)) →
         ∃ ops : List RightRotOp,
@@ -9584,31 +9586,31 @@ by
             eraseKeys (extractGlobalTree isG (execRightRotOpGen U (.single p))) ∧
           countGappedCascades ops = 0 := by
     intro p U A B C x y hsub hns_U hns_U'
-    let s := _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node (.node A x B) y C
-    let s' := _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node A x (.node B y C)
+    let s := _root_.BinaryTree.node y (.node x A B) C
+    let s' := _root_.BinaryTree.node x A (.node y B C)
     have hns_s : NonSplittingGlobal isG s := by
       have := h_ns_subPos p U hns_U
       rwa [hsub] at this
     have hns_s' : NonSplittingGlobal isG s' := by
       have := h_ns_subPos p (execRightRotOpGen U (.single p)) hns_U'
       dsimp (config := { failIfUnchanged := false }) only [execRightRotOpGen] at this
-      rw [h_subPos_after_app p _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U (by simp [hsub]), hsub] at this
+      rw [h_subPos_after_app p _root_.BinaryTree.rotateRight U (by simp [hsub]), hsub] at this
       exact this
     cases hx : isG x with
     | true =>
       cases hy : isG y with
       | true =>
-        have hne1 : extractGlobalTree isG (subtreeAtPosGen U p) ≠ .empty := by
+        have hne1 : extractGlobalTree isG (subtreeAtPosGen U p) ≠ .nil := by
           rw [hsub]; simp [extractGlobalTree, hx, hy]
-        have hne2 : extractGlobalTree isG (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight (subtreeAtPosGen U p)) ≠ .empty := by
-          rw [hsub]; simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, extractGlobalTree, hx, hy]
+        have hne2 : extractGlobalTree isG (_root_.BinaryTree.rotateRight (subtreeAtPosGen U p)) ≠ .nil := by
+          rw [hsub]; simp [_root_.BinaryTree.rotateRight, extractGlobalTree, hx, hy]
         have hcomm :
-            eraseKeys (extractGlobalTree isG (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight (subtreeAtPosGen U p))) =
-              _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight (eraseKeys (extractGlobalTree isG (subtreeAtPosGen U p))) := by
+            eraseKeys (extractGlobalTree isG (_root_.BinaryTree.rotateRight (subtreeAtPosGen U p))) =
+              _root_.BinaryTree.rotateRight (eraseKeys (extractGlobalTree isG (subtreeAtPosGen U p))) := by
           rw [hsub]
-          simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, extractGlobalTree, hx, hy, eraseKeys]
+          simp [_root_.BinaryTree.rotateRight, extractGlobalTree, hx, hy, eraseKeys]
         obtain ⟨hpos_sub, hpos_app⟩ :=
-          h_nonempty_lift p _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U hns_U hne1 hne2 hcomm
+          h_nonempty_lift p _root_.BinaryTree.rotateRight _root_.BinaryTree.rotateRight U hns_U hne1 hne2 hcomm
         let pG := projGlobalPos isG U p
         refine ⟨[.single pG], ⟨?_, trivial⟩, ?_, rfl⟩
         · simp only [pG, validRightRotOp, hpos_sub, hsub, extractGlobalTree, hx, hy, ↓reduceIte,
@@ -9616,50 +9618,50 @@ by
           omega
         · simp only [pG, execRightRotSeq, execRightRotOp, execRightRotOpGen, hpos_app]
       | false =>
-        have hEC : extractGlobalTree isG C = .empty := by
-          have hl_ne : extractGlobalTree isG (.node A x B) ≠ .empty := by
+        have hEC : extractGlobalTree isG C = .nil := by
+          have hl_ne : extractGlobalTree isG (.node x A B) ≠ .nil := by
             simp [extractGlobalTree, hx]
           rcases hns_s.1 hy with hl | hr
           · exact absurd hl hl_ne
           · exact hr
-        have heq : extractGlobalTree isG (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight (subtreeAtPosGen U p)) =
+        have heq : extractGlobalTree isG (_root_.BinaryTree.rotateRight (subtreeAtPosGen U p)) =
             extractGlobalTree isG (subtreeAtPosGen U p) := by
           rw [hsub]
-          simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, extractGlobalTree, hx, hy, ↓reduceIte,
+          simp only [_root_.BinaryTree.rotateRight, extractGlobalTree, hx, hy, ↓reduceIte,
             Bool.false_eq_true, hEC]
           cases extractGlobalTree isG B <;> rfl
         refine ⟨[], trivial, ?_, rfl⟩
         simp only [execRightRotSeq, execRightRotOpGen,
-          h_unchanged_lift p _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U heq]
+          h_unchanged_lift p _root_.BinaryTree.rotateRight U heq]
     | false =>
       cases hy : isG y with
       | true =>
-        have hEA : extractGlobalTree isG A = .empty := by
-          have hr_ne : extractGlobalTree isG (.node B y C) ≠ .empty := by
+        have hEA : extractGlobalTree isG A = .nil := by
+          have hr_ne : extractGlobalTree isG (.node y B C) ≠ .nil := by
             simp [extractGlobalTree, hy]
           rcases hns_s'.1 hx with hl | hr
           · exact hl
           · exact absurd hr hr_ne
-        have heq : extractGlobalTree isG (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight (subtreeAtPosGen U p)) =
+        have heq : extractGlobalTree isG (_root_.BinaryTree.rotateRight (subtreeAtPosGen U p)) =
             extractGlobalTree isG (subtreeAtPosGen U p) := by
           rw [hsub]
-          simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, extractGlobalTree, hx, hy, hEA]
+          simp [_root_.BinaryTree.rotateRight, extractGlobalTree, hx, hy, hEA]
         refine ⟨[], trivial, ?_, rfl⟩
         simp only [execRightRotSeq, execRightRotOpGen,
-          h_unchanged_lift p _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U heq]
+          h_unchanged_lift p _root_.BinaryTree.rotateRight U heq]
       | false =>
-        have heq : extractGlobalTree isG (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight (subtreeAtPosGen U p)) =
+        have heq : extractGlobalTree isG (_root_.BinaryTree.rotateRight (subtreeAtPosGen U p)) =
             extractGlobalTree isG (subtreeAtPosGen U p) := by
           rw [hsub]
-          simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, extractGlobalTree, hx, hy, Bool.false_eq_true, ↓reduceIte]
+          simp only [_root_.BinaryTree.rotateRight, extractGlobalTree, hx, hy, Bool.false_eq_true, ↓reduceIte]
           cases extractGlobalTree isG A <;> cases extractGlobalTree isG B <;> rfl
         refine ⟨[], trivial, ?_, rfl⟩
         simp only [execRightRotSeq, execRightRotOpGen,
-          h_unchanged_lift p _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight U heq]
+          h_unchanged_lift p _root_.BinaryTree.rotateRight U heq]
 
   have h_lpg_comm :
-      ∀ (g : ℕ) (a : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)
-        (fG : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+      ∀ (g : ℕ) (a : _root_.BinaryTree ℕ) (f : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ)
+        (fG : _root_.BinaryTree Unit → _root_.BinaryTree Unit),
         leftPrefixGlobal isG a g →
         eraseKeys (extractGlobalTree isG (f (subtreeAtLeftDepthGen a g))) =
           fG (eraseKeys (extractGlobalTree isG (subtreeAtLeftDepthGen a g))) →
@@ -9675,7 +9677,7 @@ by
       rw [h_subLDU_zero, h_appLD_zero, h_appLDU_zero]
       exact ⟨rfl, hcomm⟩
     | succ g ih =>
-      rintro (_ | ⟨l, k, r⟩) f fG hlpg hcomm
+      rintro (_ | ⟨k, l, r⟩) f fG hlpg hcomm
       · exact False.elim hlpg
       · obtain ⟨hk, hlpg_l⟩ := hlpg
         simp only [subtreeAtLeftDepthGen, applyAtLeftDepthGen] at hcomm ⊢
@@ -9685,27 +9687,27 @@ by
         exact ⟨trivial, trivial⟩
 
   have h_root_casc_comm :
-      ∀ (gs : List ℕ) (s : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (gs : List ℕ) (s : _root_.BinaryTree ℕ),
         validGappedCascadeAtRoot Δ' (eraseKeys s) gs →
         allCascadeSpineGlobal isG s gs →
-        extractGlobalTree isG s ≠ .empty ∧
-        extractGlobalTree isG (execGappedCascadeAtRootGen s gs) ≠ .empty ∧
+        extractGlobalTree isG s ≠ .nil ∧
+        extractGlobalTree isG (execGappedCascadeAtRootGen s gs) ≠ .nil ∧
         validGappedCascadeAtRoot Δ' (eraseKeys (extractGlobalTree isG s)) gs ∧
         eraseKeys (extractGlobalTree isG (execGappedCascadeAtRootGen s gs)) =
           execGappedCascadeAtRoot (eraseKeys (extractGlobalTree isG s)) gs := by
     intro gs
     induction gs with
     | nil =>
-      rintro (_ | ⟨_ | ⟨a, x, b⟩, y, c⟩) _ hsp
+      rintro (_ | ⟨y, _ | ⟨x, a, b⟩, c⟩) _ hsp
       · exact False.elim hsp
       · exact False.elim hsp
       · obtain ⟨hx, hy⟩ := hsp
         simp only [execGappedCascadeAtRootGen, execGappedCascadeAtRoot,
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, extractGlobalTree, hx, hy, ↓reduceIte,
+          _root_.BinaryTree.rotateRight, extractGlobalTree, hx, hy, ↓reduceIte,
           eraseKeys, validGappedCascadeAtRoot, leftSpineLen]
         refine ⟨by simp, by simp, by omega, trivial⟩
     | cons g rest ih =>
-      rintro (_ | ⟨_ | ⟨a, x, b⟩, y, c⟩) hvc hsp
+      rintro (_ | ⟨y, _ | ⟨x, a, b⟩, c⟩) hvc hsp
       · exact False.elim hsp
       · exact False.elim hsp
       · simp only [eraseKeys, validGappedCascadeAtRoot] at hvc
@@ -9722,7 +9724,7 @@ by
 
 
   have h_seq_cat :
-      ∀ (ops1 ops2 : List RightRotOp) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+      ∀ (ops1 ops2 : List RightRotOp) (t : _root_.BinaryTree Unit),
         ValidRightRotSeq Δ' k' t ops1 →
         ValidRightRotSeq Δ' k' (execRightRotSeq t ops1) ops2 →
         ValidRightRotSeq Δ' k' t (ops1 ++ ops2) ∧
@@ -9759,7 +9761,7 @@ by
     rw [← htail_eq] at hvc_top hpure ⊢
     change allPairsInterblock S s_top (g_top :: (mid_gaps ++ [g_bot])) = true at hpure
     change validGappedCascadeAtRoot Δ' (eraseKeys s_top) (g_top :: (mid_gaps ++ [g_bot])) at hvc_top
-    rcases hstop : s_top with _ | ⟨_ | ⟨a_top, x_top, b_top⟩, y_top, c_top⟩
+    rcases hstop : s_top with _ | ⟨y_top, _ | ⟨x_top, a_top, b_top⟩, c_top⟩
     · rw [hstop] at hpure; simp [allPairsInterblock] at hpure
     · rw [hstop] at hpure; simp [allPairsInterblock] at hpure
     · have hpure_full := hpure
@@ -9772,11 +9774,11 @@ by
 
       let T₁ := execRightRotOpGen T (.single pos)
       let pos_mid := pos ++ List.replicate (g_top + 1) .L
-      have hstop_T : subtreeAtPosGen T pos = .node (.node a_top x_top b_top) y_top c_top := hstop
+      have hstop_T : subtreeAtPosGen T pos = .node y_top (.node x_top a_top b_top) c_top := hstop
 
       have hsub_T1_mid : subtreeAtPosGen T₁ pos_mid = subtreeAtLeftDepthGen a_top g_top := by
         dsimp (config := { failIfUnchanged := false }) only [T₁, pos_mid, execRightRotOpGen]
-        rw [h_subPos_app, h_subPos_after_app pos _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight T (by simp [hstop_T]),
+        rw [h_subPos_app, h_subPos_after_app pos _root_.BinaryTree.rotateRight T (by simp [hstop_T]),
           hstop_T, ← h_subLD_eq_pos (g_top + 1)]
         rfl
 
@@ -9784,10 +9786,10 @@ by
           execRightRotOpGen T (.cascade pos (g_top :: (mid_gaps ++ [g_bot]))) =
             execRightRotOpGen T₁ (.cascade pos_mid (mid_gaps ++ [g_bot])) := by
         dsimp (config := { failIfUnchanged := false }) only [T₁, pos_mid, execRightRotOpGen]
-        rw [h_appPos_app, h_appPos_same pos _ _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight T rfl]
+        rw [h_appPos_app, h_appPos_same pos _ _root_.BinaryTree.rotateRight T rfl]
         refine h_appPos_congr pos _ _ T ?_
         rw [hstop_T]
-        simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, ← h_appLD_eq_pos (g_top + 1)]
+        simp only [_root_.BinaryTree.rotateRight, ← h_appLD_eq_pos (g_top + 1)]
         rfl
 
       obtain ⟨hvc_mid, hpure_mid, hspine_bot, hex_bot_root⟩ :=
@@ -9800,7 +9802,7 @@ by
       let pos_bot := pos_mid ++ List.replicate δ_bot .L
       let T₃ := execRightRotOpGen T₂ (.single pos_bot)
 
-      have hsub_T1_ne : subtreeAtPosGen T₁ pos_mid ≠ .empty := by
+      have hsub_T1_ne : subtreeAtPosGen T₁ pos_mid ≠ .nil := by
         rw [hsub_T1_mid]
         intro he
         rw [he] at hpure_mid
@@ -9873,7 +9875,7 @@ by
 
 
       rw [← hsub_T2_bot] at hspine_bot
-      rcases hbot_eq : subtreeAtPosGen T₂ pos_bot with _ | ⟨_ | ⟨a_bot, x_bot, b_bot⟩, y_bot, c_bot⟩
+      rcases hbot_eq : subtreeAtPosGen T₂ pos_bot with _ | ⟨y_bot, _ | ⟨x_bot, a_bot, b_bot⟩, c_bot⟩
       · rw [hbot_eq] at hspine_bot; simp [eraseKeys, leftSpineLen] at hspine_bot
       · rw [hbot_eq] at hspine_bot; simp [eraseKeys, leftSpineLen] at hspine_bot
       · obtain ⟨ops₃, hv_ops3, hex_ops3, hcnt_ops3⟩ :=
@@ -9908,7 +9910,7 @@ by
 
 
   have h_seq_cat :
-      ∀ (k : ℕ) (s1 s2 : List RightRotOp) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+      ∀ (k : ℕ) (s1 s2 : List RightRotOp) (t : _root_.BinaryTree Unit),
         (ValidRightRotSeq Δ' k t (s1 ++ s2) ↔
           ValidRightRotSeq Δ' k t s1 ∧ ValidRightRotSeq Δ' k (execRightRotSeq t s1) s2) ∧
         execRightRotSeq t (s1 ++ s2) = execRightRotSeq (execRightRotSeq t s1) s2 ∧
@@ -9926,12 +9928,12 @@ by
       · cases op <;> simp only [List.cons_append, countGappedCascades, h_cnt, Nat.add_assoc]
 
   have h_ek_rotR :
-      ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), eraseKeys t.rotateRight = (eraseKeys t).rotateRight := by
-    rintro (_ | ⟨_ | ⟨a, x, b⟩, y, c⟩) <;> rfl
+      ∀ (t : _root_.BinaryTree ℕ), eraseKeys t.rotateRight = (eraseKeys t).rotateRight := by
+    rintro (_ | ⟨y, _ | ⟨x, a, b⟩, c⟩) <;> rfl
 
   have h_ek_applyLD :
-      ∀ (d : ℕ) (fN : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (fU : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit)
-        (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (d : ℕ) (fN : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ) (fU : _root_.BinaryTree Unit → _root_.BinaryTree Unit)
+        (t : _root_.BinaryTree ℕ),
         (∀ s, eraseKeys (fN s) = fU (eraseKeys s)) →
         eraseKeys (applyAtLeftDepthGen fN t d) = applyAtLeftDepth fU (eraseKeys t) d := by
     intro d
@@ -9941,12 +9943,12 @@ by
       cases t <;> exact hf _
     | succ d ih =>
       intro fN fU t hf
-      rcases t with _ | ⟨l, k, r⟩
+      rcases t with _ | ⟨k, l, r⟩
       · rfl
       · simp only [applyAtLeftDepthGen, eraseKeys, applyAtLeftDepth, ih fN fU l hf]
 
   have h_ek_cascRoot :
-      ∀ (gaps : List ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (gaps : List ℕ) (t : _root_.BinaryTree ℕ),
         eraseKeys (execGappedCascadeAtRootGen t gaps) =
           execGappedCascadeAtRoot (eraseKeys t) gaps := by
     intro gaps
@@ -9955,7 +9957,7 @@ by
       intro t
       exact h_ek_rotR t
     | cons g rest ih =>
-      rintro (_ | ⟨_ | ⟨a, k1, b⟩, k2, c⟩)
+      rintro (_ | ⟨k2, _ | ⟨k1, a, b⟩, c⟩)
       · rfl
       · rfl
       · simp only [execGappedCascadeAtRootGen, eraseKeys, execGappedCascadeAtRoot]
@@ -9963,8 +9965,8 @@ by
           (fun s => execGappedCascadeAtRoot s rest) a ih]
 
   have h_ek_applyPos :
-      ∀ (pos : List Dir) (fN : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)
-        (fU : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (pos : List Dir) (fN : _root_.BinaryTree ℕ → _root_.BinaryTree ℕ)
+        (fU : _root_.BinaryTree Unit → _root_.BinaryTree Unit) (t : _root_.BinaryTree ℕ),
         (∀ s, eraseKeys (fN s) = fU (eraseKeys s)) →
         eraseKeys (applyAtPosGen fN t pos) = applyAtPos fU (eraseKeys t) pos := by
     intro pos
@@ -9974,66 +9976,66 @@ by
       cases t <;> exact hf _
     | cons dir rest ih =>
       intro fN fU t hf
-      rcases t with _ | ⟨l, k, r⟩
+      rcases t with _ | ⟨k, l, r⟩
       · rfl
       · cases dir <;> simp only [applyAtPosGen, eraseKeys, applyAtPos, ih fN fU _ hf]
 
   have h_ek_op :
-      ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (op : RightRotOp),
+      ∀ (t : _root_.BinaryTree ℕ) (op : RightRotOp),
         eraseKeys (execRightRotOpGen t op) = execRightRotOp (eraseKeys t) op := by
     intro t op
     cases op with
     | single pos =>
-      exact h_ek_applyPos pos _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight t h_ek_rotR
+      exact h_ek_applyPos pos _root_.BinaryTree.rotateRight _root_.BinaryTree.rotateRight t h_ek_rotR
     | cascade pos gaps =>
       exact h_ek_applyPos pos (fun s => execGappedCascadeAtRootGen s gaps)
         (fun s => execGappedCascadeAtRoot s gaps) t (h_ek_cascRoot gaps)
 
   have h_labelRange_spec :
-      ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (a : ℕ),
+      ∀ (u : _root_.BinaryTree Unit) (a : ℕ),
         IsRangeBST a (labelRange a u) ∧
         (labelRange a u).num_nodes = u.num_nodes ∧
         eraseKeys (labelRange a u) = u := by
     intro u
     induction u with
-    | empty =>
+    | nil =>
       intro a
       exact ⟨trivial, rfl, rfl⟩
-    | node l _ r ihl ihr =>
+    | node _ l r ihl ihr =>
       intro a
       obtain ⟨hb_l, hn_l, he_l⟩ := ihl a
       obtain ⟨hb_r, hn_r, he_r⟩ := ihr (a + l.num_nodes + 1)
       refine ⟨⟨?_, hb_l, hb_r⟩, ?_, ?_⟩
       · simp only [hn_l]
-      · simp only [labelRange, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, hn_l, hn_r]
+      · simp only [labelRange, _root_.BinaryTree.num_nodes, hn_l, hn_r]
       · simp only [labelRange, eraseKeys, he_l, he_r]
 
 
 
 
-  let sumRightDepth : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → ℕ := fun t =>
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rec 0 (fun _ _ r sl sr => sl + sr + r.num_nodes) t
+  let sumRightDepth : _root_.BinaryTree Unit → ℕ := fun t =>
+    _root_.BinaryTree.rec 0 (fun _ _ r sl sr => sl + sr + r.num_nodes) t
 
-  have h_srd_quad : ∀ t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit, 2 * sumRightDepth t ≤ t.num_nodes * t.num_nodes := by
+  have h_srd_quad : ∀ t : _root_.BinaryTree Unit, 2 * sumRightDepth t ≤ t.num_nodes * t.num_nodes := by
     intro t
     induction t with
-    | empty => simp [sumRightDepth, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
-    | node l _ r ihl ihr =>
+    | nil => simp [sumRightDepth, _root_.BinaryTree.num_nodes]
+    | node _ l r ihl ihr =>
       change 2 * (sumRightDepth l + sumRightDepth r + r.num_nodes) ≤
         (1 + l.num_nodes + r.num_nodes) * (1 + l.num_nodes + r.num_nodes)
       nlinarith
 
   have h_rotR_srd :
-      ∀ s : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit,
+      ∀ s : _root_.BinaryTree Unit,
         2 ≤ leftSpineLen s →
-        s ≠ .empty ∧
+        s ≠ .nil ∧
         s.rotateRight.num_nodes = s.num_nodes ∧
         sumRightDepth s + 1 ≤ sumRightDepth s.rotateRight := by
-    rintro (_ | ⟨_ | ⟨a, u1, b⟩, u2, c⟩) h
+    rintro (_ | ⟨u2, _ | ⟨u1, a, b⟩, c⟩) h
     · simp [leftSpineLen] at h
     · simp [leftSpineLen] at h
     · refine ⟨by simp, ?_, ?_⟩
-      · simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+      · simp only [_root_.BinaryTree.rotateRight, _root_.BinaryTree.num_nodes]
         omega
       · change (sumRightDepth a + sumRightDepth b + b.num_nodes) + sumRightDepth c + c.num_nodes + 1 ≤
           sumRightDepth a + (sumRightDepth b + sumRightDepth c + c.num_nodes) +
@@ -10041,8 +10043,8 @@ by
         omega
 
   have h_applyLD_srd :
-      ∀ (d δ : ℕ) (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
-        subtreeAtLeftDepth t d ≠ .empty →
+      ∀ (d δ : ℕ) (f : _root_.BinaryTree Unit → _root_.BinaryTree Unit) (t : _root_.BinaryTree Unit),
+        subtreeAtLeftDepth t d ≠ .nil →
         (f (subtreeAtLeftDepth t d)).num_nodes = (subtreeAtLeftDepth t d).num_nodes →
         sumRightDepth (subtreeAtLeftDepth t d) + δ ≤ sumRightDepth (f (subtreeAtLeftDepth t d)) →
         (applyAtLeftDepth f t d).num_nodes = t.num_nodes ∧
@@ -10054,19 +10056,19 @@ by
       cases t <;> exact ⟨hfn, hfs⟩
     | succ d ih =>
       intro δ f t hne hfn hfs
-      rcases t with _ | ⟨l, u, r⟩
+      rcases t with _ | ⟨u, l, r⟩
       · exact absurd rfl hne
       · simp only [subtreeAtLeftDepth] at hne hfn hfs
         obtain ⟨hn_l, hs_l⟩ := ih δ f l hne hfn hfs
-        refine ⟨by simp [applyAtLeftDepth, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, hn_l], ?_⟩
+        refine ⟨by simp [applyAtLeftDepth, _root_.BinaryTree.num_nodes, hn_l], ?_⟩
         change (sumRightDepth l + sumRightDepth r + r.num_nodes) + δ ≤
           sumRightDepth (applyAtLeftDepth f l d) + sumRightDepth r + r.num_nodes
         omega
 
   have h_cascRoot_srd :
-      ∀ (gaps : List ℕ) (s : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+      ∀ (gaps : List ℕ) (s : _root_.BinaryTree Unit),
         validGappedCascadeAtRoot Δ' s gaps →
-        s ≠ .empty ∧
+        s ≠ .nil ∧
         (execGappedCascadeAtRoot s gaps).num_nodes = s.num_nodes ∧
         sumRightDepth s + (gaps.length + 1) ≤ sumRightDepth (execGappedCascadeAtRoot s gaps) := by
     intro gaps
@@ -10075,7 +10077,7 @@ by
       intro s hv
       exact h_rotR_srd s hv
     | cons g rest ih =>
-      rintro (_ | ⟨_ | ⟨a, u1, b⟩, u2, c⟩) hv
+      rintro (_ | ⟨u2, _ | ⟨u1, a, b⟩, c⟩) hv
       · exact False.elim hv
       · exact False.elim hv
       · obtain ⟨_, hv_rest⟩ := hv
@@ -10084,7 +10086,7 @@ by
           h_applyLD_srd g (rest.length + 1) (fun x => execGappedCascadeAtRoot x rest)
             a hne_sub hn_sub hs_sub
         refine ⟨by simp, ?_, ?_⟩
-        · simp only [execGappedCascadeAtRoot, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, hn_a]
+        · simp only [execGappedCascadeAtRoot, _root_.BinaryTree.num_nodes, hn_a]
           omega
         · change (sumRightDepth a + sumRightDepth b + b.num_nodes) + sumRightDepth c +
               c.num_nodes + (rest.length + 1 + 1) ≤
@@ -10094,8 +10096,8 @@ by
           omega
 
   have h_applyPos_srd :
-      ∀ (pos : List Dir) (δ : ℕ) (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
-        subtreeAtPos t pos ≠ .empty →
+      ∀ (pos : List Dir) (δ : ℕ) (f : _root_.BinaryTree Unit → _root_.BinaryTree Unit) (t : _root_.BinaryTree Unit),
+        subtreeAtPos t pos ≠ .nil →
         (f (subtreeAtPos t pos)).num_nodes = (subtreeAtPos t pos).num_nodes →
         sumRightDepth (subtreeAtPos t pos) + δ ≤ sumRightDepth (f (subtreeAtPos t pos)) →
         (applyAtPos f t pos).num_nodes = t.num_nodes ∧
@@ -10107,32 +10109,32 @@ by
       cases t <;> exact ⟨hfn, hfs⟩
     | cons dir rest ih =>
       intro δ f t hne hfn hfs
-      rcases t with _ | ⟨l, u, r⟩
+      rcases t with _ | ⟨u, l, r⟩
       · cases dir <;> exact absurd rfl hne
       · cases dir with
         | L =>
           simp only [subtreeAtPos] at hne hfn hfs
           obtain ⟨hn_l, hs_l⟩ := ih δ f l hne hfn hfs
-          refine ⟨by simp [applyAtPos, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, hn_l], ?_⟩
+          refine ⟨by simp [applyAtPos, _root_.BinaryTree.num_nodes, hn_l], ?_⟩
           change (sumRightDepth l + sumRightDepth r + r.num_nodes) + δ ≤
             sumRightDepth (applyAtPos f l rest) + sumRightDepth r + r.num_nodes
           omega
         | R =>
           simp only [subtreeAtPos] at hne hfn hfs
           obtain ⟨hn_r, hs_r⟩ := ih δ f r hne hfn hfs
-          refine ⟨by simp [applyAtPos, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, hn_r], ?_⟩
+          refine ⟨by simp [applyAtPos, _root_.BinaryTree.num_nodes, hn_r], ?_⟩
           change (sumRightDepth l + sumRightDepth r + r.num_nodes) + δ ≤
             sumRightDepth l + sumRightDepth (applyAtPos f r rest) +
               (applyAtPos f r rest).num_nodes
           omega
 
   have h_quad_base :
-      ∀ (k : ℕ) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (seq : List RightRotOp),
+      ∀ (k : ℕ) (u : _root_.BinaryTree Unit) (seq : List RightRotOp),
         ValidRightRotSeq Δ' k u seq →
         2 * k * countGappedCascades seq ≤ u.num_nodes * u.num_nodes := by
     intro k
     have h_aux :
-        ∀ (seq : List RightRotOp) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+        ∀ (seq : List RightRotOp) (u : _root_.BinaryTree Unit),
           ValidRightRotSeq Δ' k u seq →
           (execRightRotSeq u seq).num_nodes = u.num_nodes ∧
           sumRightDepth u + k * countGappedCascades seq ≤ sumRightDepth (execRightRotSeq u seq) := by
@@ -10147,7 +10149,7 @@ by
         | single pos =>
           obtain ⟨hne, hfn, hfs⟩ := h_rotR_srd (subtreeAtPos u pos) hop
           obtain ⟨hn_op, hs_op⟩ :=
-            h_applyPos_srd pos 1 _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight u hne hfn hfs
+            h_applyPos_srd pos 1 _root_.BinaryTree.rotateRight u hne hfn hfs
           obtain ⟨hn_rest, hs_rest⟩ := ih (execRightRotOp u (.single pos)) hrest
           refine ⟨by simp only [execRightRotSeq]; rw [hn_rest]; exact hn_op, ?_⟩
           simp only [countGappedCascades, execRightRotSeq, execRightRotOp] at hs_rest ⊢
@@ -10174,27 +10176,27 @@ by
 
 
 
-  let appendRightmost : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit := fun u tail =>
-    _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rec tail (fun l u0 _ _ r_res => .node l u0 r_res) u
+  let appendRightmost : _root_.BinaryTree Unit → _root_.BinaryTree Unit → _root_.BinaryTree Unit := fun u tail =>
+    _root_.BinaryTree.rec tail (fun u0 l _ _ r_res => .node u0 l r_res) u
 
   have h_appR_nodes :
-      ∀ (u tail : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+      ∀ (u tail : _root_.BinaryTree Unit),
         (appendRightmost u tail).num_nodes = u.num_nodes + tail.num_nodes := by
     intro u tail
     induction u with
-    | empty => simp [appendRightmost, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
-    | node l _ r _ ihr =>
+    | nil => simp [appendRightmost, _root_.BinaryTree.num_nodes]
+    | node _ l r _ ihr =>
       change 1 + l.num_nodes + (appendRightmost r tail).num_nodes =
         (1 + l.num_nodes + r.num_nodes) + tail.num_nodes
       omega
 
   have h_appR_cascRoot :
-      ∀ (s tail : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (gaps : List ℕ),
+      ∀ (s tail : _root_.BinaryTree Unit) (gaps : List ℕ),
         validGappedCascadeAtRoot Δ' s gaps →
         validGappedCascadeAtRoot Δ' (appendRightmost s tail) gaps ∧
         execGappedCascadeAtRoot (appendRightmost s tail) gaps =
           appendRightmost (execGappedCascadeAtRoot s gaps) tail := by
-    rintro (_ | ⟨_ | ⟨a, u1, b⟩, u2, c⟩) tail (_ | ⟨g, rest⟩) hv
+    rintro (_ | ⟨u2, _ | ⟨u1, a, b⟩, c⟩) tail (_ | ⟨g, rest⟩) hv
     · simp [validGappedCascadeAtRoot, leftSpineLen] at hv
     · exact False.elim hv
     · simp [validGappedCascadeAtRoot, leftSpineLen] at hv
@@ -10203,7 +10205,7 @@ by
     · exact ⟨hv, rfl⟩
 
   have h_appR_op :
-      ∀ (k : ℕ) (tail : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (op : RightRotOp) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+      ∀ (k : ℕ) (tail : _root_.BinaryTree Unit) (op : RightRotOp) (u : _root_.BinaryTree Unit),
         validRightRotOp Δ' k u op →
         validRightRotOp Δ' k (appendRightmost u tail) op ∧
         execRightRotOp (appendRightmost u tail) op = appendRightmost (execRightRotOp u op) tail := by
@@ -10212,37 +10214,37 @@ by
     | single pos =>
       induction pos with
       | nil =>
-        rintro (_ | ⟨_ | ⟨a, u1, b⟩, u2, c⟩) hv
+        rintro (_ | ⟨u2, _ | ⟨u1, a, b⟩, c⟩) hv
         · simp [validRightRotOp, subtreeAtPos, leftSpineLen] at hv
         · simp [validRightRotOp, subtreeAtPos, leftSpineLen] at hv
         · exact ⟨hv, rfl⟩
       | cons dir rest ih =>
-        rintro (_ | ⟨l, u0, r⟩) hv
+        rintro (_ | ⟨u0, l, r⟩) hv
         · cases dir <;> simp [validRightRotOp, subtreeAtPos, leftSpineLen] at hv
         · cases dir with
           | L => exact ⟨hv, rfl⟩
           | R =>
             obtain ⟨hv_r, hex_r⟩ := ih r hv
-            exact ⟨hv_r, congrArg (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node l u0) hex_r⟩
+            exact ⟨hv_r, congrArg (_root_.BinaryTree.node u0 l) hex_r⟩
     | cascade pos gaps =>
       induction pos with
       | nil =>
-        rintro (_ | ⟨l, u0, r⟩) ⟨hk_eq, hv_casc⟩
+        rintro (_ | ⟨u0, l, r⟩) ⟨hk_eq, hv_casc⟩
         · cases gaps <;> simp [subtreeAtPos, validGappedCascadeAtRoot, leftSpineLen] at hv_casc
-        · obtain ⟨hv2, hex2⟩ := h_appR_cascRoot (.node l u0 r) tail gaps hv_casc
+        · obtain ⟨hv2, hex2⟩ := h_appR_cascRoot (.node u0 l r) tail gaps hv_casc
           exact ⟨⟨hk_eq, hv2⟩, hex2⟩
       | cons dir rest ih =>
-        rintro (_ | ⟨l, u0, r⟩) hv
+        rintro (_ | ⟨u0, l, r⟩) hv
         · obtain ⟨_, hv_casc⟩ := hv
           cases dir <;> cases gaps <;> simp [subtreeAtPos, validGappedCascadeAtRoot, leftSpineLen] at hv_casc
         · cases dir with
           | L => exact ⟨hv, rfl⟩
           | R =>
             obtain ⟨hv_r, hex_r⟩ := ih r hv
-            exact ⟨hv_r, congrArg (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node l u0) hex_r⟩
+            exact ⟨hv_r, congrArg (_root_.BinaryTree.node u0 l) hex_r⟩
 
   have h_appR_seq :
-      ∀ (k : ℕ) (tail : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (u_seq : List RightRotOp) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+      ∀ (k : ℕ) (tail : _root_.BinaryTree Unit) (u_seq : List RightRotOp) (u : _root_.BinaryTree Unit),
         ValidRightRotSeq Δ' k u u_seq →
         ValidRightRotSeq Δ' k (appendRightmost u tail) u_seq ∧
         execRightRotSeq (appendRightmost u tail) u_seq =
@@ -10267,28 +10269,28 @@ by
     | .cascade pos gaps => .cascade (pref ++ pos) gaps
 
   have h_shiftR_pos :
-      ∀ (w tail : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (pos : List Dir)
-        (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+      ∀ (w tail : _root_.BinaryTree Unit) (pos : List Dir)
+        (f : _root_.BinaryTree Unit → _root_.BinaryTree Unit),
         subtreeAtPos (appendRightmost w tail) (List.replicate (rightSpineLen w) Dir.R ++ pos) =
           subtreeAtPos tail pos ∧
         applyAtPos f (appendRightmost w tail) (List.replicate (rightSpineLen w) Dir.R ++ pos) =
           appendRightmost w (applyAtPos f tail pos) := by
     intro w tail pos f
     induction w with
-    | empty =>
+    | nil =>
       exact ⟨rfl, rfl⟩
-    | node l u0 r _ ihr =>
+    | node u0 l r _ ihr =>
       have hrep :
-          List.replicate (rightSpineLen (.node l u0 r)) Dir.R =
+          List.replicate (rightSpineLen (.node u0 l r)) Dir.R =
             Dir.R :: List.replicate (rightSpineLen r) Dir.R := by
         simp only [rightSpineLen]
         rw [Nat.add_comm 1 (rightSpineLen r)]
         rfl
       rw [hrep, List.cons_append]
-      exact ⟨ihr.1, congrArg (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node l u0) ihr.2⟩
+      exact ⟨ihr.1, congrArg (_root_.BinaryTree.node u0 l) ihr.2⟩
 
   have h_shiftR_seq :
-      ∀ (k : ℕ) (w : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (tail_seq : List RightRotOp) (tail : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+      ∀ (k : ℕ) (w : _root_.BinaryTree Unit) (tail_seq : List RightRotOp) (tail : _root_.BinaryTree Unit),
         ValidRightRotSeq Δ' k tail tail_seq →
         ValidRightRotSeq Δ' k (appendRightmost w tail)
           (tail_seq.map (shiftOp (List.replicate (rightSpineLen w) Dir.R))) ∧
@@ -10304,7 +10306,7 @@ by
       obtain ⟨hrest_v, hrest_c⟩ := ih (execRightRotOp tail op) hrest
       cases op with
       | single pos =>
-        obtain ⟨hsub, happ⟩ := h_shiftR_pos w tail pos _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight
+        obtain ⟨hsub, happ⟩ := h_shiftR_pos w tail pos _root_.BinaryTree.rotateRight
         refine ⟨⟨?_, ?_⟩, hrest_c⟩
         · simp only [shiftOp, validRightRotOp, hsub]
           exact hop
@@ -10323,17 +10325,17 @@ by
       ∀ (k C N_sm M_lg : ℕ),
         1 ≤ N_sm →
         N_sm ≤ M_lg →
-        (∀ (v : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (v_seq : List RightRotOp),
+        (∀ (v : _root_.BinaryTree Unit) (v_seq : List RightRotOp),
           v.num_nodes = M_lg →
           ValidRightRotSeq Δ' k v v_seq →
           countGappedCascades v_seq ≤ C * M_lg) →
-        ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (u_seq : List RightRotOp),
+        ∀ (u : _root_.BinaryTree Unit) (u_seq : List RightRotOp),
           u.num_nodes = N_sm →
           ValidRightRotSeq Δ' k u u_seq →
           countGappedCascades u_seq ≤ 2 * C * N_sm := by
     intro k C N_sm M_lg hN_sm hNM hM_bound u u_seq hu_nodes hu_val
-    let chainTree : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit := fun m =>
-      Nat.rec .empty (fun _ acc => .node .empty () acc) m
+    let chainTree : ℕ → _root_.BinaryTree Unit := fun m =>
+      Nat.rec .nil (fun _ acc => .node () .nil acc) m
     have h_chain_nodes : ∀ m : ℕ, (chainTree m).num_nodes = m := by
       intro m
       induction m with
@@ -10343,7 +10345,7 @@ by
         omega
     have h_stack :
         ∀ d : ℕ,
-          ∃ (vd : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (seq_d : List RightRotOp),
+          ∃ (vd : _root_.BinaryTree Unit) (seq_d : List RightRotOp),
             vd.num_nodes = d * N_sm + M_lg % N_sm ∧
             ValidRightRotSeq Δ' k vd seq_d ∧
             countGappedCascades seq_d = d * countGappedCascades u_seq := by
@@ -10392,27 +10394,27 @@ by
 
 
 
-  have h_rr_len : ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (a : ℕ), (rightReachList a t).length = t.num_nodes := by
+  have h_rr_len : ∀ (t : _root_.BinaryTree Unit) (a : ℕ), (rightReachList a t).length = t.num_nodes := by
     intro t
     induction t with
-    | empty =>
+    | nil =>
       intro _
       rfl
-    | node l _ r ihl ihr =>
+    | node _ l r ihl ihr =>
       intro a
       simp only [rightReachList, List.length_append, List.length_singleton,
-        ihl a, ihr (a + l.num_nodes + 1), _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+        ihl a, ihr (a + l.num_nodes + 1), _root_.BinaryTree.num_nodes]
       omega
 
   have h_rr_shift :
-      ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (a b : ℕ),
+      ∀ (t : _root_.BinaryTree Unit) (a b : ℕ),
         rightReachList (a + b) t = (rightReachList a t).map (· + b) := by
     intro t
     induction t with
-    | empty =>
+    | nil =>
       intro _ _
       rfl
-    | node l _ r ihl ihr =>
+    | node _ l r ihl ihr =>
       intro a b
       simp only [rightReachList, List.map_append, List.map_cons, List.map_nil]
       have h1 : a + b + l.num_nodes = a + l.num_nodes + b := by omega
@@ -10421,17 +10423,17 @@ by
       rw [ihl a b, h1, h3, h2, ihr (a + l.num_nodes + 1) b]
 
   have h_rr_lt :
-      ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (a x : ℕ),
+      ∀ (t : _root_.BinaryTree Unit) (a x : ℕ),
         x ∈ rightReachList a t → x < a + t.num_nodes := by
     intro t
     induction t with
-    | empty =>
+    | nil =>
       intro _ _ hx
       simp [rightReachList] at hx
-    | node l _ r ihl ihr =>
+    | node _ l r ihl ihr =>
       intro a x hx
       simp only [rightReachList, List.mem_append, List.mem_singleton] at hx
-      simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+      simp only [_root_.BinaryTree.num_nodes]
       rcases hx with (hxl | hxm) | hxr
       · have h1 := ihl a x hxl
         omega
@@ -10543,18 +10545,18 @@ by
       ∀ (k : ℕ) (dir : Dir) (sub_seq : List RightRotOp),
         countGappedCascades sub_seq = 0 →
         countGappedCascades (sub_seq.map (shiftOp [dir])) = 0 ∧
-        (∀ (l r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+        (∀ (l r : _root_.BinaryTree Unit),
           dir = .L →
           ValidRightRotSeq Δ' k l sub_seq →
-          ValidRightRotSeq Δ' k (.node l () r) (sub_seq.map (shiftOp [.L])) ∧
-          execRightRotSeq (.node l () r) (sub_seq.map (shiftOp [.L])) =
-            .node (execRightRotSeq l sub_seq) () r) ∧
-        (∀ (l r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+          ValidRightRotSeq Δ' k (.node () l r) (sub_seq.map (shiftOp [.L])) ∧
+          execRightRotSeq (.node () l r) (sub_seq.map (shiftOp [.L])) =
+            .node () (execRightRotSeq l sub_seq) r) ∧
+        (∀ (l r : _root_.BinaryTree Unit),
           dir = .R →
           ValidRightRotSeq Δ' k r sub_seq →
-          ValidRightRotSeq Δ' k (.node l () r) (sub_seq.map (shiftOp [.R])) ∧
-          execRightRotSeq (.node l () r) (sub_seq.map (shiftOp [.R])) =
-            .node l () (execRightRotSeq r sub_seq)) := by
+          ValidRightRotSeq Δ' k (.node () l r) (sub_seq.map (shiftOp [.R])) ∧
+          execRightRotSeq (.node () l r) (sub_seq.map (shiftOp [.R])) =
+            .node () l (execRightRotSeq r sub_seq)) := by
     intro k dir sub_seq
     induction sub_seq with
     | nil =>
@@ -10617,7 +10619,7 @@ by
         exact List.Forall₂.cons (by omega) (ih ys b h.2)
 
   have h_tamari_sim :
-      ∀ (k : ℕ) (t1 t2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+      ∀ (k : ℕ) (t1 t2 : _root_.BinaryTree Unit),
         t1.num_nodes = t2.num_nodes →
         List.Forall₂ (· ≤ ·) (rightReachList 0 t1) (rightReachList 0 t2) →
         ∃ seq : List RightRotOp,
@@ -10626,26 +10628,26 @@ by
           countGappedCascades seq = 0 := by
     intro k
     have h_lift_root :
-        ∀ (n : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (m2 : ℕ),
+        ∀ (n : ℕ) (t : _root_.BinaryTree Unit) (m2 : ℕ),
           t.num_nodes = n →
           m2 < n →
           (∀ x ∈ (rightReachList 0 t).take m2, x < m2) →
-          ∃ (l' r' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (up_ops : List RightRotOp),
+          ∃ (l' r' : _root_.BinaryTree Unit) (up_ops : List RightRotOp),
             ValidRightRotSeq Δ' k t up_ops ∧
-            execRightRotSeq t up_ops = .node l' () r' ∧
+            execRightRotSeq t up_ops = .node () l' r' ∧
             countGappedCascades up_ops = 0 ∧
             l'.num_nodes = m2 ∧
-            (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.node l' () r').num_nodes = n ∧
+            (_root_.BinaryTree.node () l' r').num_nodes = n ∧
             rightReachList 0 l' = (rightReachList 0 t).take m2 ∧
             rightReachList (m2 + 1) r' = (rightReachList 0 t).drop (m2 + 1) := by
       intro n
       induction n using Nat.strong_induction_on with
       | h n ih =>
         intro t m2 htn hm2_lt h_ub
-        rcases t with _ | ⟨l, _, r⟩
-        · simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at htn
+        rcases t with _ | ⟨_, l, r⟩
+        · simp [_root_.BinaryTree.num_nodes] at htn
           omega
-        · simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at htn
+        · simp only [_root_.BinaryTree.num_nodes] at htn
           have h_not_lt : ¬ l.num_nodes < m2 := by
             intro hlt
             have hlen_l : (rightReachList 0 l).length = l.num_nodes := h_rr_len l 0
@@ -10664,7 +10666,7 @@ by
           · subst hm_eq
             have hlen_l : (rightReachList 0 l).length = l.num_nodes := h_rr_len l 0
             refine ⟨l, r, [], trivial, rfl, rfl, rfl, ?_, ?_, ?_⟩
-            · simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+            · simp only [_root_.BinaryTree.num_nodes]
               omega
             · simp only [rightReachList, List.append_assoc]
               rw [h_take_app_le (rightReachList 0 l) _ l.num_nodes (by omega),
@@ -10675,7 +10677,7 @@ by
           · have hm_lt_l : m2 < l.num_nodes := by omega
             have hlen_l : (rightReachList 0 l).length = l.num_nodes := h_rr_len l 0
             have h_take_t :
-                (rightReachList 0 (.node l () r)).take m2 = (rightReachList 0 l).take m2 := by
+                (rightReachList 0 (.node () l r)).take m2 = (rightReachList 0 l).take m2 := by
               simp only [rightReachList, List.append_assoc]
               exact h_take_app_le (rightReachList 0 l) _ m2 (by omega)
             have h_ub_l : ∀ x ∈ (rightReachList 0 l).take m2, x < m2 := by
@@ -10687,28 +10689,28 @@ by
             obtain ⟨hmid_val, hmid_ex⟩ := hL_map l r rfl hl_val
             rw [hl_ex] at hmid_ex
             let rot_root : List RightRotOp := [.single []]
-            have hrot_val : ValidRightRotSeq Δ' k (.node (.node A () B) () r) rot_root := by
+            have hrot_val : ValidRightRotSeq Δ' k (.node () (.node () A B) r) rot_root := by
               refine ⟨?_, trivial⟩
               simp only [validRightRotOp, subtreeAtPos, leftSpineLen]
               omega
             obtain ⟨hcat_v, hcat_ex, hcat_c⟩ :=
-              h_seq_cat k (l_ops.map (shiftOp [.L])) rot_root (.node l () r)
-            refine ⟨A, .node B () r, l_ops.map (shiftOp [.L]) ++ rot_root, ?_, ?_, ?_, hA_n, ?_, ?_, ?_⟩
+              h_seq_cat k (l_ops.map (shiftOp [.L])) rot_root (.node () l r)
+            refine ⟨A, .node () B r, l_ops.map (shiftOp [.L]) ++ rot_root, ?_, ?_, ?_, hA_n, ?_, ?_, ?_⟩
             · rw [hcat_v, hmid_ex]
               exact ⟨hmid_val, hrot_val⟩
             · rw [hcat_ex, hmid_ex]
               rfl
             · rw [hcat_c, hc_map]
               rfl
-            · simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hAB_n ⊢
+            · simp only [_root_.BinaryTree.num_nodes] at hAB_n ⊢
               omega
             · rw [hA_rr, h_take_t]
             · simp only [rightReachList, List.append_assoc, Nat.zero_add] at hB_rr ⊢
-              simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hAB_n
+              simp only [_root_.BinaryTree.num_nodes] at hAB_n
               have h1 : m2 + 1 + B.num_nodes = l.num_nodes := by omega
               rw [h_drop_app_le (rightReachList 0 l) _ (m2 + 1) (by omega), hB_rr, h1]
     have h_ind :
-        ∀ (n : ℕ) (t1 t2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+        ∀ (n : ℕ) (t1 t2 : _root_.BinaryTree Unit),
           t2.num_nodes = n →
           t1.num_nodes = n →
           List.Forall₂ (· ≤ ·) (rightReachList 0 t1) (rightReachList 0 t2) →
@@ -10720,22 +10722,22 @@ by
       induction n using Nat.strong_induction_on with
       | h n ih =>
         intro t1 t2 ht2n ht1n hfor
-        rcases t2 with _ | ⟨l2, _, r2⟩
-        · simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at ht2n
+        rcases t2 with _ | ⟨_, l2, r2⟩
+        · simp only [_root_.BinaryTree.num_nodes] at ht2n
           subst ht2n
           rcases t1 with _ | ⟨_, _, _⟩
           · exact ⟨[], trivial, rfl, rfl⟩
-          · simp [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at ht1n
-        · simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at ht2n
+          · simp [_root_.BinaryTree.num_nodes] at ht1n
+        · simp only [_root_.BinaryTree.num_nodes] at ht2n
           let m2 := l2.num_nodes
           have hm2_lt : m2 < n := by omega
           have hlen_l2 : (rightReachList 0 l2).length = m2 := h_rr_len l2 0
-          have h_t2_take : (rightReachList 0 (.node l2 () r2)).take m2 = rightReachList 0 l2 := by
+          have h_t2_take : (rightReachList 0 (.node () l2 r2)).take m2 = rightReachList 0 l2 := by
             simp only [rightReachList, List.append_assoc]
             rw [h_take_app_le (rightReachList 0 l2) _ m2 (by omega),
               List.take_of_length_le (by omega)]
           have h_t2_drop :
-              (rightReachList 0 (.node l2 () r2)).drop (m2 + 1) = rightReachList (m2 + 1) r2 := by
+              (rightReachList 0 (.node () l2 r2)).drop (m2 + 1) = rightReachList (m2 + 1) r2 := by
             simp only [rightReachList, List.append_assoc, Nat.zero_add]
             exact h_drop_mid (rightReachList 0 l2) (rightReachList (m2 + 1) r2)
               (m2 + r2.num_nodes) m2 hlen_l2
@@ -10749,7 +10751,7 @@ by
           obtain ⟨l1', r1', up_ops, hup_v, hup_ex, hup_c, hl1_n, ht1'_n, hl1_rr, hr1_rr⟩ :=
             h_lift_root n t1 m2 ht1n hm2_lt hub_t1
           have hr1_n : r1'.num_nodes = r2.num_nodes := by
-            simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at ht1'_n
+            simp only [_root_.BinaryTree.num_nodes] at ht1'_n
             omega
           have hfor_l : List.Forall₂ (· ≤ ·) (rightReachList 0 l1') (rightReachList 0 l2) := by
             rw [hl1_rr]
@@ -10791,7 +10793,7 @@ by
         1 ≤ k' →
         1 ≤ M →
         D ≤ S →
-        ∀ (seq : List RightRotOp) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+        ∀ (seq : List RightRotOp) (T : _root_.BinaryTree ℕ),
           IsRangeBST 0 T →
           T.num_nodes = M * S →
           ValidRightRotSeq Δ' (k' + 2) (eraseKeys T) seq →
@@ -10850,15 +10852,15 @@ by
         1 ≤ k' →
         1 ≤ M →
         D ≤ S →
-        (∀ (w : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (w_seq : List RightRotOp),
+        (∀ (w : _root_.BinaryTree Unit) (w_seq : List RightRotOp),
           w.num_nodes = S →
           ValidRightRotSeq Δ' (k' + 2) w w_seq →
           countGappedCascades w_seq ≤ B_blk) →
-        (∀ (g : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (g_seq : List RightRotOp),
+        (∀ (g : _root_.BinaryTree Unit) (g_seq : List RightRotOp),
           g.num_nodes = D * M →
           ValidRightRotSeq Δ' k' g g_seq →
           countGappedCascades g_seq ≤ B_glb) →
-        ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (seq : List RightRotOp),
+        ∀ (u : _root_.BinaryTree Unit) (seq : List RightRotOp),
           u.num_nodes = M * S →
           ValidRightRotSeq Δ' (k' + 2) u seq →
           countGappedCascades seq ≤ M * B_blk + (D + 1) * (M * S) + B_glb := by
@@ -10892,7 +10894,7 @@ by
 
 
   have h_k2_pow2 :
-      ∀ (m : ℕ) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (seq : List RightRotOp),
+      ∀ (m : ℕ) (u : _root_.BinaryTree Unit) (seq : List RightRotOp),
         u.num_nodes = D * 2 ^ m →
         ValidRightRotSeq Δ' 2 u seq →
         countGappedCascades seq ≤ (2 * m + 1) * D * (D * 2 ^ m) := by
@@ -11043,7 +11045,7 @@ by
 
 
   have h_12D_base :
-      ∀ (k : ℕ) (w : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (w_seq : List RightRotOp),
+      ∀ (k : ℕ) (w : _root_.BinaryTree Unit) (w_seq : List RightRotOp),
         4 ≤ k →
         w.num_nodes = 12 * D →
         ValidRightRotSeq Δ' k w w_seq →
@@ -11058,7 +11060,7 @@ by
   have h_thresh_bound :
       ∀ (p j : ℕ),
         1 ≤ j →
-        ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (seq : List RightRotOp),
+        ∀ (u : _root_.BinaryTree Unit) (seq : List RightRotOp),
           u.num_nodes = 4 * D * scaleQ p j →
           ValidRightRotSeq Δ' (2 * (p + 2)) u seq →
           countGappedCascades seq ≤ 4 * (D + 2) * j * (4 * D * scaleQ p j) := by
@@ -11066,7 +11068,7 @@ by
     induction p with
     | zero =>
       have h_in0 :
-          ∀ (j0 : ℕ) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (seq : List RightRotOp),
+          ∀ (j0 : ℕ) (u : _root_.BinaryTree Unit) (seq : List RightRotOp),
             u.num_nodes = 4 * D * scaleQ 0 (j0 + 1) →
             ValidRightRotSeq Δ' 4 u seq →
             countGappedCascades seq ≤ 4 * (D + 2) * (j0 + 1) * (4 * D * scaleQ 0 (j0 + 1)) := by
@@ -11076,11 +11078,11 @@ by
           intro u seq hu_n hv
           change u.num_nodes = 4 * D * 12 at hu_n
           have hu_MS : u.num_nodes = 4 * (12 * D) := by rw [hu_n]; ring
-          have h_blk : ∀ (w : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (w_seq : List RightRotOp),
+          have h_blk : ∀ (w : _root_.BinaryTree Unit) (w_seq : List RightRotOp),
               w.num_nodes = 12 * D → ValidRightRotSeq Δ' 4 w w_seq →
               countGappedCascades w_seq ≤ 2 * D * (12 * D) :=
             fun w w_seq hw hv_w => h_12D_base 4 w w_seq (by omega) hw hv_w
-          have h_glb : ∀ (g : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (g_seq : List RightRotOp),
+          have h_glb : ∀ (g : _root_.BinaryTree Unit) (g_seq : List RightRotOp),
               g.num_nodes = D * 4 → ValidRightRotSeq Δ' 2 g g_seq →
               countGappedCascades g_seq ≤ 20 * D * D := by
             intro g g_seq hg hv_g
@@ -11103,11 +11105,11 @@ by
             change 4 * D * (2 ^ (2 * q) * q) = M * S
             dsimp (config := { failIfUnchanged := false }) [M, S]
             ring
-          have h_blk : ∀ (w : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (w_seq : List RightRotOp),
+          have h_blk : ∀ (w : _root_.BinaryTree Unit) (w_seq : List RightRotOp),
               w.num_nodes = S → ValidRightRotSeq Δ' 4 w w_seq →
               countGappedCascades w_seq ≤ 4 * (D + 2) * (j0 + 1) * S :=
             fun w w_seq hw hv_w => ih_j w w_seq hw hv_w
-          have h_glb : ∀ (g : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (g_seq : List RightRotOp),
+          have h_glb : ∀ (g : _root_.BinaryTree Unit) (g_seq : List RightRotOp),
               g.num_nodes = D * M → ValidRightRotSeq Δ' 2 g g_seq →
               countGappedCascades g_seq ≤ (4 * q + 1) * D * (D * M) := by
             intro g g_seq hg hv_g
@@ -11135,7 +11137,7 @@ by
       · exact h_in0 j0 u seq hu_n hv
     | succ p ih_p =>
       have h_inS :
-          ∀ (j0 : ℕ) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (seq : List RightRotOp),
+          ∀ (j0 : ℕ) (u : _root_.BinaryTree Unit) (seq : List RightRotOp),
             u.num_nodes = 4 * D * scaleQ (p + 1) (j0 + 1) →
             ValidRightRotSeq Δ' (2 * (p + 3)) u seq →
             countGappedCascades seq ≤ 4 * (D + 2) * (j0 + 1) * (4 * D * scaleQ (p + 1) (j0 + 1)) := by
@@ -11154,11 +11156,11 @@ by
             ring
           have hk_eq : 2 * (p + 2) + 2 = 2 * (p + 3) := by omega
           rw [← hk_eq] at hv
-          have h_blk : ∀ (w : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (w_seq : List RightRotOp),
+          have h_blk : ∀ (w : _root_.BinaryTree Unit) (w_seq : List RightRotOp),
               w.num_nodes = S → ValidRightRotSeq Δ' (2 * (p + 2) + 2) w w_seq →
               countGappedCascades w_seq ≤ 2 * D * S :=
             fun w w_seq hw hv_w => h_12D_base (2 * (p + 2) + 2) w w_seq (by omega) hw hv_w
-          have h_glb : ∀ (g : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (g_seq : List RightRotOp),
+          have h_glb : ∀ (g : _root_.BinaryTree Unit) (g_seq : List RightRotOp),
               g.num_nodes = D * M → ValidRightRotSeq Δ' (2 * (p + 2)) g g_seq →
               countGappedCascades g_seq ≤ 4 * (D + 2) * 2 * (4 * D * q2) := by
             intro g g_seq hg hv_g
@@ -11187,13 +11189,13 @@ by
             ring
           have hk_eq : 2 * (p + 2) + 2 = 2 * (p + 3) := by omega
           rw [← hk_eq] at hv
-          have h_blk : ∀ (w : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (w_seq : List RightRotOp),
+          have h_blk : ∀ (w : _root_.BinaryTree Unit) (w_seq : List RightRotOp),
               w.num_nodes = S → ValidRightRotSeq Δ' (2 * (p + 2) + 2) w w_seq →
               countGappedCascades w_seq ≤ 4 * (D + 2) * (j0 + 1) * S := by
             intro w w_seq hw hv_w
             rw [hk_eq] at hv_w
             exact ih_j w w_seq hw hv_w
-          have h_glb : ∀ (g : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (g_seq : List RightRotOp),
+          have h_glb : ∀ (g : _root_.BinaryTree Unit) (g_seq : List RightRotOp),
               g.num_nodes = D * M → ValidRightRotSeq Δ' (2 * (p + 2)) g g_seq →
               countGappedCascades g_seq ≤ 4 * (D + 2) * J * (4 * D * qJ) := by
             intro g g_seq hg hv_g
@@ -11226,7 +11228,7 @@ by
     dsimp (config := { failIfUnchanged := false }) [M1]
     nlinarith
   have hM1_bound :
-      ∀ (v : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (v_seq : List RightRotOp),
+      ∀ (v : _root_.BinaryTree Unit) (v_seq : List RightRotOp),
         v.num_nodes = M1 →
         ValidRightRotSeq Δ' (2 * i) v v_seq →
         countGappedCascades v_seq ≤ (4 * (Δ' + 4)) * M1 := by
@@ -11250,66 +11252,66 @@ theorem primal_keyed_labeling_and_cost_bridge (P : ℕ) (ops : List CoreOp) (hP 
       coreCascadeCost ops ≤ P + (jumps kops).length :=
 by
   have _ := hP
-  have h_erase_empty : ∀ T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ, eraseNatKeys T = .empty ↔ T = .empty := by
+  have h_erase_empty : ∀ T : _root_.BinaryTree ℕ, eraseNatKeys T = .nil ↔ T = .nil := by
     intro T; cases T <;> simp [eraseNatKeys]
 
-  have h_map_empty : ∀ (f : ℕ → ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), twMapTree f T = .empty ↔ T = .empty := by
+  have h_map_empty : ∀ (f : ℕ → ℕ) (T : _root_.BinaryTree ℕ), twMapTree f T = .nil ↔ T = .nil := by
     intro f T; cases T <;> simp [twMapTree]
 
-  have h_ls_aux : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List ℕ),
+  have h_ls_aux : ∀ (T : _root_.BinaryTree ℕ) (acc : List ℕ),
       leftSpineBottomUpAux T acc = leftSpineBottomUpAux T [] ++ acc := by
     intro T
     induction T with
-    | empty => intro acc; simp [leftSpineBottomUpAux]
-    | node l k r ihl _ =>
+    | nil => intro acc; simp [leftSpineBottomUpAux]
+    | node k l r ihl _ =>
       intro acc
       simp only [leftSpineBottomUpAux]
       rw [ihl (k :: acc), ihl [k], List.append_assoc]
       rfl
 
-  have h_ls_node : ∀ (l : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ) (r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      leftSpineBottomUpNat (.node l k r) = leftSpineBottomUpNat l ++ [k] := by
+  have h_ls_node : ∀ (l : _root_.BinaryTree ℕ) (k : ℕ) (r : _root_.BinaryTree ℕ),
+      leftSpineBottomUpNat (.node k l r) = leftSpineBottomUpNat l ++ [k] := by
     intro l k r
     unfold leftSpineBottomUpNat
     simp only [leftSpineBottomUpAux]
     exact h_ls_aux l [k]
 
-  have h_ls_len : ∀ T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ,
+  have h_ls_len : ∀ T : _root_.BinaryTree ℕ,
       (leftSpineBottomUpNat T).length = leftSpineLen (eraseNatKeys T) := by
     intro T
     induction T with
-    | empty => rfl
-    | node l k r ihl _ =>
+    | nil => rfl
+    | node k l r ihl _ =>
       rw [h_ls_node, List.length_append, List.length_singleton, ihl]
       simp only [eraseNatKeys, leftSpineLen]
       omega
 
-  have h_ls_map : ∀ (f : ℕ → ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+  have h_ls_map : ∀ (f : ℕ → ℕ) (T : _root_.BinaryTree ℕ),
       leftSpineBottomUpNat (twMapTree f T) = (leftSpineBottomUpNat T).map f := by
     intro f T
     induction T with
-    | empty => rfl
-    | node l k r ihl _ =>
+    | nil => rfl
+    | node k l r ihl _ =>
       simp only [twMapTree, h_ls_node, List.map_append, List.map_singleton, ihl]
 
-  have h_rs_len : ∀ T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ,
+  have h_rs_len : ∀ T : _root_.BinaryTree ℕ,
       (rightSpineTopDownNat T).length = rightSpineLen (eraseNatKeys T) := by
     intro T
     induction T with
-    | empty => rfl
-    | node l k r _ ihr =>
+    | nil => rfl
+    | node k l r _ ihr =>
       simp only [rightSpineTopDownNat, List.length_cons, eraseNatKeys, rightSpineLen, ihr]
       omega
 
-  have h_rs_map : ∀ (f : ℕ → ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+  have h_rs_map : ∀ (f : ℕ → ℕ) (T : _root_.BinaryTree ℕ),
       rightSpineTopDownNat (twMapTree f T) = (rightSpineTopDownNat T).map f := by
     intro f T
     induction T with
-    | empty => rfl
-    | node l k r _ ihr =>
+    | nil => rfl
+    | node k l r _ ihr =>
       simp only [twMapTree, rightSpineTopDownNat, List.map_cons, ihr]
 
-  have h_rotL_props : ∀ (d : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+  have h_rotL_props : ∀ (d : ℕ) (T : _root_.BinaryTree ℕ),
       eraseNatKeys (rotateLeftAtRightDepthNat T d) = rotateLeftAtRightDepth (eraseNatKeys T) d ∧
       inorderNat (rotateLeftAtRightDepthNat T d) = inorderNat T ∧
       (∀ f : ℕ → ℕ, rotateLeftAtRightDepthNat (twMapTree f T) d =
@@ -11318,16 +11320,16 @@ by
     induction d with
     | zero =>
       intro T
-      rcases T with _ | ⟨a, x, _ | ⟨b, y, c⟩⟩
-      · simp [rotateLeftAtRightDepthNat, rotateLeftAtRightDepth, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft,
+      rcases T with _ | ⟨x, a, _ | ⟨y, b, c⟩⟩
+      · simp [rotateLeftAtRightDepthNat, rotateLeftAtRightDepth, _root_.BinaryTree.rotateLeft,
           eraseNatKeys, inorderNat, twMapTree]
-      · simp [rotateLeftAtRightDepthNat, rotateLeftAtRightDepth, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft,
+      · simp [rotateLeftAtRightDepthNat, rotateLeftAtRightDepth, _root_.BinaryTree.rotateLeft,
           eraseNatKeys, inorderNat, twMapTree]
-      · simp [rotateLeftAtRightDepthNat, rotateLeftAtRightDepth, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft,
+      · simp [rotateLeftAtRightDepthNat, rotateLeftAtRightDepth, _root_.BinaryTree.rotateLeft,
           eraseNatKeys, inorderNat, twMapTree, List.append_assoc]
     | succ d ih =>
       intro T
-      rcases T with _ | ⟨l, k, r⟩
+      rcases T with _ | ⟨k, l, r⟩
       · simp [rotateLeftAtRightDepthNat, rotateLeftAtRightDepth, eraseNatKeys, inorderNat, twMapTree]
       · obtain ⟨he, hi, hm⟩ := ih r
         refine ⟨?_, ?_, ?_⟩
@@ -11335,8 +11337,8 @@ by
         · simp [rotateLeftAtRightDepthNat, inorderNat, hi]
         · intro f; simp [rotateLeftAtRightDepthNat, twMapTree, hm f]
 
-  have h_descend_props : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)),
-      T ≠ .empty →
+  have h_descend_props : ∀ (T : _root_.BinaryTree ℕ) (acc : List (ℕ × _root_.BinaryTree ℕ)),
+      T ≠ .nil →
       descendLeft (eraseNatKeys T) (acc.map (fun p => eraseNatKeys p.2)) =
         (eraseNatKeys (descendLeftNat T acc).1,
           (descendLeftNat T acc).2.map (fun p => eraseNatKeys p.2)) ∧
@@ -11350,10 +11352,10 @@ by
           inorderNat T ++ pklPathInorder acc) := by
     intro T
     induction T with
-    | empty => intro _ h; exact absurd rfl h
-    | node l k r ihl _ =>
+    | nil => intro _ h; exact absurd rfl h
+    | node k l r ihl _ =>
       intro acc _
-      rcases l with _ | ⟨ll, lk, lr⟩
+      rcases l with _ | ⟨lk, ll, lr⟩
       · refine ⟨by simp [eraseNatKeys, descendLeft, descendLeftNat],
           fun f => by simp [twMapTree, descendLeftNat], ?_, ?_⟩
         · simp [leftSpineBottomUpNat, leftSpineBottomUpAux]
@@ -11363,13 +11365,13 @@ by
         · simpa [eraseNatKeys, descendLeft, descendLeftNat] using he
         · intro f; simpa [twMapTree, descendLeftNat] using hm f
         · rw [h_ls_node]
-          rcases hls : leftSpineBottomUpNat (.node ll lk lr) with _ | ⟨s0, tl⟩
+          rcases hls : leftSpineBottomUpNat (.node lk ll lr) with _ | ⟨s0, tl⟩
           · rw [hls] at hhd; simp at hhd
           · simp
-        · have hhd_eq : (leftSpineBottomUpNat (.node (.node ll lk lr) k r)).headD 0 =
-              (leftSpineBottomUpNat (.node ll lk lr)).headD 0 := by
+        · have hhd_eq : (leftSpineBottomUpNat (.node k (.node lk ll lr) r)).headD 0 =
+              (leftSpineBottomUpNat (.node lk ll lr)).headD 0 := by
             rw [h_ls_node]
-            rcases hls : leftSpineBottomUpNat (.node ll lk lr) with _ | ⟨s0, tl⟩
+            rcases hls : leftSpineBottomUpNat (.node lk ll lr) with _ | ⟨s0, tl⟩
             · rw [hls] at hhd; simp at hhd
             · rfl
           rw [hhd_eq]
@@ -11377,7 +11379,7 @@ by
           rw [hin]
           simp [inorderNat, pklPathInorder, List.append_assoc]
 
-  have h_splay_props : ∀ (n : ℕ) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (path : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)),
+  have h_splay_props : ∀ (n : ℕ) (c : _root_.BinaryTree ℕ) (path : List (ℕ × _root_.BinaryTree ℕ)),
       path.length ≤ n →
       eraseNatKeys (splayLeftSpineNat c path) =
         splayLeftSpine (eraseNatKeys c) (path.map (fun p => eraseNatKeys p.2)) ∧
@@ -11398,7 +11400,7 @@ by
       · simp [splayLeftSpineNat, splayLeftSpine, eraseNatKeys, twMapTree, inorderNat,
           pklPathInorder, List.append_assoc]
       · have hrest : rest.length ≤ n := by simp at hlen; omega
-        obtain ⟨he, hm, hin⟩ := ih (.node c k1 (.node r1 k2 r2)) rest hrest
+        obtain ⟨he, hm, hin⟩ := ih (.node k1 c (.node k2 r1 r2)) rest hrest
         refine ⟨?_, ?_, ?_⟩
         · simpa [splayLeftSpineNat, splayLeftSpine, eraseNatKeys] using he
         · intro f; simpa [splayLeftSpineNat, twMapTree] using hm f
@@ -11406,8 +11408,8 @@ by
           rw [hin]
           simp [inorderNat, pklPathInorder, List.append_assoc]
 
-  have h_pop_props : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      T ≠ .empty →
+  have h_pop_props : ∀ (T : _root_.BinaryTree ℕ),
+      T ≠ .nil →
       eraseNatKeys (popNat T) = popUnlabeled (eraseNatKeys T) ∧
       (∀ f : ℕ → ℕ, popNat (twMapTree f T) = twMapTree f (popNat T)) ∧
       (leftSpineBottomUpNat T).head? = some ((leftSpineBottomUpNat T).headD 0) ∧
@@ -11437,15 +11439,15 @@ by
       simp only [pklPathInorder, List.append_nil] at hdin
       exact hdin.symm
 
-  have h_erase_pop_all : ∀ T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ,
+  have h_erase_pop_all : ∀ T : _root_.BinaryTree ℕ,
       eraseNatKeys (popNat T) = popUnlabeled (eraseNatKeys T) := by
     intro T
-    rcases T with _ | ⟨l, k, r⟩
+    rcases T with _ | ⟨k, l, r⟩
     · simp [popNat, popUnlabeled, descendLeftNat, descendLeft, splayLeftSpineNat,
         splayLeftSpine, eraseNatKeys]
-    · exact (h_pop_props (.node l k r) (by simp)).1
+    · exact (h_pop_props (.node k l r) (by simp)).1
 
-  have h_erase_exec : ∀ (H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (op : KeyedCoreOp),
+  have h_erase_exec : ∀ (H : _root_.BinaryTree ℕ) (op : KeyedCoreOp),
       eraseNatKeys (execKeyedOp H op) = execCoreOp (eraseNatKeys H) (eraseKeyedOp op) := by
     intro H op
     rcases op with w | s | d
@@ -11453,7 +11455,7 @@ by
     · exact h_erase_pop_all H
     · exact (h_rotL_props d H).1
 
-  have h_pass1 : ∀ (rest : List CoreOp) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (b : ℕ),
+  have h_pass1 : ∀ (rest : List CoreOp) (T : _root_.BinaryTree ℕ) (b : ℕ),
       ValidCoreSeqAux (eraseNatKeys T) rest →
       let bops := pklBuildBirthOps T b rest
       let K := countCorePush rest
@@ -11472,8 +11474,8 @@ by
       intro T b hval
       rcases op with _ | _ | d
       · simp only [ValidCoreSeqAux] at hval
-        have hval' : ValidCoreSeqAux (eraseNatKeys (.node .empty b T)) rest' := hval
-        obtain ⟨hmap', htr', hpush', hperm'⟩ := ih (.node .empty b T) (b + 1) hval'
+        have hval' : ValidCoreSeqAux (eraseNatKeys (.node b .nil T)) rest' := hval
+        obtain ⟨hmap', htr', hpush', hperm'⟩ := ih (.node b .nil T) (b + 1) hval'
         refine ⟨?_, htr', ?_, ?_⟩
         · simp [pklBuildBirthOps, eraseKeyedOp, hmap']
         · simp only [pklBuildBirthOps, pushKeys, countCorePush]
@@ -11484,11 +11486,11 @@ by
           have hr : List.range' b (countCorePush rest' + 1) =
               b :: List.range' (b + 1) (countCorePush rest') := rfl
           rw [hr]
-          have hin : inorderNat (.node .empty b T) = b :: inorderNat T := by simp [inorderNat]
+          have hin : inorderNat (.node b .nil T) = b :: inorderNat T := by simp [inorderNat]
           rw [hin, List.cons_append] at hperm'
           exact List.perm_middle.trans hperm'
       · obtain ⟨hne_e, hval_rest⟩ := hval
-        have hT_ne : T ≠ .empty := by
+        have hT_ne : T ≠ .nil := by
           intro h0; subst h0; exact hne_e rfl
         obtain ⟨he_pop, _, hhd, hin_pop⟩ := h_pop_props T hT_ne
         rw [← he_pop] at hval_rest
@@ -11528,7 +11530,7 @@ by
       have hne : a ≠ x := fun h => ha_notin (h ▸ hx)
       exact List.idxOf_cons_ne L' hne
 
-  have h_trace_map : ∀ (f : ℕ → ℕ) (xs : List KeyedCoreOp) (H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+  have h_trace_map : ∀ (f : ℕ → ℕ) (xs : List KeyedCoreOp) (H : _root_.BinaryTree ℕ),
       pklValidTrace H xs → pklValidTrace (twMapTree f H) (xs.map (pklMapKeyedOp f)) := by
     intro f xs
     induction xs with
@@ -11539,9 +11541,9 @@ by
     | cons op rest ih =>
       intro H htr
       rcases op with w | s | d
-      · exact ih (.node .empty w H) htr
+      · exact ih (.node w .nil H) htr
       · obtain ⟨hne, hhd, htr'⟩ := htr
-        have hne_f : twMapTree f H ≠ .empty := by
+        have hne_f : twMapTree f H ≠ .nil := by
           rw [ne_eq, h_map_empty]; exact hne
         have hhd_f : (leftSpineBottomUpNat (twMapTree f H)).head? = some (f s) := by
           rw [h_ls_map, List.head?_map, hhd]; rfl
@@ -11578,42 +11580,42 @@ by
     | nil => rfl
     | cons op rest ih => rcases op <;> simp [pklMapKeyedOp, eraseKeyedOp, ih]
 
-  have h_rslr_rot : ∀ (d : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+  have h_rslr_rot : ∀ (d : ℕ) (t : _root_.BinaryTree Unit),
       d + 2 ≤ rightSpineLen t →
       rightSpineLen (rotateLeftAtRightDepth t d) + 1 = rightSpineLen t := by
     intro d
     induction d with
     | zero =>
       intro t h
-      rcases t with _ | ⟨a, _, _ | ⟨b, _, c⟩⟩
+      rcases t with _ | ⟨_, a, _ | ⟨_, b, c⟩⟩
       · simp [rightSpineLen] at h
       · simp [rightSpineLen] at h
-      · simp [rotateLeftAtRightDepth, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft, rightSpineLen]
+      · simp [rotateLeftAtRightDepth, _root_.BinaryTree.rotateLeft, rightSpineLen]
         omega
     | succ d ih =>
       intro t h
-      rcases t with _ | ⟨l, _, r⟩
+      rcases t with _ | ⟨_, l, r⟩
       · simp [rightSpineLen] at h
       · simp only [rightSpineLen] at h
         have hr := ih r (by omega)
         simp only [rotateLeftAtRightDepth, rightSpineLen]
         omega
 
-  have h_descend_u_app : ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (a1 a2 : List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit)),
-      u ≠ .empty →
+  have h_descend_u_app : ∀ (u : _root_.BinaryTree Unit) (a1 a2 : List (_root_.BinaryTree Unit)),
+      u ≠ .nil →
       descendLeft u (a1 ++ a2) = ((descendLeft u a1).1, (descendLeft u a1).2 ++ a2) := by
     intro u
     induction u with
-    | empty => intro _ _ h; exact absurd rfl h
-    | node l _ r ihl _ =>
+    | nil => intro _ _ h; exact absurd rfl h
+    | node _ l r ihl _ =>
       intro a1 a2 _
-      rcases l with _ | ⟨ll, _, lr⟩
+      rcases l with _ | ⟨_, ll, lr⟩
       · simp [descendLeft]
       · simp only [descendLeft]
         rw [← List.cons_append]
         exact ihl (r :: a1) a2 (by simp)
 
-  have h_splay_u_rs : ∀ (n : ℕ) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (p : List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit)) (r0 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+  have h_splay_u_rs : ∀ (n : ℕ) (c : _root_.BinaryTree Unit) (p : List (_root_.BinaryTree Unit)) (r0 : _root_.BinaryTree Unit),
       p.length ≤ n →
       rightSpineLen (splayLeftSpine c (p ++ [r0])) ≤ 2 + rightSpineLen r0 := by
     intro n
@@ -11629,28 +11631,28 @@ by
       · simp [splayLeftSpine, rightSpineLen]
       · simp [splayLeftSpine, rightSpineLen]; omega
       · have hrest : rest.length ≤ n := by simp at hlen; omega
-        simpa [List.cons_append, splayLeftSpine] using ih (.node c () (.node r1 () r2)) rest r0 hrest
+        simpa [List.cons_append, splayLeftSpine] using ih (.node () c (.node () r1 r2)) rest r0 hrest
 
-  have h_pop_u_rs : ∀ t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit,
-      t ≠ .empty → rightSpineLen (popUnlabeled t) ≤ rightSpineLen t + 1 := by
+  have h_pop_u_rs : ∀ t : _root_.BinaryTree Unit,
+      t ≠ .nil → rightSpineLen (popUnlabeled t) ≤ rightSpineLen t + 1 := by
     intro t ht
-    rcases t with _ | ⟨l, _, r0⟩
+    rcases t with _ | ⟨_, l, r0⟩
     · exact absurd rfl ht
-    · rcases l with _ | ⟨ll, _, lr⟩
+    · rcases l with _ | ⟨_, ll, lr⟩
       · simp [popUnlabeled, descendLeft, splayLeftSpine, rightSpineLen]; omega
-      · have happ := h_descend_u_app (.node ll () lr) [] [r0] (by simp)
+      · have happ := h_descend_u_app (.node () ll lr) [] [r0] (by simp)
         simp only [List.nil_append] at happ
-        have hpop : popUnlabeled (.node (.node ll () lr) () r0) =
-            splayLeftSpine (descendLeft (.node ll () lr) []).1
-              ((descendLeft (.node ll () lr) []).2 ++ [r0]) := by
+        have hpop : popUnlabeled (.node () (.node () ll lr) r0) =
+            splayLeftSpine (descendLeft (.node () ll lr) []).1
+              ((descendLeft (.node () ll lr) []).2 ++ [r0]) := by
           simp [popUnlabeled, descendLeft, happ]
         rw [hpop]
-        have hsp := h_splay_u_rs (descendLeft (.node ll () lr) []).2.length
-          (descendLeft (.node ll () lr) []).1 (descendLeft (.node ll () lr) []).2 r0 le_rfl
+        have hsp := h_splay_u_rs (descendLeft (.node () ll lr) []).2.length
+          (descendLeft (.node () ll lr) []).1 (descendLeft (.node () ll lr) []).2 r0 le_rfl
         simp only [rightSpineLen]
         omega
 
-  have h_rslr_telescoping : ∀ (rest : List CoreOp) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+  have h_rslr_telescoping : ∀ (rest : List CoreOp) (t : _root_.BinaryTree Unit),
       ValidCoreSeqAux t rest →
       pklCountCoreRslr rest ≤ rightSpineLen t + countCorePush rest + countCorePop rest := by
     intro rest
@@ -11660,7 +11662,7 @@ by
     | cons op rest' ih =>
       intro t hval
       rcases op with _ | _ | d
-      · have h1 := ih (.node .empty () t) hval
+      · have h1 := ih (.node () .nil t) hval
         simp only [pklCountCoreRslr, countCorePush, countCorePop, rightSpineLen] at h1 ⊢
         omega
       · obtain ⟨hne, hval'⟩ := hval
@@ -11681,7 +11683,7 @@ by
     | nil => rfl
     | cons op rest ih => rcases op <;> simp [countKeyedRslr, eraseKeyedOp, pklCountCoreRslr, ih]
 
-  have h_cost_jumps : ∀ (rest : List KeyedCoreOp) (nextId step : ℕ) (H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+  have h_cost_jumps : ∀ (rest : List KeyedCoreOp) (nextId step : ℕ) (H : _root_.BinaryTree ℕ),
       coreCascadeCostAux (eraseNatKeys H) (rest.map eraseKeyedOp) ≤
         countCorePop (rest.map eraseKeyedOp) + (jumpsAux nextId step H rest).length := by
     intro rest
@@ -11705,38 +11707,38 @@ by
         rw [h_erase_exec] at h1
         simpa [eraseKeyedOp, coreCascadeCostAux, coreCascadeStepCost, countCorePop, jumpsAux] using h1
 
-  have h_rot_in : ∀ (d : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+  have h_rot_in : ∀ (d : ℕ) (T : _root_.BinaryTree ℕ),
       inorderNat (rotateLeftAtRightDepthNat T d) = inorderNat T :=
     fun d T => (h_rotL_props d T).2.1
 
-  have h_pop_in : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), T ≠ .empty →
+  have h_pop_in : ∀ (T : _root_.BinaryTree ℕ), T ≠ .nil →
       inorderNat T = (leftSpineBottomUpNat T).headD 0 :: inorderNat (popNat T) :=
     fun T hT => (h_pop_props T hT).2.2.2
 
   have h_cd : ∀ (kops : List KeyedCoreOp),
-      pklValidTrace .empty kops →
+      pklValidTrace .nil kops →
       (pushKeys kops).Perm (List.range P) →
       popKeys kops = List.range P →
       ValidKeyedCoreSeq P kops ∧ PrimalJumpLaws P kops := by
     intro kops hk_tr hk_push hk_pop
-    have h_tr_end : ∀ (xs : List KeyedCoreOp) (H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        pklValidTrace H xs → execKeyedList H xs = .empty := by
+    have h_tr_end : ∀ (xs : List KeyedCoreOp) (H : _root_.BinaryTree ℕ),
+        pklValidTrace H xs → execKeyedList H xs = .nil := by
       intro xs
       induction xs with
       | nil => intro H h; exact h
       | cons op rest ih =>
         intro H h
         rcases op with w | s | d
-        · exact ih (.node .empty w H) h
+        · exact ih (.node w .nil H) h
         · exact ih (popNat H) h.2.2
         · exact ih (rotateLeftAtRightDepthNat H d) h.2
 
-    have h_end_empty : keyedState kops kops.length = .empty := by
+    have h_end_empty : keyedState kops kops.length = .nil := by
       unfold keyedState
       rw [List.take_length]
-      exact h_tr_end kops .empty hk_tr
+      exact h_tr_end kops .nil hk_tr
 
-    have h_tr_step : ∀ (xs : List KeyedCoreOp) (H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+    have h_tr_step : ∀ (xs : List KeyedCoreOp) (H : _root_.BinaryTree ℕ),
         pklValidTrace H xs →
         ∀ (t : ℕ) (ht : t < xs.length),
           let Ht := execKeyedList H (xs.take t)
@@ -11744,7 +11746,7 @@ by
           match xs[t] with
           | .push w => inorderNat Ht1 = w :: inorderNat Ht
           | .pop s =>
-              Ht ≠ .empty ∧ (leftSpineBottomUpNat Ht).head? = some s ∧
+              Ht ≠ .nil ∧ (leftSpineBottomUpNat Ht).head? = some s ∧
                 inorderNat Ht = s :: inorderNat Ht1
           | .rslr d =>
               d + 2 ≤ (rightSpineTopDownNat Ht).length ∧ inorderNat Ht1 = inorderNat Ht := by
@@ -11769,7 +11771,7 @@ by
             exact ⟨hd_le, h_rot_in d H⟩
         · have ht' : t' < rest.length := by simp at ht; omega
           rcases op with w | s | d
-          · exact ih (.node .empty w H) htr t' ht'
+          · exact ih (.node w .nil H) htr t' ht'
           · exact ih (popNat H) htr.2.2 t' ht'
           · exact ih (rotateLeftAtRightDepthNat H d) htr.2 t' ht'
 
@@ -11778,13 +11780,13 @@ by
         | .push w =>
             inorderNat (keyedState kops (t + 1)) = w :: inorderNat (keyedState kops t)
         | .pop s =>
-            keyedState kops t ≠ .empty ∧
+            keyedState kops t ≠ .nil ∧
               (leftSpineBottomUpNat (keyedState kops t)).head? = some s ∧
               inorderNat (keyedState kops t) = s :: inorderNat (keyedState kops (t + 1))
         | .rslr d =>
             d + 2 ≤ (rightSpineTopDownNat (keyedState kops t)).length ∧
               inorderNat (keyedState kops (t + 1)) = inorderNat (keyedState kops t) :=
-      h_tr_step kops .empty hk_tr
+      h_tr_step kops .nil hk_tr
 
     have h_mem_pushKeys : ∀ (xs : List KeyedCoreOp) (w : ℕ), w ∈ pushKeys xs ↔ .push w ∈ xs := by
       intro xs w
@@ -12072,12 +12074,12 @@ by
         popIdx kops t ≤ w ∧ w < P :=
       fun t ht => (h_bwd (kops.length - t) t (by omega)).2
 
-    have h_forall_of_inorder : ∀ (p : ℕ → Prop) (B : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        (∀ x ∈ inorderNat B, p x) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p B := by
+    have h_forall_of_inorder : ∀ (p : ℕ → Prop) (B : _root_.BinaryTree ℕ),
+        (∀ x ∈ inorderNat B, p x) → _root_.SplayDeque.Direct.ForallTree p B := by
       intro p B
       induction B with
-      | empty => intro _; exact .left
-      | node l k r ihl ihr =>
+      | nil => intro _; exact .left
+      | node k l r ihl ihr =>
         intro hall
         simp only [inorderNat, List.mem_append, List.mem_singleton] at hall
         exact .node l k r
@@ -12085,12 +12087,12 @@ by
           (hall k (Or.inl (Or.inr rfl)))
           (ihr (fun x hx => hall x (Or.inr hx)))
 
-    have h_bst_of_pw : ∀ B : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ,
-        List.Pairwise (· < ·) (inorderNat B) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST B := by
+    have h_bst_of_pw : ∀ B : _root_.BinaryTree ℕ,
+        List.Pairwise (· < ·) (inorderNat B) → _root_.BinaryTree.IsBST B := by
       intro B
       induction B with
-      | empty => intro _; exact .left
-      | node l k r ihl ihr =>
+      | nil => intro _; exact .left
+      | node k l r ihl ihr =>
         intro hpw
         simp only [inorderNat] at hpw
         obtain ⟨hpw_lk, hpw_r, h_lk_r⟩ := List.pairwise_append.mp hpw
@@ -12100,17 +12102,17 @@ by
         · exact h_forall_of_inorder _ r (fun y hy =>
             h_lk_r k (List.mem_append_right _ (List.mem_singleton_self k)) y hy)
 
-    have h_isBST_state : ∀ t ≤ kops.length, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (keyedState kops t) :=
+    have h_isBST_state : ∀ t ≤ kops.length, _root_.BinaryTree.IsBST (keyedState kops t) :=
       fun t ht => h_bst_of_pw (keyedState kops t) (h_inorder_pw t ht)
 
     have h_step_valid : ∀ t (ht : t < kops.length),
         match kops[t] with
         | .push w =>
             w < P ∧ birthStep kops w = t ∧
-              _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => w < k) (keyedState kops t)
+              _root_.SplayDeque.Direct.ForallTree (fun k => w < k) (keyedState kops t)
         | .pop s =>
             s < P ∧ popStep kops s = t ∧ s = popIdx kops t ∧
-              keyedState kops t ≠ .empty ∧
+              keyedState kops t ≠ .nil ∧
               (leftSpineBottomUpNat (keyedState kops t)).head? = some s
         | .rslr d =>
             d + 2 ≤ (rightSpineTopDownNat (keyedState kops t)).length := by
@@ -12249,17 +12251,17 @@ by
         inorder_strictMono := h_inorder_pw
         step_valid := h_step_valid }
 
-    have h_ls_sublist : ∀ T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ, (leftSpineBottomUpNat T).Sublist (inorderNat T) := by
+    have h_ls_sublist : ∀ T : _root_.BinaryTree ℕ, (leftSpineBottomUpNat T).Sublist (inorderNat T) := by
       intro T
       induction T with
-      | empty => exact .slnil
-      | node l k r ihl _ =>
+      | nil => exact .slnil
+      | node k l r ihl _ =>
         rw [h_ls_node]
         simp only [inorderNat]
         exact (ihl.append (List.Sublist.refl [k])).trans
           (List.sublist_append_left (inorderNat l ++ [k]) (inorderNat r))
 
-    have h_jaux_step_bounds : ∀ (rest : List KeyedCoreOp) (nextId step : ℕ) (H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)
+    have h_jaux_step_bounds : ∀ (rest : List KeyedCoreOp) (nextId step : ℕ) (H : _root_.BinaryTree ℕ)
         (k : ℕ) (hk : k < (jumpsAux nextId step H rest).length),
         step ≤ ((jumpsAux nextId step H rest)[k]).step ∧
           ((jumpsAux nextId step H rest)[k]).step < step + rest.length := by
@@ -12291,7 +12293,7 @@ by
           obtain ⟨h1, h2⟩ := ih nextId (step + 1) (execKeyedOp H (.rslr d)) k hk
           simp only [List.length_cons]; omega
 
-    have h_jaux_slice : ∀ (rest : List KeyedCoreOp) (nextId step : ℕ) (H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)
+    have h_jaux_slice : ∀ (rest : List KeyedCoreOp) (nextId step : ℕ) (H : _root_.BinaryTree ℕ)
         (r : ℕ) (_hr : r < rest.length) (s : ℕ),
         rest[r] = .pop s →
           ∃ baseId,
@@ -12371,7 +12373,7 @@ by
             have heq : step + (r' + 1) = step + 1 + r' := by omega
             rw [heq]; exact h1
 
-    have h_jaux_order : ∀ (rest : List KeyedCoreOp) (nextId step : ℕ) (H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)
+    have h_jaux_order : ∀ (rest : List KeyedCoreOp) (nextId step : ℕ) (H : _root_.BinaryTree ℕ)
         (k1 : ℕ) (hk1 : k1 < (jumpsAux nextId step H rest).length)
         (k2 : ℕ) (hk2 : k2 < (jumpsAux nextId step H rest).length),
         k1 < k2 →
@@ -12422,7 +12424,7 @@ by
                 (k2 - (popJumpsAt nextId step s (leftSpineBottomUpNat H)).length) hk2' (by omega)
         · exact ih nextId (step + 1) (execKeyedOp H (.rslr d)) k1 hk1 k2 hk2 hlt
 
-    have h_jaux_anat : ∀ (rest : List KeyedCoreOp) (nextId step : ℕ) (H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)
+    have h_jaux_anat : ∀ (rest : List KeyedCoreOp) (nextId step : ℕ) (H : _root_.BinaryTree ℕ)
         (k : ℕ) (hk : k < (jumpsAux nextId step H rest).length),
         ∃ (r : ℕ) (hr : r < rest.length),
           ((jumpsAux nextId step H rest)[k]).id = nextId + k ∧
@@ -12536,14 +12538,14 @@ by
     have h_jump_laws : PrimalJumpLaws P kops := by
       refine { pop_step_jumps := ?_, jump_order := ?_, jump_anatomies := ?_ }
       · intro t ht s hop
-        obtain ⟨bId, hb_le, hb_iff⟩ := h_jaux_slice kops 0 0 .empty t ht s hop
+        obtain ⟨bId, hb_le, hb_iff⟩ := h_jaux_slice kops 0 0 .nil t ht s hop
         refine ⟨bId, hb_le, ?_⟩
         intro id hid
         simpa [jumps, keyedState] using hb_iff id hid
       · intro id1 hid1 id2 hid2 hlt
-        exact h_jaux_order kops 0 0 .empty id1 hid1 id2 hid2 hlt
+        exact h_jaux_order kops 0 0 .nil id1 hid1 id2 hid2 hlt
       · intro id hid
-        obtain ⟨r, hr, hid_eq, hst_eq, hop_r, hls_eq, hnx⟩ := h_jaux_anat kops 0 0 .empty id hid
+        obtain ⟨r, hr, hid_eq, hst_eq, hop_r, hls_eq, hnx⟩ := h_jaux_anat kops 0 0 .nil id hid
         simp only [Nat.zero_add] at hid_eq hst_eq
         cases hst_eq
         let e := (jumps kops)[id]
@@ -12603,13 +12605,13 @@ by
     exact ⟨hkvalid, h_jump_laws⟩
 
   obtain ⟨hpush_P, hpop_P, hval_empty⟩ := hvalid
-  have hval_e : ValidCoreSeqAux (eraseNatKeys .empty) ops := hval_empty
-  obtain ⟨hb_map, hb_tr, hb_push, hb_perm⟩ := h_pass1 ops .empty 0 hval_e
+  have hval_e : ValidCoreSeqAux (eraseNatKeys .nil) ops := hval_empty
+  obtain ⟨hb_map, hb_tr, hb_push, hb_perm⟩ := h_pass1 ops .nil 0 hval_e
   rw [hpush_P, ← List.range_eq_range'] at hb_push hb_perm
   simp only [inorderNat, List.nil_append] at hb_perm
-  let popOrder := popKeys (pklBuildBirthOps .empty 0 ops)
+  let popOrder := popKeys (pklBuildBirthOps .nil 0 ops)
   let σ : ℕ → ℕ := fun x => popOrder.idxOf x
-  let bops := pklBuildBirthOps .empty 0 ops
+  let bops := pklBuildBirthOps .nil 0 ops
   let kops := bops.map (pklMapKeyedOp σ)
   have hpo_nd : popOrder.Nodup := (hb_perm.nodup_iff).mp List.nodup_range
   have hpo_len : popOrder.length = P := by
@@ -12620,7 +12622,7 @@ by
     rw [h_nodup_idxOf popOrder hpo_nd, hpo_len]
   have hk_map : kops.map eraseKeyedOp = ops := by
     rw [h_erase_map, hb_map]
-  have hk_tr : pklValidTrace .empty kops := h_trace_map σ bops .empty hb_tr
+  have hk_tr : pklValidTrace .nil kops := h_trace_map σ bops .nil hb_tr
   have hk_pop : popKeys kops = List.range P := by
     rw [h_popKeys_map, hpo_map]
   have hk_push : (pushKeys kops).Perm (List.range P) := by
@@ -12628,11 +12630,11 @@ by
     exact (hb_perm.map σ).trans (by rw [hpo_map])
   have hk_rslr : countKeyedRslr kops ≤ 2 * P := by
     rw [h_count_rslr_erase, hk_map]
-    have ht := h_rslr_telescoping ops .empty hval_empty
+    have ht := h_rslr_telescoping ops .nil hval_empty
     simp only [rightSpineLen, hpush_P, hpop_P] at ht
     omega
   have hk_cost : coreCascadeCost ops ≤ P + (jumps kops).length := by
-    have hc := h_cost_jumps kops 0 0 .empty
+    have hc := h_cost_jumps kops 0 0 .nil
     rw [hk_map, hpop_P] at hc
     exact hc
   obtain ⟨hkvalid, h_jump_laws⟩ := h_cd kops hk_tr hk_push hk_pop
@@ -12648,14 +12650,14 @@ by
 
 
 
-  have h_forall_iff : ∀ (p : ℕ → Prop) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p T ↔ ∀ w ∈ inorderNat T, p w := by
+  have h_forall_iff : ∀ (p : ℕ → Prop) (T : _root_.BinaryTree ℕ),
+      _root_.SplayDeque.Direct.ForallTree p T ↔ ∀ w ∈ inorderNat T, p w := by
     intro p T
     induction T with
-    | empty =>
+    | nil =>
       simp only [inorderNat, List.not_mem_nil, false_implies, implies_true, iff_true]
       exact .left
-    | node l k r ihl ihr =>
+    | node k l r ihl ihr =>
       constructor
       · intro hft w hw
         cases hft with
@@ -12671,28 +12673,28 @@ by
         · simp [inorderNat]
         · simp [inorderNat, hw]
 
-  have h_ls_aux : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List ℕ),
+  have h_ls_aux : ∀ (T : _root_.BinaryTree ℕ) (acc : List ℕ),
       leftSpineBottomUpAux T acc = leftSpineBottomUpAux T [] ++ acc := by
     intro T
     induction T with
-    | empty => intro acc; rfl
-    | node l k r ihl _ =>
+    | nil => intro acc; rfl
+    | node k l r ihl _ =>
       intro acc
       simp only [leftSpineBottomUpAux]
       rw [ihl (k :: acc), ihl [k], List.append_assoc]
       rfl
 
-  have h_ls_node : ∀ (l : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ) (r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      leftSpineBottomUpNat (.node l k r) = leftSpineBottomUpNat l ++ [k] := by
+  have h_ls_node : ∀ (l : _root_.BinaryTree ℕ) (k : ℕ) (r : _root_.BinaryTree ℕ),
+      leftSpineBottomUpNat (.node k l r) = leftSpineBottomUpNat l ++ [k] := by
     intro l k r
     exact h_ls_aux l [k]
 
-  have h_ls_mem_inorder : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (u : ℕ),
+  have h_ls_mem_inorder : ∀ (T : _root_.BinaryTree ℕ) (u : ℕ),
       u ∈ leftSpineBottomUpNat T → u ∈ inorderNat T := by
     intro T
     induction T with
-    | empty => intro u hu; nomatch hu
-    | node l k r ihl _ =>
+    | nil => intro u hu; nomatch hu
+    | node k l r ihl _ =>
       intro u hu
       rw [h_ls_node] at hu
       simp only [List.mem_append, List.mem_singleton] at hu
@@ -12701,47 +12703,47 @@ by
       · exact Or.inl (Or.inl (ihl u hu))
       · exact Or.inl (Or.inr rfl)
 
-  have h_foldRightSpine_eq_attach : ∀ (r acc : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ),
+  have h_foldRightSpine_eq_attach : ∀ (r acc : _root_.BinaryTree ℕ) (k : ℕ),
       foldRightSpine acc k r = twAttachPoly acc (fdmRightSpineFrames k r) := by
     intro r
     induction r with
-    | empty => intro acc k; rfl
-    | node l2 k2 r2 _ ihr =>
+    | nil => intro acc k; rfl
+    | node k2 l2 r2 _ ihr =>
       intro acc k
-      exact ihr (.node acc k l2) k2
+      exact ihr (.node k acc l2) k2
 
-  have h_fdFrames_fst : ∀ (r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ),
+  have h_fdFrames_fst : ∀ (r : _root_.BinaryTree ℕ) (k : ℕ),
       (fdmRightSpineFrames k r).map Prod.fst = k :: rightSpineTopDownNat r := by
     intro r
     induction r with
-    | empty => intro k; rfl
-    | node l2 k2 r2 _ ihr =>
+    | nil => intro k; rfl
+    | node k2 l2 r2 _ ihr =>
       intro k
       simp only [fdmRightSpineFrames, List.map_cons, rightSpineTopDownNat, ihr k2]
 
-  have h_foldRightSpine_spec : ∀ (r acc : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST acc → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST r →
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (· < k) acc → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (k < ·) r →
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (foldRightSpine acc k r) ∧
+  have h_foldRightSpine_spec : ∀ (r acc : _root_.BinaryTree ℕ) (k : ℕ),
+      _root_.BinaryTree.IsBST acc → _root_.BinaryTree.IsBST r →
+      _root_.SplayDeque.Direct.ForallTree (· < k) acc → _root_.SplayDeque.Direct.ForallTree (k < ·) r →
+      _root_.BinaryTree.IsBST (foldRightSpine acc k r) ∧
       inorderNat (foldRightSpine acc k r) = inorderNat acc ++ [k] ++ inorderNat r ∧
       leftSpineBottomUpNat (foldRightSpine acc k r) =
         leftSpineBottomUpNat acc ++ [k] ++ rightSpineTopDownNat r := by
     intro r
     induction r with
-    | empty =>
+    | nil =>
       intro acc k hbst_acc _ hlt_acc _
-      refine ⟨.node k acc .empty hlt_acc .left hbst_acc .left, ?_, ?_⟩
+      refine ⟨.node k acc .nil hlt_acc .left hbst_acc .left, ?_, ?_⟩
       · simp [foldRightSpine, inorderNat]
       · simp [foldRightSpine, rightSpineTopDownNat, h_ls_node]
-    | node l2 k2 r2 _ ihr =>
+    | node k2 l2 r2 _ ihr =>
       intro acc k hbst_acc hbst_r hlt_acc hgt_r
-      cases hbst_r with
+      cases hbst_r using isBSTCases with
       | node _ _ _ hl2_lt hr2_gt hbst_l2 hbst_r2 =>
         cases hgt_r with
         | node _ _ _ hl2_gt hk_lt_k2 _ =>
-          have hbst_acc' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node acc k l2) :=
+          have hbst_acc' : _root_.BinaryTree.IsBST (.node k acc l2) :=
             .node k acc l2 hlt_acc hl2_gt hbst_acc hbst_l2
-          have hlt_acc' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (· < k2) (.node acc k l2) := by
+          have hlt_acc' : _root_.SplayDeque.Direct.ForallTree (· < k2) (.node k acc l2) := by
             rw [h_forall_iff] at hlt_acc hl2_lt ⊢
             intro w hw
             simp only [inorderNat, List.mem_append, List.mem_singleton] at hw
@@ -12749,7 +12751,7 @@ by
             · exact lt_trans (hlt_acc w hw) hk_lt_k2
             · exact hk_lt_k2
             · exact hl2_lt w hw
-          obtain ⟨h1, h2, h3⟩ := ihr (.node acc k l2) k2 hbst_acc' hbst_r2 hlt_acc' hr2_gt
+          obtain ⟨h1, h2, h3⟩ := ihr (.node k acc l2) k2 hbst_acc' hbst_r2 hlt_acc' hr2_gt
           refine ⟨h1, ?_, ?_⟩
           · simp only [foldRightSpine, inorderNat] at h2 ⊢
             rw [h2]
@@ -12758,12 +12760,12 @@ by
             rw [h3, h_ls_node]
             simp
 
-  have h_lcrs_absent : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (curP v : ℕ),
+  have h_lcrs_absent : ∀ (T : _root_.BinaryTree ℕ) (curP v : ℕ),
       v ∉ inorderNat T → lcrsParentAux P curP v T = P := by
     intro T
     induction T with
-    | empty => intro curP v _; rfl
-    | node l k r ihl ihr =>
+    | nil => intro curP v _; rfl
+    | node k l r ihl ihr =>
       intro curP v hv
       simp only [inorderNat, List.mem_append, List.mem_singleton, not_or] at hv
       obtain ⟨⟨hvl, hvk⟩, hvr⟩ := hv
@@ -12773,16 +12775,16 @@ by
       · exact ihr curP v hvr
       · omega
 
-  have h_lcrs_bounds_aux : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (curP v : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T → (∀ w ∈ inorderNat T, w < curP) → curP ≤ P → v ∈ inorderNat T →
+  have h_lcrs_bounds_aux : ∀ (T : _root_.BinaryTree ℕ) (curP v : ℕ),
+      _root_.BinaryTree.IsBST T → (∀ w ∈ inorderNat T, w < curP) → curP ≤ P → v ∈ inorderNat T →
       v < lcrsParentAux P curP v T ∧ lcrsParentAux P curP v T ≤ curP ∧
         (lcrsParentAux P curP v T = curP ∨ lcrsParentAux P curP v T ∈ inorderNat T) := by
     intro T
     induction T with
-    | empty => intro _ _ _ _ _ hv; nomatch hv
-    | node l k r ihl ihr =>
+    | nil => intro _ _ _ _ _ hv; nomatch hv
+    | node k l r ihl ihr =>
       intro curP v hbst hall hcurP hv
-      cases hbst with
+      cases hbst using isBSTCases with
       | node _ _ _ hl_lt hr_gt hbst_l hbst_r =>
         rw [h_forall_iff] at hl_lt hr_gt
         have hk_lt : k < curP := hall k (by simp [inorderNat])
@@ -12816,16 +12818,16 @@ by
           subst hvk
           exact ⟨hk_lt, le_rfl, Or.inl rfl⟩
 
-  have h_lcrs_le_ls_aux : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (curP x u : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T → x ∈ inorderNat T → x < u →
+  have h_lcrs_le_ls_aux : ∀ (T : _root_.BinaryTree ℕ) (curP x u : ℕ),
+      _root_.BinaryTree.IsBST T → x ∈ inorderNat T → x < u →
       (u ∈ leftSpineBottomUpNat T ∨ (curP ≤ u ∧ ∀ w ∈ inorderNat T, w < curP)) →
       lcrsParentAux P curP x T ≤ u := by
     intro T
     induction T with
-    | empty => intro _ _ _ _ hx _ _; nomatch hx
-    | node l k r ihl ihr =>
+    | nil => intro _ _ _ _ hx _ _; nomatch hx
+    | node k l r ihl ihr =>
       intro curP x u hbst hx hxu hcond
-      cases hbst with
+      cases hbst using isBSTCases with
       | node _ _ _ hl_lt hr_gt hbst_l hbst_r =>
         rw [h_forall_iff] at hl_lt hr_gt
         simp only [inorderNat, List.mem_append, List.mem_singleton] at hx
@@ -12867,11 +12869,11 @@ by
               (Or.inr ⟨hcurP_le, fun w hw => hall w (by simp [inorderNat, hw])⟩)
           · exact hcurP_le
 
-  have hs1 : ∀ H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST H →
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (foldBST P H).1 ∧
+  have hs1 : ∀ H : _root_.BinaryTree ℕ, _root_.BinaryTree.IsBST H →
+      _root_.BinaryTree.IsBST (foldBST P H).1 ∧
       inorderNat (foldBST P H).1 = inorderNat H ∧
-      ((H = .empty ∧ (foldBST P H).2 = P) ∨
-        (H ≠ .empty ∧ (rightSpineTopDownNat H).head? = some (foldBST P H).2 ∧
+      ((H = .nil ∧ (foldBST P H).2 = P) ∨
+        (H ≠ .nil ∧ (rightSpineTopDownNat H).head? = some (foldBST P H).2 ∧
           (leftSpineBottomUpNat H).getLast? = some (foldBST P H).2)) ∧
       leftSpineBottomUpNat (foldBST P H).1 =
         leftSpineBottomUpNat H ++ (rightSpineTopDownNat H).tail ∧
@@ -12885,17 +12887,17 @@ by
       (∀ x u : ℕ, x ∈ inorderNat H → u ∈ leftSpineBottomUpNat (foldBST P H).1 → x < u →
         lcrsParent P (foldBST P H).1 x ≤ u) := by
     intro H hbst
-    have h_main : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (foldBST P H).1 ∧
+    have h_main : _root_.BinaryTree.IsBST (foldBST P H).1 ∧
         inorderNat (foldBST P H).1 = inorderNat H ∧
-        ((H = .empty ∧ (foldBST P H).2 = P) ∨
-          (H ≠ .empty ∧ (rightSpineTopDownNat H).head? = some (foldBST P H).2 ∧
+        ((H = .nil ∧ (foldBST P H).2 = P) ∨
+          (H ≠ .nil ∧ (rightSpineTopDownNat H).head? = some (foldBST P H).2 ∧
             (leftSpineBottomUpNat H).getLast? = some (foldBST P H).2)) ∧
         leftSpineBottomUpNat (foldBST P H).1 =
           leftSpineBottomUpNat H ++ (rightSpineTopDownNat H).tail := by
-      cases hbst with
+      cases hbst using isBSTCases with
       | left =>
         simp [foldBST, inorderNat, leftSpineBottomUpNat, leftSpineBottomUpAux, rightSpineTopDownNat,
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST.left]
+          _root_.BinaryTree.IsBST.left]
       | node b0 l0 r0 hl0 hr0 hbst_l0 hbst_r0 =>
         obtain ⟨hfb, hfi, hfls⟩ := h_foldRightSpine_spec r0 l0 b0 hbst_l0 hbst_r0 hl0 hr0
         refine ⟨hfb, hfi, Or.inr ⟨by simp, rfl, ?_⟩, ?_⟩
@@ -12919,52 +12921,52 @@ by
 
 
 
-  have h_attach_append : ∀ (p1 p2 : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+  have h_attach_append : ∀ (p1 p2 : List (ℕ × _root_.BinaryTree ℕ)) (u : _root_.BinaryTree ℕ),
       twAttachPoly u (p1 ++ p2) = twAttachPoly (twAttachPoly u p1) p2 := by
     intro p1
     induction p1 with
     | nil => intro p2 u; rfl
-    | cons kr rest ih => intro p2 u; exact ih p2 (.node u kr.1 kr.2)
+    | cons kr rest ih => intro p2 u; exact ih p2 (.node kr.1 u kr.2)
 
-  have h_attach_ls : ∀ (F : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+  have h_attach_ls : ∀ (F : List (ℕ × _root_.BinaryTree ℕ)) (u : _root_.BinaryTree ℕ),
       leftSpineBottomUpNat (twAttachPoly u F) = leftSpineBottomUpNat u ++ F.map Prod.fst := by
     intro F
     induction F with
     | nil => intro u; simp [twAttachPoly]
     | cons kr rest ih =>
       intro u
-      simp only [twAttachPoly, ih (.node u kr.1 kr.2), h_ls_node, List.map_cons,
+      simp only [twAttachPoly, ih (.node kr.1 u kr.2), h_ls_node, List.map_cons,
         List.append_assoc, List.singleton_append]
 
-  have h_attach_bst_bot : ∀ (F : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (twAttachPoly u F) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST u := by
+  have h_attach_bst_bot : ∀ (F : List (ℕ × _root_.BinaryTree ℕ)) (u : _root_.BinaryTree ℕ),
+      _root_.BinaryTree.IsBST (twAttachPoly u F) → _root_.BinaryTree.IsBST u := by
     intro F
     induction F with
     | nil => intro u h; exact h
     | cons kr rest ih =>
       intro u h
-      have h1 := ih (.node u kr.1 kr.2) h
-      cases h1 with
+      have h1 := ih (.node kr.1 u kr.2) h
+      cases h1 using isBSTCases with
       | node _ _ _ _ _ hu _ => exact hu
 
-  have h_attach_bst_replace : ∀ (F : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (u u' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (twAttachPoly u F) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST u' →
+  have h_attach_bst_replace : ∀ (F : List (ℕ × _root_.BinaryTree ℕ)) (u u' : _root_.BinaryTree ℕ),
+      _root_.BinaryTree.IsBST (twAttachPoly u F) → _root_.BinaryTree.IsBST u' →
       (∀ w ∈ inorderNat u', w ∈ inorderNat u) →
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (twAttachPoly u' F) := by
+      _root_.BinaryTree.IsBST (twAttachPoly u' F) := by
     intro F
     induction F with
     | nil => intro _ _ _ hu' _; exact hu'
     | cons kr rest ih =>
       intro u u' h hu' hsub
-      have hnode := h_attach_bst_bot rest (.node u kr.1 kr.2) h
-      cases hnode with
+      have hnode := h_attach_bst_bot rest (.node kr.1 u kr.2) h
+      cases hnode using isBSTCases with
       | node _ _ _ hlt hgt _ hr_bst =>
-        have hlt' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (· < kr.1) u' := by
+        have hlt' : _root_.SplayDeque.Direct.ForallTree (· < kr.1) u' := by
           rw [h_forall_iff] at hlt ⊢
           exact fun w hw => hlt w (hsub w hw)
-        have hnode' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node u' kr.1 kr.2) :=
+        have hnode' : _root_.BinaryTree.IsBST (.node kr.1 u' kr.2) :=
           .node kr.1 u' kr.2 hlt' hgt hu' hr_bst
-        refine ih (.node u kr.1 kr.2) (.node u' kr.1 kr.2) h hnode' ?_
+        refine ih (.node kr.1 u kr.2) (.node kr.1 u' kr.2) h hnode' ?_
         intro w hw
         simp only [inorderNat, List.mem_append, List.mem_singleton] at hw ⊢
         rcases hw with (hw | rfl) | hw
@@ -12972,56 +12974,56 @@ by
         · exact Or.inl (Or.inr rfl)
         · exact Or.inr hw
 
-  have h_attach_keys_gt : ∀ (F : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (twAttachPoly u F) →
+  have h_attach_keys_gt : ∀ (F : List (ℕ × _root_.BinaryTree ℕ)) (u : _root_.BinaryTree ℕ),
+      _root_.BinaryTree.IsBST (twAttachPoly u F) →
       ∀ w ∈ inorderNat u, ∀ k ∈ F.map Prod.fst, w < k := by
     intro F
     induction F with
     | nil => intro _ _ _ _ _ hk; nomatch hk
     | cons kr rest ih =>
       intro u h w hw k hk
-      have hnode := h_attach_bst_bot rest (.node u kr.1 kr.2) h
-      cases hnode with
+      have hnode := h_attach_bst_bot rest (.node kr.1 u kr.2) h
+      cases hnode using isBSTCases with
       | node _ _ _ hlt _ _ _ =>
         rw [h_forall_iff] at hlt
         simp only [List.map_cons, List.mem_cons] at hk
         rcases hk with rfl | hk
         · exact hlt w hw
-        · exact ih (.node u kr.1 kr.2) h w (by simp [inorderNat, hw]) k hk
+        · exact ih (.node kr.1 u kr.2) h w (by simp [inorderNat, hw]) k hk
 
-  have h_splice_attach : ∀ (F : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      u ≠ .empty → spliceMinNat (twAttachPoly u F) = twAttachPoly (spliceMinNat u) F := by
+  have h_splice_attach : ∀ (F : List (ℕ × _root_.BinaryTree ℕ)) (u : _root_.BinaryTree ℕ),
+      u ≠ .nil → spliceMinNat (twAttachPoly u F) = twAttachPoly (spliceMinNat u) F := by
     intro F
     induction F with
     | nil => intro _ _; rfl
     | cons kr rest ih =>
       intro u hu
-      rcases u with _ | ⟨ul, uk, ur⟩
+      rcases u with _ | ⟨uk, ul, ur⟩
       · exact absurd rfl hu
       · simp only [twAttachPoly]
-        rw [ih (.node (.node ul uk ur) kr.1 kr.2) (by simp)]
+        rw [ih (.node kr.1 (.node uk ul ur) kr.2) (by simp)]
         simp [spliceMinNat]
 
-  have h_rotR_attach : ∀ (F : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (a b : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (u_key x : ℕ),
-      u_key < x → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (twAttachPoly (.node a x b) F) →
-      rotateRightOnLeftSpine u_key (twAttachPoly (.node a x b) F) =
-        twAttachPoly (rotateRightOnLeftSpine u_key (.node a x b)) F := by
+  have h_rotR_attach : ∀ (F : List (ℕ × _root_.BinaryTree ℕ)) (a b : _root_.BinaryTree ℕ) (u_key x : ℕ),
+      u_key < x → _root_.BinaryTree.IsBST (twAttachPoly (.node x a b) F) →
+      rotateRightOnLeftSpine u_key (twAttachPoly (.node x a b) F) =
+        twAttachPoly (rotateRightOnLeftSpine u_key (.node x a b)) F := by
     intro F
     induction F with
     | nil => intro _ _ _ _ _ _; rfl
     | cons kr rest ih =>
       intro a b u_key x hux hbst
-      have hnode := h_attach_bst_bot rest (.node (.node a x b) kr.1 kr.2) hbst
-      cases hnode with
+      have hnode := h_attach_bst_bot rest (.node kr.1 (.node x a b) kr.2) hbst
+      cases hnode using isBSTCases with
       | node _ _ _ hlt _ _ _ =>
         rw [h_forall_iff] at hlt
         have hx_lt_k : x < kr.1 := hlt x (by simp [inorderNat])
         simp only [twAttachPoly]
-        rw [ih (.node a x b) kr.2 u_key kr.1 (lt_trans hux hx_lt_k) hbst]
+        rw [ih (.node x a b) kr.2 u_key kr.1 (lt_trans hux hx_lt_k) hbst]
         have hne : x ≠ u_key := by omega
         simp only [rotateRightOnLeftSpine, if_neg hne]
 
-  have h_lcrs_attach_congr : ∀ (F : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (T1 T2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (curP v : ℕ),
+  have h_lcrs_attach_congr : ∀ (F : List (ℕ × _root_.BinaryTree ℕ)) (T1 T2 : _root_.BinaryTree ℕ) (curP v : ℕ),
       (∀ c, lcrsParentAux P c v T1 = lcrsParentAux P c v T2) →
       lcrsParentAux P curP v (twAttachPoly T1 F) = lcrsParentAux P curP v (twAttachPoly T2 F) := by
     intro F
@@ -13029,15 +13031,15 @@ by
     | nil => intro T1 T2 curP v h; exact h curP
     | cons kr rest ih =>
       intro T1 T2 curP v h
-      refine ih (.node T1 kr.1 kr.2) (.node T2 kr.1 kr.2) curP v (fun c => ?_)
+      refine ih (.node kr.1 T1 kr.2) (.node kr.1 T2 kr.2) curP v (fun c => ?_)
       simp only [lcrsParentAux]
       split_ifs
       · exact h kr.1
       · rfl
       · rfl
 
-  have h_lcrs_attach_lt : ∀ (rest : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (T r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k curP v : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (twAttachPoly (.node T k r) rest) → v < k →
+  have h_lcrs_attach_lt : ∀ (rest : List (ℕ × _root_.BinaryTree ℕ)) (T r : _root_.BinaryTree ℕ) (k curP v : ℕ),
+      _root_.BinaryTree.IsBST (twAttachPoly (.node k T r) rest) → v < k →
       lcrsParentAux P curP v (twAttachPoly T ((k, r) :: rest)) = lcrsParentAux P k v T := by
     intro rest
     induction rest with
@@ -13047,36 +13049,36 @@ by
     | cons kr2 rest2 ih =>
       rcases kr2 with ⟨k2, r2⟩
       intro T r k curP v hbst hvk
-      have hnode := h_attach_bst_bot rest2 (.node (.node T k r) k2 r2) hbst
-      cases hnode with
+      have hnode := h_attach_bst_bot rest2 (.node k2 (.node k T r) r2) hbst
+      cases hnode using isBSTCases with
       | node _ _ _ hlt _ _ _ =>
         rw [h_forall_iff] at hlt
         have hk_lt : k < k2 := hlt k (by simp [inorderNat])
-        change lcrsParentAux P curP v (twAttachPoly (.node T k r) ((k2, r2) :: rest2)) =
+        change lcrsParentAux P curP v (twAttachPoly (.node k T r) ((k2, r2) :: rest2)) =
           lcrsParentAux P k v T
-        rw [ih (.node T k r) r2 k2 curP v hbst (lt_trans hvk hk_lt)]
+        rw [ih (.node k T r) r2 k2 curP v hbst (lt_trans hvk hk_lt)]
         simp only [lcrsParentAux, if_pos hvk]
 
-  have h_lcrs_foldRightSpine_lt : ∀ (r T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k curP v : ℕ),
-      v < k → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (v < ·) r →
+  have h_lcrs_foldRightSpine_lt : ∀ (r T : _root_.BinaryTree ℕ) (k curP v : ℕ),
+      v < k → _root_.SplayDeque.Direct.ForallTree (v < ·) r →
       lcrsParentAux P curP v (foldRightSpine T k r) = lcrsParentAux P k v T := by
     intro r
     induction r with
-    | empty =>
+    | nil =>
       intro T k curP v hvk _
       simp only [foldRightSpine, lcrsParentAux, if_pos hvk]
-    | node l2 k2 r2 _ ihr =>
+    | node k2 l2 r2 _ ihr =>
       intro T k curP v hvk hvr
       cases hvr with
       | node _ _ _ _ hvk2 hvr2 =>
         simp only [foldRightSpine]
-        rw [ihr (.node T k l2) k2 curP v hvk2 hvr2]
+        rw [ihr (.node k T l2) k2 curP v hvk2 hvr2]
         simp only [lcrsParentAux, if_pos hvk]
 
-  have h_lcrs_rot_local : ∀ (a b d : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (u p c w : ℕ),
+  have h_lcrs_rot_local : ∀ (a b d : _root_.BinaryTree ℕ) (u p c w : ℕ),
       u < p → w ≠ u →
-      lcrsParentAux P c w (.node a u (.node b p d)) =
-        lcrsParentAux P c w (.node (.node a u b) p d) := by
+      lcrsParentAux P c w (.node u a (.node p b d)) =
+        lcrsParentAux P c w (.node p (.node u a b) d) := by
     intro a b d u p c w hup hwu
     by_cases h1 : w < u
     · have h2 : w < p := lt_trans h1 hup
@@ -13092,31 +13094,31 @@ by
           have hnp : ¬ w < w := Nat.lt_irrefl w
           simp only [lcrsParentAux, if_neg hnu, if_pos hup, if_neg hnp]
 
-  have h_insertPush_foldRightSpine : ∀ (r T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (b0 w k : ℕ),
-      b0 < k → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (b0 < ·) r →
+  have h_insertPush_foldRightSpine : ∀ (r T : _root_.BinaryTree ℕ) (b0 w k : ℕ),
+      b0 < k → _root_.SplayDeque.Direct.ForallTree (b0 < ·) r →
       insertPushFolded b0 w (foldRightSpine T k r) = foldRightSpine (insertPushFolded b0 w T) k r := by
     intro r
     induction r with
-    | empty =>
+    | nil =>
       intro T b0 w k hbk _
       have hne : k ≠ b0 := by omega
       simp only [foldRightSpine, insertPushFolded, if_neg hne]
-    | node l2 k2 r2 _ ihr =>
+    | node k2 l2 r2 _ ihr =>
       intro T b0 w k hbk hgt
       cases hgt with
       | node _ _ _ _ hbk2 hr2 =>
         have hne : k ≠ b0 := by omega
         simp only [foldRightSpine]
-        rw [ihr (.node T k l2) b0 w k2 hbk2 hr2]
+        rw [ihr (.node k T l2) b0 w k2 hbk2 hr2]
         simp only [insertPushFolded, if_neg hne]
 
-  have hs2 : ∀ H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST H →
-      (∀ w : ℕ, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => w < k) H →
-        (foldBST P (.node .empty w H)).1 =
+  have hs2 : ∀ H : _root_.BinaryTree ℕ, _root_.BinaryTree.IsBST H →
+      (∀ w : ℕ, _root_.SplayDeque.Direct.ForallTree (fun k => w < k) H →
+        (foldBST P (.node w .nil H)).1 =
           insertPushFolded (foldBST P H).2 w (foldBST P H).1 ∧
-        lcrsParent P (foldBST P (.node .empty w H)).1 w = (foldBST P H).2 ∧
+        lcrsParent P (foldBST P (.node w .nil H)).1 w = (foldBST P H).2 ∧
         ∀ v : ℕ, v ≠ w →
-          lcrsParent P (foldBST P (.node .empty w H)).1 v = lcrsParent P (foldBST P H).1 v) ∧
+          lcrsParent P (foldBST P (.node w .nil H)).1 v = lcrsParent P (foldBST P H).1 v) ∧
       (2 ≤ (rightSpineTopDownNat H).length →
         (foldBST P (rotateLeftAtRightDepthNat H 0)).1 = (foldBST P H).1) ∧
       (∀ d : ℕ, d + 3 ≤ (rightSpineTopDownNat H).length →
@@ -13135,7 +13137,7 @@ by
     intro H hbst
     refine ⟨?_, ?_, ?_⟩
     · intro w hw_lt
-      cases hbst with
+      cases hbst using isBSTCases with
       | left =>
         refine ⟨rfl, ?_, ?_⟩
         · simp [foldBST, foldRightSpine, lcrsParent, lcrsParentAux]
@@ -13149,21 +13151,21 @@ by
         cases hw_lt with
         | node _ _ _ hwl0 hwb0 hwr0 =>
           refine ⟨?_, ?_, ?_⟩
-          · rcases r0 with _ | ⟨l2, k2, r2⟩
+          · rcases r0 with _ | ⟨k2, l2, r2⟩
             · simp [foldBST, foldRightSpine, insertPushFolded]
             · cases hr0 with
               | node _ _ _ _ hb0_k2 hr2 =>
                 simp only [foldBST, foldRightSpine]
-                rw [h_insertPush_foldRightSpine r2 (.node l0 b0 l2) b0 w k2 hb0_k2 hr2]
+                rw [h_insertPush_foldRightSpine r2 (.node b0 l0 l2) b0 w k2 hb0_k2 hr2]
                 simp [insertPushFolded]
-          · change lcrsParentAux P P w (foldRightSpine (.node .empty w l0) b0 r0) = b0
-            rw [h_lcrs_foldRightSpine_lt r0 (.node .empty w l0) b0 P w hwb0 hwr0]
+          · change lcrsParentAux P P w (foldRightSpine (.node w .nil l0) b0 r0) = b0
+            rw [h_lcrs_foldRightSpine_lt r0 (.node w .nil l0) b0 P w hwb0 hwr0]
             simp [lcrsParentAux]
           · intro v hvw
-            change lcrsParentAux P P v (foldRightSpine (.node .empty w l0) b0 r0) =
+            change lcrsParentAux P P v (foldRightSpine (.node w .nil l0) b0 r0) =
               lcrsParentAux P P v (foldRightSpine l0 b0 r0)
             rw [h_foldRightSpine_eq_attach, h_foldRightSpine_eq_attach]
-            refine h_lcrs_attach_congr (fdmRightSpineFrames b0 r0) (.node .empty w l0) l0 P v (fun c => ?_)
+            refine h_lcrs_attach_congr (fdmRightSpineFrames b0 r0) (.node w .nil l0) l0 P v (fun c => ?_)
             by_cases h1 : v < w
             · have hv_not : v ∉ inorderNat l0 := by
                 rw [h_forall_iff] at hwl0
@@ -13176,18 +13178,18 @@ by
               have hnw : ¬ v < w := h1
               simp only [lcrsParentAux, if_neg hnw, if_pos hwv]
     · intro hlen
-      rcases H with _ | ⟨a, b0, _ | ⟨b, k1, c⟩⟩
+      rcases H with _ | ⟨b0, a, _ | ⟨k1, b, c⟩⟩
       · simp [rightSpineTopDownNat] at hlen
       · simp [rightSpineTopDownNat] at hlen
       · rfl
-    · have h_rslr_ind : ∀ (d : ℕ) (acc r0 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k0 : ℕ),
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node acc k0 r0) →
-          d + 3 ≤ (rightSpineTopDownNat (.node acc k0 r0)).length →
-          let rs := rightSpineTopDownNat (.node acc k0 r0)
+    · have h_rslr_ind : ∀ (d : ℕ) (acc r0 : _root_.BinaryTree ℕ) (k0 : ℕ),
+          _root_.BinaryTree.IsBST (.node k0 acc r0) →
+          d + 3 ≤ (rightSpineTopDownNat (.node k0 acc r0)).length →
+          let rs := rightSpineTopDownNat (.node k0 acc r0)
           let u := rs.getD d 0
           let p := rs.getD (d + 1) 0
-          u ∈ inorderNat (.node acc k0 r0) ∧
-          p ∈ inorderNat (.node acc k0 r0) ∧
+          u ∈ inorderNat (.node k0 acc r0) ∧
+          p ∈ inorderNat (.node k0 acc r0) ∧
           u < p ∧
           foldRightSpine acc k0 (rotateLeftAtRightDepthNat r0 d) =
             rotateRightOnLeftSpine u (foldRightSpine acc k0 r0) ∧
@@ -13201,23 +13203,23 @@ by
         induction d with
         | zero =>
           intro acc r0 u hbst0 hlen0
-          rcases r0 with _ | ⟨b, p, _ | ⟨cl, q, cr⟩⟩
+          rcases r0 with _ | ⟨p, b, _ | ⟨q, cl, cr⟩⟩
           · simp [rightSpineTopDownNat] at hlen0
           · simp [rightSpineTopDownNat] at hlen0
-          · cases hbst0 with
+          · cases hbst0 using isBSTCases with
             | node _ _ _ hacc_lt hr0_gt hbst_acc hbst_r0 =>
-              cases hbst_r0 with
+              cases hbst_r0 using isBSTCases with
               | node _ _ _ hb_lt hr1_gt hbst_b hbst_r1 =>
                 cases hr0_gt with
                 | node _ _ _ hb_gt_u hup hcr_gt_u_all =>
-                  cases hbst_r1 with
+                  cases hbst_r1 using isBSTCases with
                   | node _ _ _ hcl_lt hcr_gt hbst_cl hbst_cr =>
                     cases hr1_gt with
                     | node _ _ _ hcl_gt_p hpq hcr_gt_p =>
                       cases hcr_gt_u_all with
                       | node _ _ _ _ huq hcr_gt_u =>
-                        have hbst_pre_base : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node (.node acc u b) p cl) := by
-                          refine .node p (.node acc u b) cl ?_ hcl_gt_p
+                        have hbst_pre_base : _root_.BinaryTree.IsBST (.node p (.node u acc b) cl) := by
+                          refine .node p (.node u acc b) cl ?_ hcl_gt_p
                             (.node u acc b hacc_lt hb_gt_u hbst_acc hbst_b) hbst_cl
                           rw [h_forall_iff] at hacc_lt hb_lt ⊢
                           intro w hw
@@ -13226,7 +13228,7 @@ by
                           · exact lt_trans (hacc_lt w hw) hup
                           · exact hup
                           · exact hb_lt w hw
-                        have hlt_pre_q : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (· < q) (.node (.node acc u b) p cl) := by
+                        have hlt_pre_q : _root_.SplayDeque.Direct.ForallTree (· < q) (.node p (.node u acc b) cl) := by
                           rw [h_forall_iff] at hacc_lt hb_lt hcl_lt ⊢
                           intro w hw
                           simp only [inorderNat, List.mem_append, List.mem_singleton] at hw
@@ -13236,53 +13238,53 @@ by
                           · exact lt_trans (hb_lt w hw) hpq
                           · exact hpq
                           · exact hcl_lt w hw
-                        have hbst_pre : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST
-                            (foldRightSpine (.node (.node acc u b) p cl) q cr) :=
-                          (h_foldRightSpine_spec cr (.node (.node acc u b) p cl) q
+                        have hbst_pre : _root_.BinaryTree.IsBST
+                            (foldRightSpine (.node p (.node u acc b) cl) q cr) :=
+                          (h_foldRightSpine_spec cr (.node p (.node u acc b) cl) q
                             hbst_pre_base hbst_cr hlt_pre_q hcr_gt).1
                         refine ⟨by simp [rightSpineTopDownNat, inorderNat],
                           by simp [rightSpineTopDownNat, inorderNat],
                           by simpa [rightSpineTopDownNat] using hup, ?_, ?_, ?_, ?_⟩
-                        · change foldRightSpine (.node acc u (.node b p cl)) q cr =
+                        · change foldRightSpine (.node u acc (.node p b cl)) q cr =
                             rotateRightOnLeftSpine u
-                              (foldRightSpine (.node (.node acc u b) p cl) q cr)
+                              (foldRightSpine (.node p (.node u acc b) cl) q cr)
                           rw [h_foldRightSpine_eq_attach] at hbst_pre ⊢
                           rw [h_foldRightSpine_eq_attach]
-                          rw [h_rotR_attach (fdmRightSpineFrames q cr) (.node acc u b) cl u p hup hbst_pre]
+                          rw [h_rotR_attach (fdmRightSpineFrames q cr) (.node u acc b) cl u p hup hbst_pre]
                           simp [rotateRightOnLeftSpine]
                         · change lcrsParentAux P P u
-                            (foldRightSpine (.node (.node acc u b) p cl) q cr) = p
-                          rw [h_lcrs_foldRightSpine_lt cr (.node (.node acc u b) p cl) q P u huq hcr_gt_u]
+                            (foldRightSpine (.node p (.node u acc b) cl) q cr) = p
+                          rw [h_lcrs_foldRightSpine_lt cr (.node p (.node u acc b) cl) q P u huq hcr_gt_u]
                           simp [lcrsParentAux, hup]
                         · change lcrsParentAux P P u
-                            (foldRightSpine (.node acc u (.node b p cl)) q cr) =
+                            (foldRightSpine (.node u acc (.node p b cl)) q cr) =
                             lcrsParentAux P P p
-                              (foldRightSpine (.node (.node acc u b) p cl) q cr)
-                          rw [h_lcrs_foldRightSpine_lt cr (.node acc u (.node b p cl)) q P u huq hcr_gt_u]
-                          rw [h_lcrs_foldRightSpine_lt cr (.node (.node acc u b) p cl) q P p hpq hcr_gt_p]
+                              (foldRightSpine (.node p (.node u acc b) cl) q cr)
+                          rw [h_lcrs_foldRightSpine_lt cr (.node u acc (.node p b cl)) q P u huq hcr_gt_u]
+                          rw [h_lcrs_foldRightSpine_lt cr (.node p (.node u acc b) cl) q P p hpq hcr_gt_p]
                           simp [lcrsParentAux]
                         · intro v hvu
                           have hvu' : v ≠ u := by simpa [rightSpineTopDownNat] using hvu
                           change lcrsParentAux P P v
-                            (foldRightSpine (.node acc u (.node b p cl)) q cr) =
+                            (foldRightSpine (.node u acc (.node p b cl)) q cr) =
                             lcrsParentAux P P v
-                              (foldRightSpine (.node (.node acc u b) p cl) q cr)
+                              (foldRightSpine (.node p (.node u acc b) cl) q cr)
                           rw [h_foldRightSpine_eq_attach, h_foldRightSpine_eq_attach]
                           exact h_lcrs_attach_congr (fdmRightSpineFrames q cr)
-                            (.node acc u (.node b p cl)) (.node (.node acc u b) p cl) P v
+                            (.node u acc (.node p b cl)) (.node p (.node u acc b) cl) P v
                             (fun c => h_lcrs_rot_local acc b cl u p c v hup hvu')
         | succ d' ih =>
           intro acc r0 k0 hbst0 hlen0
-          rcases r0 with _ | ⟨l1, k1, r1⟩
+          rcases r0 with _ | ⟨k1, l1, r1⟩
           · simp [rightSpineTopDownNat] at hlen0
-          · cases hbst0 with
+          · cases hbst0 using isBSTCases with
             | node _ _ _ hacc_lt hr0_gt hbst_acc hbst_r0 =>
-              cases hbst_r0 with
+              cases hbst_r0 using isBSTCases with
               | node _ _ _ hl1_lt hr1_gt hbst_l1 hbst_r1 =>
                 cases hr0_gt with
                 | node _ _ _ hl1_gt hk0_k1 _ =>
-                  have hbst' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node (.node acc k0 l1) k1 r1) := by
-                    refine .node k1 (.node acc k0 l1) r1 ?_ hr1_gt
+                  have hbst' : _root_.BinaryTree.IsBST (.node k1 (.node k0 acc l1) r1) := by
+                    refine .node k1 (.node k0 acc l1) r1 ?_ hr1_gt
                       (.node k0 acc l1 hacc_lt hl1_gt hbst_acc hbst_l1) hbst_r1
                     rw [h_forall_iff] at hacc_lt hl1_lt ⊢
                     intro w hw
@@ -13291,53 +13293,53 @@ by
                     · exact lt_trans (hacc_lt w hw) hk0_k1
                     · exact hk0_k1
                     · exact hl1_lt w hw
-                  have hlen' : d' + 3 ≤ (rightSpineTopDownNat (.node (.node acc k0 l1) k1 r1)).length := by
+                  have hlen' : d' + 3 ≤ (rightSpineTopDownNat (.node k1 (.node k0 acc l1) r1)).length := by
                     simp only [rightSpineTopDownNat, List.length_cons] at hlen0 ⊢
                     omega
-                  have h_res := ih (.node acc k0 l1) r1 k1 hbst' hlen'
-                  have hin_eq : inorderNat (.node (.node acc k0 l1) k1 r1) =
-                      inorderNat (.node acc k0 (.node l1 k1 r1)) := by
+                  have h_res := ih (.node k0 acc l1) r1 k1 hbst' hlen'
+                  have hin_eq : inorderNat (.node k1 (.node k0 acc l1) r1) =
+                      inorderNat (.node k0 acc (.node k1 l1 r1)) := by
                     simp only [inorderNat, List.append_assoc]
                   dsimp (config := { failIfUnchanged := false }) only [rightSpineTopDownNat, List.getD_cons_succ] at h_res ⊢
                   rw [hin_eq] at h_res
                   exact h_res
       intro d hlen
-      rcases H with _ | ⟨l0, k0, r0⟩
+      rcases H with _ | ⟨k0, l0, r0⟩
       · simp [rightSpineTopDownNat] at hlen
       · exact h_rslr_ind d l0 r0 k0 hbst hlen
 
 
 
 
-  have h_descend_append : ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a1 a2 : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)),
-      u ≠ .empty →
+  have h_descend_append : ∀ (u : _root_.BinaryTree ℕ) (a1 a2 : List (ℕ × _root_.BinaryTree ℕ)),
+      u ≠ .nil →
       descendLeftNat u (a1 ++ a2) = ((descendLeftNat u a1).1, (descendLeftNat u a1).2 ++ a2) := by
     intro u
     induction u with
-    | empty => intro _ _ h; exact absurd rfl h
-    | node l k r ihl _ =>
+    | nil => intro _ _ h; exact absurd rfl h
+    | node k l r ihl _ =>
       intro a1 a2 _
-      rcases l with _ | ⟨ll, lk, lr⟩
+      rcases l with _ | ⟨lk, ll, lr⟩
       · simp [descendLeftNat]
       · simp only [descendLeftNat]
         rw [← List.cons_append]
         exact ihl ((k, r) :: a1) a2 (by simp)
 
-  have h_descend_spec : ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), u ≠ .empty →
+  have h_descend_spec : ∀ (u : _root_.BinaryTree ℕ), u ≠ .nil →
       ∃ s0 : ℕ,
         leftSpineBottomUpNat u = s0 :: (descendLeftNat u []).2.map Prod.fst ∧
-        u = twAttachPoly (.node .empty s0 (descendLeftNat u []).1) (descendLeftNat u []).2 := by
+        u = twAttachPoly (.node s0 .nil (descendLeftNat u []).1) (descendLeftNat u []).2 := by
     intro u
     induction u with
-    | empty => intro h; exact absurd rfl h
-    | node l k r ihl _ =>
+    | nil => intro h; exact absurd rfl h
+    | node k l r ihl _ =>
       intro _
-      rcases l with _ | ⟨ll, lk, lr⟩
+      rcases l with _ | ⟨lk, ll, lr⟩
       · refine ⟨k, ?_, ?_⟩
         · simp [leftSpineBottomUpNat, leftSpineBottomUpAux, descendLeftNat]
         · simp [descendLeftNat, twAttachPoly]
       · obtain ⟨s0, hls0, heq0⟩ := ihl (by simp)
-        have happ := h_descend_append (.node ll lk lr) [] [(k, r)] (by simp)
+        have happ := h_descend_append (.node lk ll lr) [] [(k, r)] (by simp)
         simp only [List.nil_append] at happ
         refine ⟨s0, ?_, ?_⟩
         · rw [h_ls_node, hls0]
@@ -13347,8 +13349,8 @@ by
           rw [h_attach_append, ← heq0]
           rfl
 
-  have h_splay_keep_ls : ∀ (n : ℕ) (rest : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)
-      (b0 : ℕ) (r0 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+  have h_splay_keep_ls : ∀ (n : ℕ) (rest : List (ℕ × _root_.BinaryTree ℕ)) (u : _root_.BinaryTree ℕ)
+      (b0 : ℕ) (r0 : _root_.BinaryTree ℕ),
       rest.length ≤ n →
       ∀ w ∈ leftSpineBottomUpNat u,
         w ∈ leftSpineBottomUpNat (foldBST P (splayLeftSpineNat u (rest ++ [(b0, r0)]))).1 := by
@@ -13365,12 +13367,12 @@ by
       · simp [splayLeftSpineNat, foldBST, h_foldRightSpine_eq_attach, h_attach_ls, hw]
       · simp [splayLeftSpineNat, foldBST, h_foldRightSpine_eq_attach, h_attach_ls, hw]
       · simp only [List.cons_append, splayLeftSpineNat]
-        refine ih rest2 (.node u k1 (.node s1 k2 s2)) b0 r0 (by simp at hlen; omega) w ?_
+        refine ih rest2 (.node k1 u (.node k2 s1 s2)) b0 r0 (by simp at hlen; omega) w ?_
         rw [h_ls_node, List.mem_append]
         exact Or.inl hw
 
-  have h_lcrs_attach_adj : ∀ (F : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (idx : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (twAttachPoly c F) → idx + 1 < F.length →
+  have h_lcrs_attach_adj : ∀ (F : List (ℕ × _root_.BinaryTree ℕ)) (c : _root_.BinaryTree ℕ) (idx : ℕ),
+      _root_.BinaryTree.IsBST (twAttachPoly c F) → idx + 1 < F.length →
       lcrsParent P (twAttachPoly c F) ((F.map Prod.fst).getD idx 0) =
         (F.map Prod.fst).getD (idx + 1) 0 := by
     intro F c idx hbst hidx
@@ -13393,28 +13395,28 @@ by
     set F_lo := F.take idx
     set F_hi := F.drop (idx + 2)
     have hT_eq : twAttachPoly c F =
-        twAttachPoly (.node (twAttachPoly c F_lo) u_pair.1 u_pair.2)
+        twAttachPoly (.node u_pair.1 (twAttachPoly c F_lo) u_pair.2)
           ((p_pair.1, p_pair.2) :: F_hi) := by
       conv => lhs; arg 2; rw [hsplit]
       rw [h_attach_append]
       rfl
     rw [hT_eq] at hbst ⊢
     have hbst_mid := h_attach_bst_bot F_hi
-      (.node (.node (twAttachPoly c F_lo) u_pair.1 u_pair.2) p_pair.1 p_pair.2) hbst
-    cases hbst_mid with
+      (.node p_pair.1 (.node u_pair.1 (twAttachPoly c F_lo) u_pair.2) p_pair.2) hbst
+    cases hbst_mid using isBSTCases with
     | node _ _ _ hlt _ _ _ =>
       rw [h_forall_iff] at hlt
       have hlt_keys : u_pair.1 < p_pair.1 := hlt u_pair.1 (by simp [inorderNat])
       rw [lcrsParent]
-      rw [h_lcrs_attach_lt F_hi (.node (twAttachPoly c F_lo) u_pair.1 u_pair.2)
+      rw [h_lcrs_attach_lt F_hi (.node u_pair.1 (twAttachPoly c F_lo) u_pair.2)
         p_pair.2 p_pair.1 P u_pair.1 hbst hlt_keys]
       simp [lcrsParentAux]
 
-  have h_pop_splay_ind : ∀ (n : ℕ) (initPath : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)
-      (b0 : ℕ) (r0 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+  have h_pop_splay_ind : ∀ (n : ℕ) (initPath : List (ℕ × _root_.BinaryTree ℕ)) (c : _root_.BinaryTree ℕ)
+      (b0 : ℕ) (r0 : _root_.BinaryTree ℕ),
       initPath.length ≤ n →
       let F := initPath ++ fdmRightSpineFrames b0 r0
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (twAttachPoly c F) →
+      _root_.BinaryTree.IsBST (twAttachPoly c F) →
       let T_start := twAttachPoly c F
       let T_end := (foldBST P (splayLeftSpineNat c (initPath ++ [(b0, r0)]))).1
       let m := initPath.length / 2
@@ -13441,31 +13443,31 @@ by
       · refine ⟨?_, fun _ _ => ?_, fun j hj => by simp at hj, fun j hj => by simp at hj⟩
         · simp [splayLeftSpineNat, foldBST, h_foldRightSpine_eq_attach, F]
         · simp [splayLeftSpineNat, foldBST, h_foldRightSpine_eq_attach, F]
-      · have hm0 : ([(x, r1)] : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)).length / 2 = 0 := by simp
+      · have hm0 : ([(x, r1)] : List (ℕ × _root_.BinaryTree ℕ)).length / 2 = 0 := by simp
         refine ⟨?_, fun _ _ => ?_, fun j hj => by omega, fun j hj => by omega⟩
         · simp [splayLeftSpineNat, foldBST, foldRightSpine, h_foldRightSpine_eq_attach, F,
             twAttachPoly]
         · simp [splayLeftSpineNat, foldBST, foldRightSpine, h_foldRightSpine_eq_attach, F,
             twAttachPoly]
       · set F' := rest ++ fdmRightSpineFrames b0 r0
-        set c' := _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node c x (.node r1 y r2)
-        have hF_eq : twAttachPoly c F = twAttachPoly (.node (.node c x r1) y r2) F' := rfl
+        set c' := _root_.BinaryTree.node x c (.node y r1 r2)
+        have hF_eq : twAttachPoly c F = twAttachPoly (.node y (.node x c r1) r2) F' := rfl
         rw [hF_eq] at hbst
-        have hbst_old := h_attach_bst_bot F' (.node (.node c x r1) y r2) hbst
+        have hbst_old := h_attach_bst_bot F' (.node y (.node x c r1) r2) hbst
         have hxy : x < y := by
-          cases hbst_old with
+          cases hbst_old using isBSTCases with
           | node _ _ _ hlt _ _ _ =>
             rw [h_forall_iff] at hlt
             exact hlt x (by simp [inorderNat])
-        have hbst_c' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST c' := by
-          cases hbst_old with
+        have hbst_c' : _root_.BinaryTree.IsBST c' := by
+          cases hbst_old using isBSTCases with
           | node _ _ _ hlt hr2_gt hbst_cx hbst_r2 =>
-            cases hbst_cx with
+            cases hbst_cx using isBSTCases with
             | node _ _ _ hc_lt hr1_gt hbst_c hbst_r1 =>
-              have hr1_lt_y : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (· < y) r1 := by
+              have hr1_lt_y : _root_.SplayDeque.Direct.ForallTree (· < y) r1 := by
                 rw [h_forall_iff] at hlt ⊢
                 exact fun w hw => hlt w (by simp [inorderNat, hw])
-              refine .node x c (.node r1 y r2) hc_lt ?_ hbst_c
+              refine .node x c (.node y r1 r2) hc_lt ?_ hbst_c
                 (.node y r1 r2 hr1_lt_y hr2_gt hbst_r1 hbst_r2)
               rw [h_forall_iff] at hr1_gt hr2_gt ⊢
               intro w hw
@@ -13474,14 +13476,14 @@ by
               · exact hr1_gt w hw
               · exact hxy
               · exact lt_trans hxy (hr2_gt w hw)
-        have hbst_mid : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (twAttachPoly c' F') := by
-          refine h_attach_bst_replace F' (.node (.node c x r1) y r2) c' hbst hbst_c' ?_
+        have hbst_mid : _root_.BinaryTree.IsBST (twAttachPoly c' F') := by
+          refine h_attach_bst_replace F' (.node y (.node x c r1) r2) c' hbst hbst_c' ?_
           intro w hw
           simp only [c', inorderNat, List.mem_append, List.mem_singleton] at hw ⊢
           tauto
-        have hrot1 : rotateRightOnLeftSpine x (twAttachPoly (.node (.node c x r1) y r2) F') =
+        have hrot1 : rotateRightOnLeftSpine x (twAttachPoly (.node y (.node x c r1) r2) F') =
             twAttachPoly c' F' := by
-          rw [h_rotR_attach F' (.node c x r1) r2 x y hxy hbst]
+          rw [h_rotR_attach F' (.node x c r1) r2 x y hxy hbst]
           simp [rotateRightOnLeftSpine, c']
         have hrest_len : rest.length ≤ n := by simp at hlen; omega
         obtain ⟨ih_tree, ih_other, ih_x, ih_ls⟩ := ih rest c' b0 r0 hrest_len hbst_mid
@@ -13510,7 +13512,7 @@ by
             exact this
           simp only [List.cons_append, splayLeftSpineNat]
           rw [ih_other v hv_rest, hF_eq]
-          exact h_lcrs_attach_congr F' c' (.node (.node c x r1) y r2) P v
+          exact h_lcrs_attach_congr F' c' (.node y (.node x c r1) r2) P v
             (fun cur => h_lcrs_rot_local c r1 r2 x y cur v hxy hvx)
         · intro j hj
           rw [hm_eq] at hj
@@ -13567,7 +13569,7 @@ by
             simp only [List.map_cons, h2j, List.getD_cons_succ]
             exact h1
 
-  have hs3 : ∀ (t s : ℕ) (H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST H → H ≠ .empty →
+  have hs3 : ∀ (t s : ℕ) (H : _root_.BinaryTree ℕ), _root_.BinaryTree.IsBST H → H ≠ .nil →
       (leftSpineBottomUpNat H).head? = some s →
       let ls := leftSpineBottomUpNat H
       let m := (ls.length - 2) / 2
@@ -13598,7 +13600,7 @@ by
         change splayLeftSpineNat c (descendLeftNat H []).2 = c
         rw [hpath_nil]
         rfl
-      have hH_node : H = .node .empty s c := by
+      have hH_node : H = .node s .nil c := by
         rw [hpath_nil] at hH_eq
         exact hH_eq
       have hls_s : leftSpineBottomUpNat H = [s] := by
@@ -13608,18 +13610,18 @@ by
       refine ⟨?_, ?_, fun j hj => by omega⟩
       · dsimp (config := { failIfUnchanged := false }) only
         rw [popJumpsAt, hm0, List.range_zero, List.map_nil, List.foldl_nil, hpop_c, hH_node]
-        rcases c with _ | ⟨l1, k1, r1⟩
+        rcases c with _ | ⟨k1, l1, r1⟩
         · simp [foldBST, foldRightSpine, spliceMinNat]
         · simp only [foldBST, foldRightSpine, h_foldRightSpine_eq_attach]
-          rw [h_splice_attach (fdmRightSpineFrames k1 r1) (.node .empty s l1) (by simp)]
+          rw [h_splice_attach (fdmRightSpineFrames k1 r1) (.node s .nil l1) (by simp)]
           simp [spliceMinNat]
       · intro v hsv _
         rw [hpop_c, hH_node]
-        rcases c with _ | ⟨l1, k1, r1⟩
+        rcases c with _ | ⟨k1, l1, r1⟩
         · have hns : ¬ v < s := by omega
           simp [foldBST, foldRightSpine, lcrsParent, lcrsParentAux, hns, hsv]
         · simp only [foldBST, foldRightSpine, lcrsParent, h_foldRightSpine_eq_attach]
-          refine h_lcrs_attach_congr (fdmRightSpineFrames k1 r1) l1 (.node .empty s l1) P v
+          refine h_lcrs_attach_congr (fdmRightSpineFrames k1 r1) l1 (.node s .nil l1) P v
             (fun cur => ?_)
           have hns : ¬ v < s := by omega
           simp [lcrsParentAux, hns, hsv]
@@ -13632,25 +13634,25 @@ by
         change splayLeftSpineNat c (descendLeftNat H []).2 = _
         rw [hpath_eq]
       set F := initPath ++ fdmRightSpineFrames b0 r0
-      have hH_top : H = .node (twAttachPoly (.node .empty s c) initPath) b0 r0 := by
+      have hH_top : H = .node b0 (twAttachPoly (.node s .nil c) initPath) r0 := by
         rw [hpath_eq, h_attach_append] at hH_eq
         exact hH_eq
-      have hfoldH : (foldBST P H).1 = twAttachPoly (.node .empty s c) F := by
+      have hfoldH : (foldBST P H).1 = twAttachPoly (.node s .nil c) F := by
         rw [hH_top]
         simp only [foldBST, h_foldRightSpine_eq_attach, F, h_attach_append]
       have hspliceH : spliceMinNat (foldBST P H).1 = twAttachPoly c F := by
-        rw [hfoldH, h_splice_attach F (.node .empty s c) (by simp)]
+        rw [hfoldH, h_splice_attach F (.node s .nil c) (by simp)]
         simp [spliceMinNat]
-      have hbst_foldH : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (twAttachPoly (.node .empty s c) F) := by
+      have hbst_foldH : _root_.BinaryTree.IsBST (twAttachPoly (.node s .nil c) F) := by
         rw [← hfoldH]
         exact (hs1 H hbst).1
-      have hbst_sc : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node .empty s c) :=
-        h_attach_bst_bot F (.node .empty s c) hbst_foldH
-      have hbst_c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST c := by
-        cases hbst_sc with
+      have hbst_sc : _root_.BinaryTree.IsBST (.node s .nil c) :=
+        h_attach_bst_bot F (.node s .nil c) hbst_foldH
+      have hbst_c : _root_.BinaryTree.IsBST c := by
+        cases hbst_sc using isBSTCases with
         | node _ _ _ _ _ _ hc => exact hc
-      have hbst_F : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (twAttachPoly c F) := by
-        refine h_attach_bst_replace F (.node .empty s c) c hbst_foldH hbst_c ?_
+      have hbst_F : _root_.BinaryTree.IsBST (twAttachPoly c F) := by
+        refine h_attach_bst_replace F (.node s .nil c) c hbst_foldH hbst_c ?_
         intro w hw
         simp [inorderNat, hw]
       have hls_full : leftSpineBottomUpNat H = s :: (initPath.map Prod.fst ++ [b0]) := by
@@ -13662,7 +13664,7 @@ by
           lcrsParent P (twAttachPoly c F) v = lcrsParent P (foldBST P H).1 v := by
         intro v hsv
         rw [hfoldH, lcrsParent, lcrsParent]
-        refine h_lcrs_attach_congr F c (.node .empty s c) P v (fun cur => ?_)
+        refine h_lcrs_attach_congr F c (.node s .nil c) P v (fun cur => ?_)
         have hns : ¬ v < s := by omega
         simp [lcrsParentAux, hns, hsv]
       have hls_get_init : ∀ i : ℕ, i < initPath.length →
@@ -13731,7 +13733,7 @@ by
             rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (by simp [hidx])]
             simp
           rw [hget]
-          exact h_attach_keys_gt F (.node .empty s c) hbst_foldH s (by simp [inorderNat])
+          exact h_attach_keys_gt F (.node s .nil c) hbst_foldH s (by simp [inorderNat])
             F[idx].1 (List.mem_map_of_mem (List.getElem_mem hidx))
         have hs_lt_x : s < (leftSpineBottomUpNat H).getD (2 * j + 1) 0 := by
           rw [hx_F]; exact hs_lt_F (2 * j) (by omega)
@@ -14282,7 +14284,7 @@ by
 
 
 
-  have h_exec_append : ∀ (xs ys : List KeyedCoreOp) (H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+  have h_exec_append : ∀ (xs ys : List KeyedCoreOp) (H : _root_.BinaryTree ℕ),
       execKeyedList H (xs ++ ys) = execKeyedList (execKeyedList H xs) ys := by
     intro xs
     induction xs with
@@ -14375,15 +14377,15 @@ by
       ((h_mem_of_getElem? (leftSpineBottomUpNat (keyedState kops t)) (2 * j + 1) _ hx_opt).2).symm⟩
 
   have h_fold_bst_inorder : ∀ t ≤ kops.length,
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (foldBST P (keyedState kops t)).1 ∧
+      _root_.BinaryTree.IsBST (foldBST P (keyedState kops t)).1 ∧
         inorderNat (foldBST P (keyedState kops t)).1 = inorderNat (keyedState kops t) := by
     intro t ht
     obtain ⟨h1, h2, _⟩ := hs1 (keyedState kops t) (hkvalid.isBST_state t ht)
     exact ⟨h1, h2⟩
 
   have h_fold_cursor : ∀ t ≤ kops.length,
-      (keyedState kops t = .empty ∧ (foldBST P (keyedState kops t)).2 = P) ∨
-        (keyedState kops t ≠ .empty ∧
+      (keyedState kops t = .nil ∧ (foldBST P (keyedState kops t)).2 = P) ∨
+        (keyedState kops t ≠ .nil ∧
           (rightSpineTopDownNat (keyedState kops t)).head? =
             some (foldBST P (keyedState kops t)).2 ∧
           (leftSpineBottomUpNat (keyedState kops t)).getLast? =
@@ -14794,14 +14796,14 @@ theorem folded_spine_lock_and_confinement_buckets (P L : ℕ) (S : ℕ → ℕ) 
         (B_3_intra S P L kops).card + (B_3_post S P L kops).card +
         (B_3_act S P L kops).card :=
 by
-  have h_ls_aux : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List ℕ) (u : ℕ),
+  have h_ls_aux : ∀ (T : _root_.BinaryTree ℕ) (acc : List ℕ) (u : ℕ),
       u ∈ leftSpineBottomUpAux T acc → u ∈ inorderNat T ∨ u ∈ acc := by
     intro T
     induction T with
-    | empty =>
+    | nil =>
       intro acc u hu
       exact Or.inr hu
-    | node l k r ihl _ =>
+    | node k l r ihl _ =>
       intro acc u hu
       simp only [leftSpineBottomUpAux] at hu
       rcases ihl (k :: acc) u hu with hl | hacc
@@ -14813,7 +14815,7 @@ by
           simp [inorderNat]
         · exact Or.inr hacc'
 
-  have h_ls_mem_inorder : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (u : ℕ),
+  have h_ls_mem_inorder : ∀ (T : _root_.BinaryTree ℕ) (u : ℕ),
       u ∈ leftSpineBottomUpNat T → u ∈ inorderNat T := by
     intro T u hu
     rcases h_ls_aux T [] u hu with h | h
@@ -15883,7 +15885,7 @@ by
         omega
 
     have hPhi0 : Phi 0 = 0 := by
-      have h0 : keyedState kops 0 = .empty := rfl
+      have h0 : keyedState kops 0 = .nil := rfl
       simp [Phi, V, h0, inorderNat]
     have hPhi_end : Phi kops.length = 0 := by
       simp [Phi, V, hkvalid.end_empty, inorderNat]
@@ -16304,35 +16306,35 @@ by
   have _ := hP
 
   have h_inord_left :
-      ∀ (l : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ) (r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (x : ℕ),
-        x ∈ inorderNat l → x ∈ inorderNat (.node l k r) := by
+      ∀ (l : _root_.BinaryTree ℕ) (k : ℕ) (r : _root_.BinaryTree ℕ) (x : ℕ),
+        x ∈ inorderNat l → x ∈ inorderNat (.node k l r) := by
     intro l k r x hx
     rw [inorderNat]
     exact List.mem_append_left _ (List.mem_append_left _ hx)
 
   have h_inord_key :
-      ∀ (l : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ) (r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        k ∈ inorderNat (.node l k r) := by
+      ∀ (l : _root_.BinaryTree ℕ) (k : ℕ) (r : _root_.BinaryTree ℕ),
+        k ∈ inorderNat (.node k l r) := by
     intro l k r
     rw [inorderNat]
     exact List.mem_append_left _ (List.mem_append_right _ (List.mem_singleton_self k))
 
   have h_inord_right :
-      ∀ (l : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ) (r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (x : ℕ),
-        x ∈ inorderNat r → x ∈ inorderNat (.node l k r) := by
+      ∀ (l : _root_.BinaryTree ℕ) (k : ℕ) (r : _root_.BinaryTree ℕ) (x : ℕ),
+        x ∈ inorderNat r → x ∈ inorderNat (.node k l r) := by
     intro l k r x hx
     rw [inorderNat]
     exact List.mem_append_right _ hx
 
   have h_forall_inord :
-      ∀ (p : ℕ → Prop) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p T ↔ ∀ k ∈ inorderNat T, p k := by
+      ∀ (p : ℕ → Prop) (T : _root_.BinaryTree ℕ),
+        _root_.SplayDeque.Direct.ForallTree p T ↔ ∀ k ∈ inorderNat T, p k := by
     intro p T
     induction T with
-    | empty =>
+    | nil =>
       simp only [inorderNat, List.not_mem_nil, false_implies, implies_true, iff_true]
-      exact _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree.left
-    | node l key r ihl ihr =>
+      exact _root_.SplayDeque.Direct.ForallTree.left
+    | node key l r ihl ihr =>
       constructor
       · intro hft x hx
         cases hft with
@@ -16343,39 +16345,39 @@ by
           · exact hk
           · exact ihr.mp hr x hxr
       · intro hall
-        exact _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree.node l key r
+        exact _root_.SplayDeque.Direct.ForallTree.node l key r
           (ihl.mpr fun x hx => hall x (h_inord_left l key r x hx))
           (hall key (h_inord_key l key r))
           (ihr.mpr fun x hx => hall x (h_inord_right l key r x hx))
 
   have h_ls_aux :
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List ℕ),
+      ∀ (T : _root_.BinaryTree ℕ) (acc : List ℕ),
         leftSpineBottomUpAux T acc = leftSpineBottomUpNat T ++ acc := by
     intro T
     induction T with
-    | empty =>
+    | nil =>
       intro acc
       rfl
-    | node l k r ihl _ =>
+    | node k l r ihl _ =>
       intro acc
       calc
-        leftSpineBottomUpAux (.node l k r) acc
+        leftSpineBottomUpAux (.node k l r) acc
             = leftSpineBottomUpAux l (k :: acc) := rfl
         _ = leftSpineBottomUpNat l ++ (k :: acc) := ihl (k :: acc)
         _ = (leftSpineBottomUpNat l ++ [k]) ++ acc := by simp
         _ = (leftSpineBottomUpAux l [k]) ++ acc := by rw [← ihl [k]]
-        _ = leftSpineBottomUpNat (.node l k r) ++ acc := rfl
+        _ = leftSpineBottomUpNat (.node k l r) ++ acc := rfl
 
   have h_ls_node :
-      ∀ (l : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ) (r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        leftSpineBottomUpNat (.node l k r) = leftSpineBottomUpNat l ++ [k] := by
+      ∀ (l : _root_.BinaryTree ℕ) (k : ℕ) (r : _root_.BinaryTree ℕ),
+        leftSpineBottomUpNat (.node k l r) = leftSpineBottomUpNat l ++ [k] := by
     intro l k r
     simpa [leftSpineBottomUpNat, leftSpineBottomUpAux] using h_ls_aux l [k]
 
   have h_nonempty_lists :
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), T ≠ .empty →
+      ∀ (T : _root_.BinaryTree ℕ), T ≠ .nil →
         leftSpineBottomUpNat T ≠ [] ∧ inorderNat T ≠ [] := by
-    rintro (_ | ⟨l, k, r⟩) hne
+    rintro (_ | ⟨k, l, r⟩) hne
     · exact absurd rfl hne
     · refine ⟨?_, ?_⟩
       · rw [h_ls_node]
@@ -16384,83 +16386,83 @@ by
         simp
 
   have h_rot_not_mem :
-      ∀ (u : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (u : ℕ) (T : _root_.BinaryTree ℕ),
         u ∉ inorderNat T → rotateRightOnLeftSpine u T = T := by
     intro u T
     induction T with
-    | empty =>
+    | nil =>
       intro _
       rfl
-    | node l y c ihl _ =>
+    | node y l c ihl _ =>
       intro hu
-      rcases l with _ | ⟨a, x, b⟩
+      rcases l with _ | ⟨x, a, b⟩
       · rfl
       · have hxu : x ≠ u := by
           intro h_eq
           subst h_eq
-          exact hu (h_inord_left (.node a x b) y c x (h_inord_key a x b))
-        have hu_l : u ∉ inorderNat (.node a x b) :=
-          fun hmem => hu (h_inord_left (.node a x b) y c u hmem)
+          exact hu (h_inord_left (.node x a b) y c x (h_inord_key a x b))
+        have hu_l : u ∉ inorderNat (.node x a b) :=
+          fun hmem => hu (h_inord_left (.node x a b) y c u hmem)
         simp only [rotateRightOnLeftSpine, hxu, ↓reduceIte, ihl hu_l]
 
   have h_rot_left_not_mem :
-      ∀ (u : ℕ) (L : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (y : ℕ) (R : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        u ∉ inorderNat L → rotateRightOnLeftSpine u (.node L y R) = .node L y R := by
+      ∀ (u : ℕ) (L : _root_.BinaryTree ℕ) (y : ℕ) (R : _root_.BinaryTree ℕ),
+        u ∉ inorderNat L → rotateRightOnLeftSpine u (.node y L R) = .node y L R := by
     intro u L y R huL
-    rcases L with _ | ⟨a, x, b⟩
+    rcases L with _ | ⟨x, a, b⟩
     · rfl
     · have hxu : x ≠ u := by
         intro h_eq
         subst h_eq
         exact huL (h_inord_key a x b)
-      simp only [rotateRightOnLeftSpine, hxu, ↓reduceIte, h_rot_not_mem u (.node a x b) huL]
+      simp only [rotateRightOnLeftSpine, hxu, ↓reduceIte, h_rot_not_mem u (.node x a b) huL]
 
   have h_rot_bst_inord :
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (u : ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (rotateRightOnLeftSpine u T) ∧
+      ∀ (T : _root_.BinaryTree ℕ) (u : ℕ),
+        _root_.BinaryTree.IsBST T →
+          _root_.BinaryTree.IsBST (rotateRightOnLeftSpine u T) ∧
             inorderNat (rotateRightOnLeftSpine u T) = inorderNat T := by
     intro T u
     induction T with
-    | empty =>
+    | nil =>
       intro hbst
       exact ⟨hbst, rfl⟩
-    | node l y c ihl _ =>
+    | node y l c ihl _ =>
       intro hbst
-      cases hbst with
+      cases hbst using isBSTCases with
       | node _ _ _ hl_lt hc_gt hbst_l hbst_c =>
-        rcases l with _ | ⟨a, x, b⟩
-        · exact ⟨_root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST.node y .empty c hl_lt hc_gt hbst_l hbst_c, rfl⟩
+        rcases l with _ | ⟨x, a, b⟩
+        · exact ⟨_root_.BinaryTree.IsBST.node y .nil c hl_lt hc_gt hbst_l hbst_c, rfl⟩
         · by_cases hxu : x = u
           · subst hxu
             simp only [rotateRightOnLeftSpine, ↓reduceIte]
-            cases hbst_l with
+            cases hbst_l using isBSTCases with
             | node _ _ _ ha_lt hb_gt hbst_a hbst_b =>
               cases hl_lt with
               | node _ _ _ _ hx_lt_y hb_lt_y =>
-                have hbst_byc : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node b y c) :=
-                  _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST.node y b c hb_lt_y hc_gt hbst_b hbst_c
-                have h_gt_x : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => x < k) (.node b y c) := by
-                  refine _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree.node b y c hb_gt hx_lt_y ?_
+                have hbst_byc : _root_.BinaryTree.IsBST (.node y b c) :=
+                  _root_.BinaryTree.IsBST.node y b c hb_lt_y hc_gt hbst_b hbst_c
+                have h_gt_x : _root_.SplayDeque.Direct.ForallTree (fun k => x < k) (.node y b c) := by
+                  refine _root_.SplayDeque.Direct.ForallTree.node b y c hb_gt hx_lt_y ?_
                   rw [h_forall_inord] at hc_gt ⊢
                   intro z hz
                   have hyz := hc_gt z hz
                   omega
-                refine ⟨_root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST.node x a (.node b y c) ha_lt h_gt_x hbst_a hbst_byc, ?_⟩
+                refine ⟨_root_.BinaryTree.IsBST.node x a (.node y b c) ha_lt h_gt_x hbst_a hbst_byc, ?_⟩
                 simp [inorderNat, List.append_assoc]
           · simp only [rotateRightOnLeftSpine, hxu, ↓reduceIte]
             obtain ⟨hbst_l', hinord_l'⟩ := ihl hbst_l
-            have hl'_lt : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => k < y)
-                (rotateRightOnLeftSpine u (.node a x b)) := by
+            have hl'_lt : _root_.SplayDeque.Direct.ForallTree (fun k => k < y)
+                (rotateRightOnLeftSpine u (.node x a b)) := by
               rw [h_forall_inord, hinord_l', ← h_forall_inord]
               exact hl_lt
-            refine ⟨_root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST.node y _ c hl'_lt hc_gt hbst_l' hbst_c, ?_⟩
+            refine ⟨_root_.BinaryTree.IsBST.node y _ c hl'_lt hc_gt hbst_l' hbst_c, ?_⟩
             rw [inorderNat, inorderNat, hinord_l']
 
   have h_cart_bst_inord :
       ∀ (birth : ℕ → ℕ) (fuel a b : ℕ),
         a ≤ b → b - a ≤ fuel →
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (cartesianRangeAux birth fuel a b) ∧
+          _root_.BinaryTree.IsBST (cartesianRangeAux birth fuel a b) ∧
             inorderNat (cartesianRangeAux birth fuel a b) = List.Ico a b := by
     intro birth fuel
     induction fuel with
@@ -16468,7 +16470,7 @@ by
       intro a b hab hfuel
       have heq : a = b := by omega
       subst heq
-      simp [cartesianRangeAux, inorderNat, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST.left]
+      simp [cartesianRangeAux, inorderNat, _root_.BinaryTree.IsBST.left]
     | succ fuel ih =>
       intro a b hab hfuel
       by_cases hlt : a < b
@@ -16478,36 +16480,36 @@ by
         have hwb : w < b := by omega
         obtain ⟨hbst_l, hinord_l⟩ := ih a w haw (by omega)
         obtain ⟨hbst_r, hinord_r⟩ := ih (w + 1) b (by omega) (by omega)
-        have hl_lt : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => k < w) (cartesianRangeAux birth fuel a w) := by
+        have hl_lt : _root_.SplayDeque.Direct.ForallTree (fun k => k < w) (cartesianRangeAux birth fuel a w) := by
           rw [h_forall_inord, hinord_l]
           intro k hk
           exact (List.Ico.mem.mp hk).2
-        have hr_gt : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => w < k)
+        have hr_gt : _root_.SplayDeque.Direct.ForallTree (fun k => w < k)
             (cartesianRangeAux birth fuel (w + 1) b) := by
           rw [h_forall_inord, hinord_r]
           intro k hk
           have := (List.Ico.mem.mp hk).1
           omega
-        refine ⟨_root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST.node w _ _ hl_lt hr_gt hbst_l hbst_r, ?_⟩
+        refine ⟨_root_.BinaryTree.IsBST.node w _ _ hl_lt hr_gt hbst_l hbst_r, ?_⟩
         simp only [inorderNat, hinord_l, hinord_r, List.append_assoc, List.singleton_append]
         rw [← List.Ico.eq_cons hwb, List.Ico.append_consecutive haw (le_of_lt hwb)]
       · have heq : a = b := by omega
         subst heq
-        simp [cartesianRangeAux, inorderNat, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST.left]
+        simp [cartesianRangeAux, inorderNat, _root_.BinaryTree.IsBST.left]
 
   have h_plug_bst_inord :
-      ∀ (birth : ℕ → ℕ) (F : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (lo hi : ℕ),
-        lo ≤ hi → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST F → (∀ k ∈ inorderNat F, lo ≤ k ∧ k < hi) →
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (plugUnbornNat birth lo hi F) ∧
+      ∀ (birth : ℕ → ℕ) (F : _root_.BinaryTree ℕ) (lo hi : ℕ),
+        lo ≤ hi → _root_.BinaryTree.IsBST F → (∀ k ∈ inorderNat F, lo ≤ k ∧ k < hi) →
+          _root_.BinaryTree.IsBST (plugUnbornNat birth lo hi F) ∧
             inorderNat (plugUnbornNat birth lo hi F) = List.Ico lo hi := by
     intro birth F
     induction F with
-    | empty =>
+    | nil =>
       intro lo hi hlo _ _
       exact h_cart_bst_inord birth (hi - lo) lo hi hlo le_rfl
-    | node l k r ihl ihr =>
+    | node k l r ihl ihr =>
       intro lo hi _ hbst hinord
-      cases hbst with
+      cases hbst using isBSTCases with
       | node _ _ _ hl_lt hr_gt hbst_l hbst_r =>
         have hk_in : lo ≤ k ∧ k < hi := hinord k (h_inord_key l k r)
         have hl_in : ∀ x ∈ inorderNat l, lo ≤ x ∧ x < k := fun x hx =>
@@ -16518,24 +16520,24 @@ by
           exact ⟨by omega, (hinord x (h_inord_right l k r x hx)).2⟩
         obtain ⟨hbst_pl, hinord_pl⟩ := ihl lo k hk_in.1 hbst_l hl_in
         obtain ⟨hbst_pr, hinord_pr⟩ := ihr (k + 1) hi (by omega) hbst_r hr_in
-        have hpl_lt : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => x < k) (plugUnbornNat birth lo k l) := by
+        have hpl_lt : _root_.SplayDeque.Direct.ForallTree (fun x => x < k) (plugUnbornNat birth lo k l) := by
           rw [h_forall_inord, hinord_pl]
           intro x hx
           exact (List.Ico.mem.mp hx).2
-        have hpr_gt : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => k < x)
+        have hpr_gt : _root_.SplayDeque.Direct.ForallTree (fun x => k < x)
             (plugUnbornNat birth (k + 1) hi r) := by
           rw [h_forall_inord, hinord_pr]
           intro x hx
           have := (List.Ico.mem.mp hx).1
           omega
-        refine ⟨_root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST.node k _ _ hpl_lt hpr_gt hbst_pl hbst_pr, ?_⟩
+        refine ⟨_root_.BinaryTree.IsBST.node k _ _ hpl_lt hpr_gt hbst_pl hbst_pr, ?_⟩
         rw [plugUnbornNat, inorderNat, hinord_pl, hinord_pr,
           List.append_assoc, List.singleton_append,
           ← List.Ico.eq_cons hk_in.2, List.Ico.append_consecutive hk_in.1 (le_of_lt hk_in.2)]
 
-  have h_s1 : ∀ (birth : ℕ → ℕ) (P0 lo hi : ℕ) (F : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      lo ≤ hi → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST F → (∀ k ∈ inorderNat F, lo ≤ k ∧ k < hi) →
-        (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (plugUnbornNat birth lo hi F) ∧
+  have h_s1 : ∀ (birth : ℕ → ℕ) (P0 lo hi : ℕ) (F : _root_.BinaryTree ℕ),
+      lo ≤ hi → _root_.BinaryTree.IsBST F → (∀ k ∈ inorderNat F, lo ≤ k ∧ k < hi) →
+        (_root_.BinaryTree.IsBST (plugUnbornNat birth lo hi F) ∧
           inorderNat (plugUnbornNat birth lo hi F) = List.Ico lo hi) ∧
         (∀ v ∈ inorderNat F,
           lcrsParent P0 (plugUnbornNat birth lo hi F) v = lcrsParent P0 F v) ∧
@@ -16550,17 +16552,17 @@ by
             us.foldl (fun T u => rotateRightOnLeftSpine u T) (plugUnbornNat birth lo hi F)) := by
     intro birth P0 lo hi F hlo hbst hinord
     have h_lcrs_aux :
-        ∀ (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a b curP v : ℕ),
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G → v ∈ inorderNat G →
+        ∀ (G : _root_.BinaryTree ℕ) (a b curP v : ℕ),
+          _root_.BinaryTree.IsBST G → v ∈ inorderNat G →
             lcrsParentAux P0 curP v (plugUnbornNat birth a b G) = lcrsParentAux P0 curP v G := by
       intro G
       induction G with
-      | empty =>
+      | nil =>
         intro _ _ _ _ _ hv
         simp [inorderNat] at hv
-      | node l k r ihl ihr =>
+      | node k l r ihl ihr =>
         intro a b curP v hbstG hv
-        cases hbstG with
+        cases hbstG using isBSTCases with
         | node _ _ _ hl_lt hr_gt hbst_l hbst_r =>
           rw [plugUnbornNat]
           simp only [lcrsParentAux]
@@ -16587,77 +16589,77 @@ by
               exact ihr (k + 1) b curP v hbst_r hv_r
             · simp only [hkv, ↓reduceIte]
     have h_ls_plug :
-        ∀ (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a b m0 : ℕ),
+        ∀ (G : _root_.BinaryTree ℕ) (a b m0 : ℕ),
           (leftSpineBottomUpNat G).head? = some m0 →
             leftSpineBottomUpNat (plugUnbornNat birth a b G) =
               leftSpineBottomUpNat (cartesianRangeNat birth a m0) ++ leftSpineBottomUpNat G := by
       intro G
       induction G with
-      | empty =>
+      | nil =>
         intro _ _ _ h
         simp [leftSpineBottomUpNat, leftSpineBottomUpAux] at h
-      | node l k r ihl _ =>
+      | node k l r ihl _ =>
         intro a b m0 hhead
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · rw [h_ls_node] at hhead
           simp only [leftSpineBottomUpNat, leftSpineBottomUpAux, List.nil_append,
             List.head?_cons, Option.some.injEq] at hhead
           subst hhead
           rw [plugUnbornNat, h_ls_node, h_ls_node]
           simp [plugUnbornNat, leftSpineBottomUpNat, leftSpineBottomUpAux]
-        · have hne : leftSpineBottomUpNat (.node ll lk lr) ≠ [] :=
-            (h_nonempty_lists (.node ll lk lr) (by simp)).1
+        · have hne : leftSpineBottomUpNat (.node lk ll lr) ≠ [] :=
+            (h_nonempty_lists (.node lk ll lr) (by simp)).1
           rw [h_ls_node, List.head?_append_of_ne_nil _ hne] at hhead
           conv_lhs => rw [plugUnbornNat]
           rw [h_ls_node, h_ls_node, ihl a k m0 hhead, List.append_assoc]
     have h_splice_plug :
-        ∀ (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (b : ℕ),
+        ∀ (G : _root_.BinaryTree ℕ) (b : ℕ),
           (leftSpineBottomUpNat G).head? = some lo →
             spliceMinNat (plugUnbornNat birth lo b G) =
               plugUnbornNat birth (lo + 1) b (spliceMinNat G) := by
       intro G
       induction G with
-      | empty =>
+      | nil =>
         intro _ h
         simp [leftSpineBottomUpNat, leftSpineBottomUpAux] at h
-      | node l k r ihl _ =>
+      | node k l r ihl _ =>
         intro b hhead
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · rw [h_ls_node] at hhead
           simp only [leftSpineBottomUpNat, leftSpineBottomUpAux, List.nil_append,
             List.head?_cons, Option.some.injEq] at hhead
           subst hhead
-          have hcart_empty : cartesianRangeNat birth k k = .empty := by
+          have hcart_empty : cartesianRangeNat birth k k = .nil := by
             simp [cartesianRangeNat, cartesianRangeAux]
           simp [plugUnbornNat, hcart_empty, spliceMinNat]
-        · have hne : leftSpineBottomUpNat (.node ll lk lr) ≠ [] :=
-            (h_nonempty_lists (.node ll lk lr) (by simp)).1
+        · have hne : leftSpineBottomUpNat (.node lk ll lr) ≠ [] :=
+            (h_nonempty_lists (.node lk ll lr) (by simp)).1
           rw [h_ls_node, List.head?_append_of_ne_nil _ hne] at hhead
           have h_lhs :
-              spliceMinNat (plugUnbornNat birth lo b (.node (.node ll lk lr) k r)) =
-                .node (spliceMinNat (plugUnbornNat birth lo k (.node ll lk lr))) k
+              spliceMinNat (plugUnbornNat birth lo b (.node k (.node lk ll lr) r)) =
+                .node k (spliceMinNat (plugUnbornNat birth lo k (.node lk ll lr)))
                   (plugUnbornNat birth (k + 1) b r) := by
             simp [plugUnbornNat, spliceMinNat]
           have h_rhs :
-              plugUnbornNat birth (lo + 1) b (spliceMinNat (.node (.node ll lk lr) k r)) =
-                .node (plugUnbornNat birth (lo + 1) k (spliceMinNat (.node ll lk lr))) k
+              plugUnbornNat birth (lo + 1) b (spliceMinNat (.node k (.node lk ll lr) r)) =
+                .node k (plugUnbornNat birth (lo + 1) k (spliceMinNat (.node lk ll lr)))
                   (plugUnbornNat birth (k + 1) b r) := by
             simp [plugUnbornNat, spliceMinNat]
           rw [h_lhs, h_rhs, ihl k hhead]
     have h_rot_one :
-        ∀ (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a b u : ℕ),
-          a ≤ b → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G → (∀ k ∈ inorderNat G, a ≤ k ∧ k < b) →
+        ∀ (G : _root_.BinaryTree ℕ) (a b u : ℕ),
+          a ≤ b → _root_.BinaryTree.IsBST G → (∀ k ∈ inorderNat G, a ≤ k ∧ k < b) →
           u ∈ inorderNat G →
             plugUnbornNat birth a b (rotateRightOnLeftSpine u G) =
               rotateRightOnLeftSpine u (plugUnbornNat birth a b G) := by
       intro G
       induction G with
-      | empty =>
+      | nil =>
         intro _ _ _ _ _ _ hu
         simp [inorderNat] at hu
-      | node l y c ihl _ =>
+      | node y l c ihl _ =>
         intro a b u hab hbstG hinordG hu
-        cases hbstG with
+        cases hbstG using isBSTCases with
         | node _ _ _ hl_lt hc_gt hbst_l _ =>
           have hy_in : a ≤ y ∧ y < b := hinordG y (h_inord_key l y c)
           by_cases hyu : y ≤ u
@@ -16684,29 +16686,29 @@ by
               · omega
               · have := (h_forall_inord _ c).mp hc_gt u huc
                 omega
-            rcases l with _ | ⟨la, x, lb⟩
+            rcases l with _ | ⟨x, la, lb⟩
             · simp [inorderNat] at hu_l
             · by_cases hxu : x = u
               · subst hxu
                 simp [rotateRightOnLeftSpine, plugUnbornNat]
-              · have hl_in : ∀ k ∈ inorderNat (.node la x lb), a ≤ k ∧ k < y := fun k hk =>
-                  ⟨(hinordG k (h_inord_left (.node la x lb) y c k hk)).1,
-                    (h_forall_inord _ (.node la x lb)).mp hl_lt k hk⟩
+              · have hl_in : ∀ k ∈ inorderNat (.node x la lb), a ≤ k ∧ k < y := fun k hk =>
+                  ⟨(hinordG k (h_inord_left (.node x la lb) y c k hk)).1,
+                    (h_forall_inord _ (.node x la lb)).mp hl_lt k hk⟩
                 have h_ih := ihl a y u hy_in.1 hbst_l hl_in hu_l
                 have h_lhs :
-                    plugUnbornNat birth a b (rotateRightOnLeftSpine u (.node (.node la x lb) y c)) =
-                      .node (plugUnbornNat birth a y (rotateRightOnLeftSpine u (.node la x lb))) y
+                    plugUnbornNat birth a b (rotateRightOnLeftSpine u (.node y (.node x la lb) c)) =
+                      .node y (plugUnbornNat birth a y (rotateRightOnLeftSpine u (.node x la lb)))
                         (plugUnbornNat birth (y + 1) b c) := by
                   simp [rotateRightOnLeftSpine, hxu, plugUnbornNat]
                 have h_rhs :
-                    rotateRightOnLeftSpine u (plugUnbornNat birth a b (.node (.node la x lb) y c)) =
-                      .node (rotateRightOnLeftSpine u (plugUnbornNat birth a y (.node la x lb))) y
+                    rotateRightOnLeftSpine u (plugUnbornNat birth a b (.node y (.node x la lb) c)) =
+                      .node y (rotateRightOnLeftSpine u (plugUnbornNat birth a y (.node x la lb)))
                         (plugUnbornNat birth (y + 1) b c) := by
                   simp [plugUnbornNat, rotateRightOnLeftSpine, hxu]
                 rw [h_lhs, h_rhs, h_ih]
     have h_rot_foldl :
-        ∀ (us : List ℕ) (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G → (∀ k ∈ inorderNat G, lo ≤ k ∧ k < hi) →
+        ∀ (us : List ℕ) (G : _root_.BinaryTree ℕ),
+          _root_.BinaryTree.IsBST G → (∀ k ∈ inorderNat G, lo ≤ k ∧ k < hi) →
           (∀ u ∈ us, u ∈ inorderNat G) →
             plugUnbornNat birth lo hi (us.foldl (fun T u => rotateRightOnLeftSpine u T) G) =
               us.foldl (fun T u => rotateRightOnLeftSpine u T) (plugUnbornNat birth lo hi G) := by
@@ -16734,32 +16736,32 @@ by
       fun us hus => h_rot_foldl us F hbst hinord hus⟩
 
   have h_bst_props :
-      ∀ T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+      ∀ T : _root_.BinaryTree ℕ, _root_.BinaryTree.IsBST T →
         List.Pairwise (· < ·) (inorderNat T) ∧
           List.Pairwise (· < ·) (leftSpineBottomUpNat T) ∧
           (leftSpineBottomUpNat T).head? = (inorderNat T).head? ∧
           (∀ u ∈ leftSpineBottomUpNat T, u ∈ inorderNat T) := by
     intro T
     induction T with
-    | empty =>
+    | nil =>
       intro _
       simp [inorderNat, leftSpineBottomUpNat, leftSpineBottomUpAux]
-    | node l k r ihl ihr =>
+    | node k l r ihl ihr =>
       intro hbst
-      cases hbst with
+      cases hbst using isBSTCases with
       | node _ _ _ hl_lt hr_gt hbst_l hbst_r =>
         obtain ⟨hpl_in, hpl_ls, hhead_l, hsub_l⟩ := ihl hbst_l
         obtain ⟨hpr_in, _, _, _⟩ := ihr hbst_r
         have hl_lt' := (h_forall_inord _ l).mp hl_lt
         have hr_gt' := (h_forall_inord _ r).mp hr_gt
-        have hsub : ∀ u ∈ leftSpineBottomUpNat (.node l k r), u ∈ inorderNat (.node l k r) := by
+        have hsub : ∀ u ∈ leftSpineBottomUpNat (.node k l r), u ∈ inorderNat (.node k l r) := by
           intro u hu
           rw [h_ls_node, List.mem_append, List.mem_singleton] at hu
           rcases hu with hul | huk
           · exact h_inord_left l k r u (hsub_l u hul)
           · rw [huk]
             exact h_inord_key l k r
-        have hp_in : List.Pairwise (· < ·) (inorderNat (.node l k r)) := by
+        have hp_in : List.Pairwise (· < ·) (inorderNat (.node k l r)) := by
           rw [inorderNat, List.append_assoc, List.singleton_append, List.pairwise_append]
           refine ⟨hpl_in, List.Pairwise.cons hr_gt' hpr_in, ?_⟩
           intro a ha b hb
@@ -16769,7 +16771,7 @@ by
           · exact hak
           · have := hr_gt' b hbr
             omega
-        have hp_ls : List.Pairwise (· < ·) (leftSpineBottomUpNat (.node l k r)) := by
+        have hp_ls : List.Pairwise (· < ·) (leftSpineBottomUpNat (.node k l r)) := by
           rw [h_ls_node, List.pairwise_append]
           refine ⟨hpl_ls, by simp, ?_⟩
           intro a ha b hb
@@ -16777,11 +16779,11 @@ by
           subst hb
           exact hl_lt' a (hsub_l a ha)
         have hhead :
-            (leftSpineBottomUpNat (.node l k r)).head? = (inorderNat (.node l k r)).head? := by
-          rcases l with _ | ⟨ll, lk, lr⟩
+            (leftSpineBottomUpNat (.node k l r)).head? = (inorderNat (.node k l r)).head? := by
+          rcases l with _ | ⟨lk, ll, lr⟩
           · rw [h_ls_node]
             simp [leftSpineBottomUpNat, leftSpineBottomUpAux, inorderNat]
-          · obtain ⟨hne_ls, hne_in⟩ := h_nonempty_lists (.node ll lk lr) (by simp)
+          · obtain ⟨hne_ls, hne_in⟩ := h_nonempty_lists (.node lk ll lr) (by simp)
             rw [h_ls_node, List.head?_append_of_ne_nil _ hne_ls]
             conv_rhs => rw [inorderNat, List.append_assoc]
             rw [List.head?_append_of_ne_nil _ hne_in]
@@ -16789,32 +16791,32 @@ by
         exact ⟨hp_in, hp_ls, hhead, hsub⟩
 
   have h_splice_props :
-      ∀ T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (spliceMinNat T) ∧
+      ∀ T : _root_.BinaryTree ℕ, _root_.BinaryTree.IsBST T →
+        _root_.BinaryTree.IsBST (spliceMinNat T) ∧
           inorderNat (spliceMinNat T) = (inorderNat T).tail ∧
           (∃ r_ls : List ℕ,
             leftSpineBottomUpNat (spliceMinNat T) = r_ls ++ (leftSpineBottomUpNat T).tail) ∧
           (∀ P0 s v : ℕ, (inorderNat T).head? = some s → s < v →
             lcrsParent P0 (spliceMinNat T) v = lcrsParent P0 T v) := by
     have h_lcrs_splice :
-        ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (P0 curP s v : ℕ),
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T → (inorderNat T).head? = some s → s < v →
+        ∀ (T : _root_.BinaryTree ℕ) (P0 curP s v : ℕ),
+          _root_.BinaryTree.IsBST T → (inorderNat T).head? = some s → s < v →
             lcrsParentAux P0 curP v (spliceMinNat T) = lcrsParentAux P0 curP v T := by
       intro T
       induction T with
-      | empty =>
+      | nil =>
         intro _ _ _ _ _ hmin _
         simp [inorderNat] at hmin
-      | node l k r ihl _ =>
+      | node k l r ihl _ =>
         intro P0 curP s v hbst hmin hsv
-        have hbst_l : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST l := by cases hbst; assumption
-        rcases l with _ | ⟨ll, lk, lr⟩
+        have hbst_l : _root_.BinaryTree.IsBST l := by cases hbst using isBSTCases; assumption
+        rcases l with _ | ⟨lk, ll, lr⟩
         · simp [inorderNat] at hmin
           subst hmin
           have hnot_vk : ¬ (v < k) := by omega
           simp [spliceMinNat, lcrsParentAux, hnot_vk, hsv]
-        · have hne_in : inorderNat (.node ll lk lr) ≠ [] :=
-            (h_nonempty_lists (.node ll lk lr) (by simp)).2
+        · have hne_in : inorderNat (.node lk ll lr) ≠ [] :=
+            (h_nonempty_lists (.node lk ll lr) (by simp)).2
           rw [inorderNat, List.append_assoc, List.head?_append_of_ne_nil _ hne_in] at hmin
           simp only [spliceMinNat, lcrsParentAux]
           by_cases hvk : v < k
@@ -16823,44 +16825,44 @@ by
           · simp only [hvk, ↓reduceIte]
     intro T
     induction T with
-    | empty =>
+    | nil =>
       intro hbst
       refine ⟨by simpa [spliceMinNat] using hbst,
         by simp [spliceMinNat, inorderNat],
         ⟨[], by simp [spliceMinNat, leftSpineBottomUpNat, leftSpineBottomUpAux]⟩, ?_⟩
       intro P0 s v _ _
       simp [spliceMinNat]
-    | node l k r ihl _ =>
+    | node k l r ihl _ =>
       intro hbst
-      have hl_lt : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => x < k) l := by cases hbst; assumption
-      have hr_gt : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => k < x) r := by cases hbst; assumption
-      have hbst_l : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST l := by cases hbst; assumption
-      have hbst_r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST r := by cases hbst; assumption
-      rcases l with _ | ⟨ll, lk, lr⟩
+      have hl_lt : _root_.SplayDeque.Direct.ForallTree (fun x => x < k) l := by cases hbst using isBSTCases; assumption
+      have hr_gt : _root_.SplayDeque.Direct.ForallTree (fun x => k < x) r := by cases hbst using isBSTCases; assumption
+      have hbst_l : _root_.BinaryTree.IsBST l := by cases hbst using isBSTCases; assumption
+      have hbst_r : _root_.BinaryTree.IsBST r := by cases hbst using isBSTCases; assumption
+      rcases l with _ | ⟨lk, ll, lr⟩
       · refine ⟨by simpa [spliceMinNat] using hbst_r, ?_, ⟨leftSpineBottomUpNat r, ?_⟩, ?_⟩
         · simp [spliceMinNat, inorderNat]
         · rw [h_ls_node]
           simp [spliceMinNat, leftSpineBottomUpNat, leftSpineBottomUpAux]
         · intro P0 s v hmin hsv
-          exact h_lcrs_splice (.node .empty k r) P0 P0 s v hbst hmin hsv
+          exact h_lcrs_splice (.node k .nil r) P0 P0 s v hbst hmin hsv
       · obtain ⟨hbst_sl, hinord_sl, ⟨r_ls, hls_sl⟩, _⟩ := ihl hbst_l
-        obtain ⟨hne_ls, hne_in⟩ := h_nonempty_lists (.node ll lk lr) (by simp)
-        have hsl_lt : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => x < k) (spliceMinNat (.node ll lk lr)) := by
+        obtain ⟨hne_ls, hne_in⟩ := h_nonempty_lists (.node lk ll lr) (by simp)
+        have hsl_lt : _root_.SplayDeque.Direct.ForallTree (fun x => x < k) (spliceMinNat (.node lk ll lr)) := by
           rw [h_forall_inord, hinord_sl]
           intro x hx
           exact (h_forall_inord _ _).mp hl_lt x (List.mem_of_mem_tail hx)
-        have hsp_eq : spliceMinNat (.node (.node ll lk lr) k r) =
-            .node (spliceMinNat (.node ll lk lr)) k r := by
+        have hsp_eq : spliceMinNat (.node k (.node lk ll lr) r) =
+            .node k (spliceMinNat (.node lk ll lr)) r := by
           simp [spliceMinNat]
         rw [hsp_eq]
-        refine ⟨_root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST.node k _ r hsl_lt hr_gt hbst_sl hbst_r, ?_, ⟨r_ls, ?_⟩, ?_⟩
+        refine ⟨_root_.BinaryTree.IsBST.node k _ r hsl_lt hr_gt hbst_sl hbst_r, ?_, ⟨r_ls, ?_⟩, ?_⟩
         · conv_lhs => rw [inorderNat, List.append_assoc]
           conv_rhs => rw [inorderNat, List.append_assoc]
           rw [hinord_sl, List.tail_append_of_ne_nil hne_in]
         · rw [h_ls_node, h_ls_node, hls_sl, List.append_assoc, List.tail_append_of_ne_nil hne_ls]
         · intro P0 s v hmin hsv
           rw [← hsp_eq]
-          exact h_lcrs_splice (.node (.node ll lk lr) k r) P0 P0 s v hbst hmin hsv
+          exact h_lcrs_splice (.node k (.node lk ll lr) r) P0 P0 s v hbst hmin hsv
 
   have h_snoc_inj :
       ∀ (xs ys : List ℕ) (a b : ℕ), xs ++ [a] = ys ++ [b] → xs = ys ∧ a = b := by
@@ -16873,24 +16875,24 @@ by
     exact ⟨h1, by simpa using h2⟩
 
   have h_rot_evict :
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (u y : ℕ) (pre suf : List ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+      ∀ (T : _root_.BinaryTree ℕ) (u y : ℕ) (pre suf : List ℕ),
+        _root_.BinaryTree.IsBST T →
         leftSpineBottomUpNat T = pre ++ u :: y :: suf →
           leftSpineBottomUpNat (rotateRightOnLeftSpine u T) = pre ++ u :: suf := by
     intro T u y pre
     induction T with
-    | empty =>
+    | nil =>
       intro suf _ h
       have := congrArg List.length h
       simp [leftSpineBottomUpNat, leftSpineBottomUpAux] at this
-    | node l k r ihl _ =>
+    | node k l r ihl _ =>
       intro suf hbst hls
-      rcases l with _ | ⟨a, x, b⟩
+      rcases l with _ | ⟨x, a, b⟩
       · rw [h_ls_node] at hls
         have := congrArg List.length hls
         simp [leftSpineBottomUpNat, leftSpineBottomUpAux] at this
         omega
-      · have hp_ls := (h_bst_props (.node (.node a x b) k r) hbst).2.1
+      · have hp_ls := (h_bst_props (.node k (.node x a b) r) hbst).2.1
         rw [hls, List.pairwise_append] at hp_ls
         have hp_uys : List.Pairwise (· < ·) (u :: y :: suf) := hp_ls.2.1
         rw [List.pairwise_cons] at hp_uys
@@ -16898,7 +16900,7 @@ by
         have hp_ys := hp_uys.2
         rw [List.pairwise_cons] at hp_ys
         have hy_suf : ∀ z ∈ suf, y < z := hp_ys.1
-        cases hbst with
+        cases hbst using isBSTCases with
         | node _ _ _ _ _ hbst_l _ =>
           rw [h_ls_node, h_ls_node] at hls
           induction suf using List.reverseRecOn with
@@ -16926,7 +16928,7 @@ by
                 obtain ⟨_, rfl⟩ := h_snoc_inj _ _ _ _ h3
                 have hyx : y < x := hy_suf x (by simp)
                 omega
-            have hls_l : leftSpineBottomUpNat (.node a x b) = pre ++ u :: y :: suf_init := by
+            have hls_l : leftSpineBottomUpNat (.node x a b) = pre ++ u :: y :: suf_init := by
               rw [h_ls_node]
               exact h2
             simp only [rotateRightOnLeftSpine, hxu, ↓reduceIte]
@@ -16934,22 +16936,22 @@ by
             simp [List.append_assoc]
 
   have h_rot_lcrs_step :
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (P0 curP u v : ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T → (∀ k ∈ inorderNat T, k < curP) →
+      ∀ (T : _root_.BinaryTree ℕ) (P0 curP u v : ℕ),
+        _root_.BinaryTree.IsBST T → (∀ k ∈ inorderNat T, k < curP) →
           lcrsParentAux P0 curP v T ≤ lcrsParentAux P0 curP v (rotateRightOnLeftSpine u T) := by
     intro T P0
     induction T with
-    | empty =>
+    | nil =>
       intro _ _ _ _ _
       exact le_rfl
-    | node l y c ihl _ =>
+    | node y l c ihl _ =>
       intro curP u v hbst hlt
-      cases hbst with
+      cases hbst using isBSTCases with
       | node _ _ _ hl_lt _ hbst_l _ =>
-        rcases l with _ | ⟨a, x, b⟩
+        rcases l with _ | ⟨x, a, b⟩
         · exact le_rfl
-        · have hy_cur : y < curP := hlt y (h_inord_key (.node a x b) y c)
-          have hxy : x < y := (h_forall_inord _ (.node a x b)).mp hl_lt x (h_inord_key a x b)
+        · have hy_cur : y < curP := hlt y (h_inord_key (.node x a b) y c)
+          have hxy : x < y := (h_forall_inord _ (.node x a b)).mp hl_lt x (h_inord_key a x b)
           by_cases hxu : x = u
           · subst hxu
             simp only [rotateRightOnLeftSpine, ↓reduceIte, lcrsParentAux]
@@ -16972,14 +16974,14 @@ by
           · simp only [rotateRightOnLeftSpine, hxu, ↓reduceIte, lcrsParentAux]
             by_cases hvy : v < y
             · simp only [hvy, ↓reduceIte]
-              exact ihl y u v hbst_l ((h_forall_inord _ (.node a x b)).mp hl_lt)
+              exact ihl y u v hbst_l ((h_forall_inord _ (.node x a b)).mp hl_lt)
             · simp only [hvy, ↓reduceIte]
               exact le_rfl
 
   have h_s2_part3 :
-      ∀ T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+      ∀ T : _root_.BinaryTree ℕ, _root_.BinaryTree.IsBST T →
         (∀ u : ℕ,
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (rotateRightOnLeftSpine u T) ∧
+          _root_.BinaryTree.IsBST (rotateRightOnLeftSpine u T) ∧
             inorderNat (rotateRightOnLeftSpine u T) = inorderNat T) ∧
         (∀ (u y : ℕ) (pre suf : List ℕ),
           leftSpineBottomUpNat T = pre ++ u :: y :: suf →
@@ -16996,11 +16998,11 @@ by
           let js := popJumpsAt 0 t s ls
           ∀ j (hj : j < js.length),
             let Tj := (js.take j).foldl (fun G e => rotateRightOnLeftSpine e.x G) T
-            _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST Tj ∧
+            _root_.BinaryTree.IsBST Tj ∧
               ∃ pre suf, leftSpineBottomUpNat Tj = pre ++ (js[j]'hj).x :: (js[j]'hj).y :: suf) := by
     have h_foldl_mono :
-        ∀ (us : List ℕ) (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (P0 v : ℕ),
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G → (∀ k ∈ inorderNat G, k < P0) →
+        ∀ (us : List ℕ) (G : _root_.BinaryTree ℕ) (P0 v : ℕ),
+          _root_.BinaryTree.IsBST G → (∀ k ∈ inorderNat G, k < P0) →
             lcrsParent P0 G v ≤
               lcrsParent P0 (us.foldl (fun H u => rotateRightOnLeftSpine u H) G) v := by
       intro us
@@ -17016,9 +17018,9 @@ by
         have hrest := ih (rotateRightOnLeftSpine u G) P0 v hbstG' (by rw [hinordG']; exact hltG)
         exact le_trans hstep hrest
     have h_iter_bst :
-        ∀ (N w : ℕ) (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G →
-            _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST ((rotateRightOnLeftSpine w)^[N] G) ∧
+        ∀ (N w : ℕ) (G : _root_.BinaryTree ℕ),
+          _root_.BinaryTree.IsBST G →
+            _root_.BinaryTree.IsBST ((rotateRightOnLeftSpine w)^[N] G) ∧
               inorderNat ((rotateRightOnLeftSpine w)^[N] G) = inorderNat G := by
       intro N w G hbstG
       induction N with
@@ -17029,8 +17031,8 @@ by
         obtain ⟨hbst_n1, hinord_n1⟩ := h_rot_bst_inord _ w hbst_n
         exact ⟨hbst_n1, hinord_n1.trans hinord_n⟩
     have h_iter_mono :
-        ∀ (N w P0 v : ℕ) (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G → (∀ k ∈ inorderNat G, k < P0) →
+        ∀ (N w P0 v : ℕ) (G : _root_.BinaryTree ℕ),
+          _root_.BinaryTree.IsBST G → (∀ k ∈ inorderNat G, k < P0) →
             lcrsParent P0 G v ≤ lcrsParent P0 ((rotateRightOnLeftSpine w)^[N] G) v := by
       intro N w P0 v G hbstG hltG
       induction N with
@@ -17053,7 +17055,7 @@ by
     have h_inv :
         ∀ j ≤ js.length,
           let Tj := (js.take j).foldl (fun G e => rotateRightOnLeftSpine e.x G) T
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST Tj ∧
+          _root_.BinaryTree.IsBST Tj ∧
             leftSpineBottomUpNat Tj =
               (pre0 ++ (List.range j).map (fun i => ls.getD (2 * i + 1) 0)) ++
                 ls.drop (2 * j + 1) ++ suf0 := by
@@ -17124,11 +17126,11 @@ by
     simp [List.append_assoc]
 
   have h_s3 :
-      ∀ (birth : ℕ → ℕ) (P0 lo w : ℕ) (H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST H →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => w < k ∧ k < P0) H →
+      ∀ (birth : ℕ → ℕ) (P0 lo w : ℕ) (H : _root_.BinaryTree ℕ),
+        _root_.BinaryTree.IsBST H →
+        _root_.SplayDeque.Direct.ForallTree (fun k => w < k ∧ k < P0) H →
         lo ≤ w → w < P0 →
-        (∀ k, lo ≤ k → k < P0 → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun z => k < z) H → k ≠ w →
+        (∀ k, lo ≤ k → k < P0 → _root_.SplayDeque.Direct.ForallTree (fun z => k < z) H → k ≠ w →
           birth w < birth k) →
         ∃ N : ℕ,
           plugUnbornNat birth lo P0 (insertPushFolded (foldBST P0 H).2 w (foldBST P0 H).1) =
@@ -17158,7 +17160,7 @@ by
         ∀ (m0 : ℕ), lo ≤ w → w < m0 →
           (∀ k, lo ≤ k → k < m0 → k ≠ w → birth w < birth k) →
           cartesianRangeNat birth lo m0 =
-            .node (cartesianRangeNat birth lo w) w (cartesianRangeNat birth (w + 1) m0) := by
+            .node w (cartesianRangeNat birth lo w) (cartesianRangeNat birth (w + 1) m0) := by
       intro m0 hlw hwm0 hm
       let step : ℕ → ℕ → ℕ := fun best k => if birth k < birth best then k else best
       have h_stay :
@@ -17227,11 +17229,11 @@ by
       · exact h_fuel_irrel (m0 - lo - 1) (w - lo) lo w (by omega) le_rfl
       · exact h_fuel_irrel (m0 - lo - 1) (m0 - (w + 1)) (w + 1) m0 (by omega) le_rfl
     have h_iter_lift :
-        ∀ (n m : ℕ) (V0 Rm : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-          (∀ i < n, ∃ a x b, (rotateRightOnLeftSpine w)^[i] V0 = .node a x b ∧ w < x) →
+        ∀ (n m : ℕ) (V0 Rm : _root_.BinaryTree ℕ),
+          (∀ i < n, ∃ a x b, (rotateRightOnLeftSpine w)^[i] V0 = .node x a b ∧ w < x) →
           ∀ i ≤ n,
-            (rotateRightOnLeftSpine w)^[i] (.node V0 m Rm) =
-              .node ((rotateRightOnLeftSpine w)^[i] V0) m Rm := by
+            (rotateRightOnLeftSpine w)^[i] (.node m V0 Rm) =
+              .node m ((rotateRightOnLeftSpine w)^[i] V0) Rm := by
       intro n m V0 Rm hroot i
       induction i with
       | zero => intro _; rfl
@@ -17242,80 +17244,80 @@ by
         rw [Function.iterate_succ_apply', ih (le_of_lt (Nat.lt_of_succ_le hi_le)), hVi]
         simp only [rotateRightOnLeftSpine, hxw, ↓reduceIte]
         rw [← hVi, ← Function.iterate_succ_apply' (rotateRightOnLeftSpine w) i V0]
-    rcases H with _ | ⟨l0, b0, r0⟩
+    rcases H with _ | ⟨b0, l0, r0⟩
     · refine ⟨0, ?_⟩
       simp only [foldBST, insertPushFolded, plugUnbornNat, Function.iterate_zero_apply]
       refine (h_cart_split P0 hlo_w hw_P ?_).symm
       intro k hkl hkP hkw
-      exact hmin_birth k hkl hkP _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree.left hkw
-    · cases hbst with
+      exact hmin_birth k hkl hkP _root_.SplayDeque.Direct.ForallTree.left hkw
+    · cases hbst using isBSTCases with
       | node _ _ _ hl0_lt hr0_gt hbst_l0 _ =>
         cases hbounds with
         | node _ _ _ hl0_b hb0_b hr0_b =>
           have h_ins_frs :
-              ∀ (r acc acc' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ),
+              ∀ (r acc acc' : _root_.BinaryTree ℕ) (k : ℕ),
                 insertPushFolded b0 w acc = acc' → k ≠ b0 →
-                _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun z => b0 < z) r →
+                _root_.SplayDeque.Direct.ForallTree (fun z => b0 < z) r →
                   insertPushFolded b0 w (foldRightSpine acc k r) = foldRightSpine acc' k r := by
             intro r
             induction r with
-            | empty =>
+            | nil =>
               intro acc acc' k hacc hk _
               simp [foldRightSpine, insertPushFolded, hk, hacc]
-            | node l2 k2 r2 _ ihr2 =>
+            | node k2 l2 r2 _ ihr2 =>
               intro acc acc' k hacc hk hr
               cases hr with
               | node _ _ _ _ hk2 hr2 =>
                 have hk2_ne : k2 ≠ b0 := by omega
                 simp only [foldRightSpine]
-                refine ihr2 (.node acc k l2) (.node acc' k l2) k2 ?_ hk2_ne hr2
+                refine ihr2 (.node k acc l2) (.node k acc' l2) k2 ?_ hk2_ne hr2
                 simp [insertPushFolded, hk, hacc]
           have h_ins_eq :
               insertPushFolded b0 w (foldRightSpine l0 b0 r0) =
-                foldRightSpine (.node .empty w l0) b0 r0 := by
-            rcases r0 with _ | ⟨l2, k2, r2⟩
+                foldRightSpine (.node w .nil l0) b0 r0 := by
+            rcases r0 with _ | ⟨k2, l2, r2⟩
             · simp [foldRightSpine, insertPushFolded]
             · cases hr0_gt with
               | node _ _ _ _ hk2 hr2 =>
                 simp only [foldRightSpine]
-                exact h_ins_frs r2 (.node l0 b0 l2) (.node (.node .empty w l0) b0 l2) k2
+                exact h_ins_frs r2 (.node b0 l0 l2) (.node b0 (.node w .nil l0) l2) k2
                   (by simp [insertPushFolded]) (by omega) hr2
           have h_left_rot :
-              ∀ (l : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (hi : ℕ),
-                _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST l → w < hi → hi ≤ P0 →
-                _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => w < k ∧ k < hi) l →
-                (∀ k, lo ≤ k → k < hi → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun z => k < z) l → k ≠ w →
+              ∀ (l : _root_.BinaryTree ℕ) (hi : ℕ),
+                _root_.BinaryTree.IsBST l → w < hi → hi ≤ P0 →
+                _root_.SplayDeque.Direct.ForallTree (fun k => w < k ∧ k < hi) l →
+                (∀ k, lo ≤ k → k < hi → _root_.SplayDeque.Direct.ForallTree (fun z => k < z) l → k ≠ w →
                   birth w < birth k) →
                 let Nl := leftSpineLen (eraseNatKeys l)
                 let U0 := plugUnbornNat birth lo hi l
                 (rotateRightOnLeftSpine w)^[Nl] U0 =
-                  .node (cartesianRangeNat birth lo w) w (plugUnbornNat birth (w + 1) hi l) ∧
-                (∀ i < Nl, ∃ a x b, (rotateRightOnLeftSpine w)^[i] U0 = .node a x b ∧ w < x) := by
+                  .node w (cartesianRangeNat birth lo w) (plugUnbornNat birth (w + 1) hi l) ∧
+                (∀ i < Nl, ∃ a x b, (rotateRightOnLeftSpine w)^[i] U0 = .node x a b ∧ w < x) := by
             intro l
             induction l with
-            | empty =>
+            | nil =>
               intro hi _ hwhi _ _ hmin_l
               refine ⟨?_, fun i hi0 => by simp [eraseNatKeys, leftSpineLen] at hi0⟩
               simp only [eraseNatKeys, leftSpineLen, Function.iterate_zero_apply, plugUnbornNat]
               exact h_cart_split hi hlo_w hwhi fun k h1 h2 h3 =>
-                hmin_l k h1 h2 _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree.left h3
-            | node ll m rl ihll _ =>
+                hmin_l k h1 h2 _root_.SplayDeque.Direct.ForallTree.left h3
+            | node m ll rl ihll _ =>
               intro hi hbst_l _ hhiP hbounds_l hmin_l
-              cases hbst_l with
+              cases hbst_l using isBSTCases with
               | node _ _ _ hll_lt hrl_gt hbst_ll _ =>
                 cases hbounds_l with
                 | node _ _ _ hll_b hm_b _ =>
-                  have hll_bounds : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => w < k ∧ k < m) ll := by
+                  have hll_bounds : _root_.SplayDeque.Direct.ForallTree (fun k => w < k ∧ k < m) ll := by
                     rw [h_forall_inord]
                     intro k hk
                     exact ⟨((h_forall_inord _ ll).mp hll_b k hk).1,
                       (h_forall_inord _ ll).mp hll_lt k hk⟩
                   have hmin_ll :
-                      ∀ k, lo ≤ k → k < m → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun z => k < z) ll → k ≠ w →
+                      ∀ k, lo ≤ k → k < m → _root_.SplayDeque.Direct.ForallTree (fun z => k < z) ll → k ≠ w →
                         birth w < birth k := by
                     intro k h1 h2 hk_ll hkw
                     refine hmin_l k h1 (by omega) ?_ hkw
-                    refine _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree.node ll m rl hk_ll h2 ?_
+                    refine _root_.SplayDeque.Direct.ForallTree.node ll m rl hk_ll h2 ?_
                     rw [h_forall_inord] at hrl_gt ⊢
                     intro z hz
                     have := hrl_gt z hz
@@ -17324,30 +17326,30 @@ by
                   set Nll := leftSpineLen (eraseNatKeys ll)
                   set V0 := plugUnbornNat birth lo m ll
                   set Rm := plugUnbornNat birth (m + 1) hi rl
-                  have hNl_eq : leftSpineLen (eraseNatKeys (.node ll m rl)) = Nll + 1 := by
+                  have hNl_eq : leftSpineLen (eraseNatKeys (.node m ll rl)) = Nll + 1 := by
                     simp [eraseNatKeys, leftSpineLen, Nll, Nat.add_comm]
                   have h_lift := h_iter_lift Nll m V0 Rm h_ih_roots
                   refine ⟨?_, ?_⟩
-                  · change (rotateRightOnLeftSpine w)^[leftSpineLen (eraseNatKeys (.node ll m rl))]
-                      (.node V0 m Rm) = _
+                  · change (rotateRightOnLeftSpine w)^[leftSpineLen (eraseNatKeys (.node m ll rl))]
+                      (.node m V0 Rm) = _
                     rw [hNl_eq, Function.iterate_succ_apply', h_lift Nll le_rfl, h_ih_eq]
                     simp [rotateRightOnLeftSpine, plugUnbornNat, Rm]
                   · intro i hi_lt
                     rw [hNl_eq] at hi_lt
-                    change ∃ a x b, (rotateRightOnLeftSpine w)^[i] (.node V0 m Rm) = .node a x b ∧ w < x
+                    change ∃ a x b, (rotateRightOnLeftSpine w)^[i] (.node m V0 Rm) = .node x a b ∧ w < x
                     rw [h_lift i (by omega)]
                     exact ⟨_, m, Rm, rfl, hm_b.1⟩
-          have hl0_bounds : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => w < k ∧ k < b0) l0 := by
+          have hl0_bounds : _root_.SplayDeque.Direct.ForallTree (fun k => w < k ∧ k < b0) l0 := by
             rw [h_forall_inord]
             intro k hk
             exact ⟨((h_forall_inord _ l0).mp hl0_b k hk).1,
               (h_forall_inord _ l0).mp hl0_lt k hk⟩
           have hmin_l0 :
-              ∀ k, lo ≤ k → k < b0 → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun z => k < z) l0 → k ≠ w →
+              ∀ k, lo ≤ k → k < b0 → _root_.SplayDeque.Direct.ForallTree (fun z => k < z) l0 → k ≠ w →
                 birth w < birth k := by
             intro k h1 h2 hk_l0 hkw
             refine hmin_birth k h1 (by omega) ?_ hkw
-            refine _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree.node l0 b0 r0 hk_l0 h2 ?_
+            refine _root_.SplayDeque.Direct.ForallTree.node l0 b0 r0 hk_l0 h2 ?_
             rw [h_forall_inord] at hr0_gt ⊢
             intro z hz
             have := hr0_gt z hz
@@ -17356,41 +17358,41 @@ by
             hl0_bounds hmin_l0
           set N := leftSpineLen (eraseNatKeys l0)
           have h_frs_lift :
-              ∀ (r acc1 acc2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ),
-                w < k → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun z => w < z) r →
+              ∀ (r acc1 acc2 : _root_.BinaryTree ℕ) (k : ℕ),
+                w < k → _root_.SplayDeque.Direct.ForallTree (fun z => w < z) r →
                 plugUnbornNat birth lo k acc2 =
                   (rotateRightOnLeftSpine w)^[N] (plugUnbornNat birth lo k acc1) →
                 (∀ i < N, ∃ a x b,
-                  (rotateRightOnLeftSpine w)^[i] (plugUnbornNat birth lo k acc1) = .node a x b ∧
+                  (rotateRightOnLeftSpine w)^[i] (plugUnbornNat birth lo k acc1) = .node x a b ∧
                   w < x) →
                 plugUnbornNat birth lo P0 (foldRightSpine acc2 k r) =
                   (rotateRightOnLeftSpine w)^[N]
                     (plugUnbornNat birth lo P0 (foldRightSpine acc1 k r)) := by
             intro r
             induction r with
-            | empty =>
+            | nil =>
               intro acc1 acc2 k _ _ hacc hroots
               simp only [foldRightSpine, plugUnbornNat]
               rw [h_iter_lift N k _ _ hroots N le_rfl, hacc]
-            | node l2 k2 r2 _ ihr2 =>
+            | node k2 l2 r2 _ ihr2 =>
               intro acc1 acc2 k hwk hr hacc hroots
               cases hr with
               | node _ _ _ _ hwk2 hr2 =>
                 simp only [foldRightSpine]
-                refine ihr2 (.node acc1 k l2) (.node acc2 k l2) k2 hwk2 hr2 ?_ ?_
+                refine ihr2 (.node k acc1 l2) (.node k acc2 l2) k2 hwk2 hr2 ?_ ?_
                 · simp only [plugUnbornNat]
                   rw [h_iter_lift N k _ _ hroots N le_rfl, hacc]
                 · intro i hi
                   simp only [plugUnbornNat]
                   rw [h_iter_lift N k _ _ hroots i (le_of_lt hi)]
                   exact ⟨_, k, _, rfl, hwk⟩
-          have hr0_w : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun z => w < z) r0 := by
+          have hr0_w : _root_.SplayDeque.Direct.ForallTree (fun z => w < z) r0 := by
             rw [h_forall_inord] at hr0_b ⊢
             intro z hz
             exact (hr0_b z hz).1
           refine ⟨N, ?_⟩
           simp only [foldBST, h_ins_eq]
-          exact h_frs_lift r0 l0 (.node .empty w l0) b0 hb0_b.1 hr0_w
+          exact h_frs_lift r0 l0 (.node w .nil l0) b0 hb0_b.1 hr0_w
             (by simpa [plugUnbornNat] using h_l0_eq.symm) h_l0_roots
 
   have h_take_countP :
@@ -17552,7 +17554,7 @@ by
               (ls.length = 2 * m + 2 ∧ rightSpineTopDownNat H' = rs) ∨
               (ls.length = 2 * m + 3 ∧ rightSpineTopDownNat H' = ls.getD (2 * m + 1) 0 :: rs) := by
     have h_exec_append :
-        ∀ (xs ys : List KeyedCoreOp) (H0 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+        ∀ (xs ys : List KeyedCoreOp) (H0 : _root_.BinaryTree ℕ),
           execKeyedList H0 (xs ++ ys) = execKeyedList (execKeyedList H0 xs) ys := by
       intro xs
       induction xs with
@@ -17561,7 +17563,7 @@ by
         intro ys H0
         exact ih ys (execKeyedOp H0 op)
     have h_rslr_rs :
-        ∀ (d : ℕ) (H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+        ∀ (d : ℕ) (H : _root_.BinaryTree ℕ),
           d + 2 ≤ (rightSpineTopDownNat H).length →
             rightSpineTopDownNat (rotateLeftAtRightDepthNat H d) =
               (rightSpineTopDownNat H).eraseIdx d := by
@@ -17569,53 +17571,53 @@ by
       induction d with
       | zero =>
         intro H hlen
-        rcases H with _ | ⟨a, x, _ | ⟨b, y, c⟩⟩
+        rcases H with _ | ⟨x, a, _ | ⟨y, b, c⟩⟩
         · simp [rightSpineTopDownNat] at hlen
         · simp [rightSpineTopDownNat] at hlen
-        · simp [rotateLeftAtRightDepthNat, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft, rightSpineTopDownNat]
+        · simp [rotateLeftAtRightDepthNat, _root_.BinaryTree.rotateLeft, rightSpineTopDownNat]
       | succ d ih =>
         intro H hlen
-        rcases H with _ | ⟨l, k, r⟩
+        rcases H with _ | ⟨k, l, r⟩
         · simp [rightSpineTopDownNat] at hlen
         · simp only [rightSpineTopDownNat, List.length_cons] at hlen
           simp only [rotateLeftAtRightDepthNat, rightSpineTopDownNat, List.eraseIdx_cons_succ]
           rw [ih r (by omega)]
     have h_desc_app :
-        ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a1 a2 : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)),
-          u ≠ .empty →
+        ∀ (u : _root_.BinaryTree ℕ) (a1 a2 : List (ℕ × _root_.BinaryTree ℕ)),
+          u ≠ .nil →
             descendLeftNat u (a1 ++ a2) =
               ((descendLeftNat u a1).1, (descendLeftNat u a1).2 ++ a2) := by
       intro u
       induction u with
-      | empty =>
+      | nil =>
         intro _ _ h
         exact absurd rfl h
-      | node l k r ihl _ =>
+      | node k l r ihl _ =>
         intro a1 a2 _
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · simp [descendLeftNat]
         · simp only [descendLeftNat]
           rw [← List.cons_append]
           exact ihl ((k, r) :: a1) a2 (by simp)
     have h_desc_ls :
-        ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)),
-          u ≠ .empty →
+        ∀ (u : _root_.BinaryTree ℕ) (acc : List (ℕ × _root_.BinaryTree ℕ)),
+          u ≠ .nil →
             ∃ s0 : ℕ, leftSpineBottomUpAux u (acc.map Prod.fst) =
               s0 :: ((descendLeftNat u acc).2.map Prod.fst) := by
       intro u
       induction u with
-      | empty =>
+      | nil =>
         intro _ h
         exact absurd rfl h
-      | node l k r ihl _ =>
+      | node k l r ihl _ =>
         intro acc _
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · exact ⟨k, by simp [leftSpineBottomUpAux, descendLeftNat]⟩
         · simp only [leftSpineBottomUpAux, descendLeftNat]
           exact ihl ((k, r) :: acc) (by simp)
     have h_splay_rs :
-        ∀ (n : ℕ) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (p0 : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ))
-          (b0 : ℕ) (r0 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+        ∀ (n : ℕ) (c : _root_.BinaryTree ℕ) (p0 : List (ℕ × _root_.BinaryTree ℕ))
+          (b0 : ℕ) (r0 : _root_.BinaryTree ℕ),
           p0.length ≤ n →
             let H_after := splayLeftSpineNat c (p0 ++ [(b0, r0)])
             let m' := p0.length / 2
@@ -17642,7 +17644,7 @@ by
         · have hrest : rest.length ≤ n := by
             simp at hlen
             omega
-          have h_ih := ih (.node c k1 (.node r1 k2 r2)) rest b0 r0 hrest
+          have h_ih := ih (.node k1 c (.node k2 r1 r2)) rest b0 r0 hrest
           dsimp (config := { failIfUnchanged := false }) only at h_ih ⊢
           simp only [List.cons_append, splayLeftSpineNat]
           rcases h_ih with ⟨heven, hrs⟩ | ⟨hodd, hrs⟩
@@ -17669,25 +17671,25 @@ by
     · rfl
     · rw [h_op] at hval
       obtain ⟨_, _, _, hne, _⟩ := hval
-      rcases H_eq : keyedState kops t with _ | ⟨l0, b0, r0⟩
+      rcases H_eq : keyedState kops t with _ | ⟨b0, l0, r0⟩
       · exact absurd H_eq hne
-      · rcases l0 with _ | ⟨ll, lk, lr⟩
+      · rcases l0 with _ | ⟨lk, ll, lr⟩
         · left
           simp [execKeyedOp, popNat, descendLeftNat, splayLeftSpineNat,
             leftSpineBottomUpNat, leftSpineBottomUpAux, rightSpineTopDownNat]
-        · set l0 := _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node ll lk lr
-          have hl0_ne : l0 ≠ .empty := by simp [l0]
-          have hdesc : descendLeftNat (.node l0 b0 r0) [] =
+        · set l0 := _root_.BinaryTree.node lk ll lr
+          have hl0_ne : l0 ≠ .nil := by simp [l0]
+          have hdesc : descendLeftNat (.node b0 l0 r0) [] =
               ((descendLeftNat l0 []).1, (descendLeftNat l0 []).2 ++ [(b0, r0)]) := by
-            have h0 : descendLeftNat (.node l0 b0 r0) [] =
+            have h0 : descendLeftNat (.node b0 l0 r0) [] =
                 descendLeftNat l0 ([] ++ [(b0, r0)]) := by
               simp [descendLeftNat, l0]
             rw [h0, h_desc_app l0 [] [(b0, r0)] hl0_ne]
           obtain ⟨s0, hls_eq⟩ := h_desc_ls l0 [(b0, r0)] hl0_ne
           have hls_form :
-              leftSpineBottomUpNat (.node l0 b0 r0) =
+              leftSpineBottomUpNat (.node b0 l0 r0) =
                 s0 :: ((descendLeftNat l0 []).2.map Prod.fst ++ [b0]) := by
-            have h1 : leftSpineBottomUpNat (.node l0 b0 r0) =
+            have h1 : leftSpineBottomUpNat (.node b0 l0 r0) =
                 leftSpineBottomUpAux l0 ([(b0, r0)].map Prod.fst) := rfl
             rw [h1, hls_eq]
             have h2 := congrArg Prod.snd (h_desc_app l0 [] [(b0, r0)] hl0_ne)
@@ -17696,14 +17698,14 @@ by
             rfl
           set p0 := (descendLeftNat l0 []).2
           set c := (descendLeftNat l0 []).1
-          have hpop_eq : popNat (.node l0 b0 r0) = splayLeftSpineNat c (p0 ++ [(b0, r0)]) := by
+          have hpop_eq : popNat (.node b0 l0 r0) = splayLeftSpineNat c (p0 ++ [(b0, r0)]) := by
             unfold popNat
             rw [hdesc]
-          have hls_len : (leftSpineBottomUpNat (.node l0 b0 r0)).length = p0.length + 2 := by
+          have hls_len : (leftSpineBottomUpNat (.node b0 l0 r0)).length = p0.length + 2 := by
             rw [hls_form]
             simp
           have hm_eq :
-              ((leftSpineBottomUpNat (.node l0 b0 r0)).length - 2) / 2 = p0.length / 2 := by
+              ((leftSpineBottomUpNat (.node b0 l0 r0)).length - 2) / 2 = p0.length / 2 := by
             rw [hls_len]
             omega
           rcases h_splay_rs p0.length c p0 b0 r0 le_rfl with ⟨heven, hrs⟩ | ⟨hodd, hrs⟩
@@ -17731,7 +17733,7 @@ by
       exact ⟨hval, h_rslr_rs d (keyedState kops t) hval⟩
 
   have h_foldl_map_x :
-      ∀ (js : List JumpRecord) (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+      ∀ (js : List JumpRecord) (G : _root_.BinaryTree ℕ),
         js.foldl (fun T e => rotateRightOnLeftSpine e.x T) G =
           (js.map JumpRecord.x).foldl (fun T u => rotateRightOnLeftSpine u T) G := by
     intro js
@@ -17743,7 +17745,7 @@ by
       ∀ t ≤ kops.length,
         let F := (foldBST P (keyedState kops t)).1
         let lo := popIdx kops t
-        (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (puqPreEmbeddedState P kops t) ∧
+        (_root_.BinaryTree.IsBST (puqPreEmbeddedState P kops t) ∧
           inorderNat (puqPreEmbeddedState P kops t) = List.Ico lo P) ∧
         (∀ v ∈ inorderNat F,
           lcrsParent P (puqPreEmbeddedState P kops t) v = lcrsParent P F v) ∧
@@ -17772,7 +17774,7 @@ by
   have h_c1 :
       ∀ t ≤ kops.length,
         popIdx kops t ≤ P ∧
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (puqPreEmbeddedState P kops t) ∧
+          _root_.BinaryTree.IsBST (puqPreEmbeddedState P kops t) ∧
           inorderNat (puqPreEmbeddedState P kops t) = List.Ico (popIdx kops t) P := by
     intro t ht
     obtain ⟨⟨hbstT, hinordT⟩, _⟩ := h_s1_at t ht
@@ -17834,7 +17836,7 @@ by
       simp only [puqPreEmbeddedState, hpop, hF_next]
       exact hcomm
     refine ⟨hd_lt, hrot_eq, ?_⟩
-    have hH_ne : H ≠ .empty := by
+    have hH_ne : H ≠ .nil := by
       intro hempty
       have : rs = [] := by simp [rs, hempty, rightSpineTopDownNat]
       rw [this] at hstep
@@ -17911,7 +17913,7 @@ by
     rw [hop] at hstep
     obtain ⟨hwP, hbirth_w, hH_gt_w⟩ := hstep
     have hbst_H := hkvalid.isBST_state t (le_of_lt ht)
-    have hH_bounds : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => w < k ∧ k < P) H := by
+    have hH_bounds : _root_.SplayDeque.Direct.ForallTree (fun k => w < k ∧ k < P) H := by
       rw [h_forall_inord] at hH_gt_w ⊢
       intro k hk
       exact ⟨hH_gt_w k hk, (hkvalid.popIdx_bound t (le_of_lt ht) k hk).2⟩
@@ -17923,7 +17925,7 @@ by
       have h1 := (hkvalid.popIdx_bound (t + 1) (by omega) w hw_mem_next).1
       omega
     have hmin_birth :
-        ∀ k, lo ≤ k → k < P → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun z => k < z) H → k ≠ w →
+        ∀ k, lo ≤ k → k < P → _root_.SplayDeque.Direct.ForallTree (fun z => k < z) H → k ≠ w →
           birthStep kops w < birthStep kops k := by
       intro k hlo_k hkP hH_gt_k hkw
       have hk_not_H : k ∉ inorderNat H := by
@@ -17960,14 +17962,14 @@ by
           s = popIdx kops t ∧
             leftSpineBottomUpNat (puqPreEmbeddedState P kops t) =
               leftSpineBottomUpNat (foldBST P (keyedState kops t)).1 ∧
-            _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (spliceMinNat (puqPreEmbeddedState P kops t)) ∧
+            _root_.BinaryTree.IsBST (spliceMinNat (puqPreEmbeddedState P kops t)) ∧
             puqPreEmbeddedState P kops (t + 1) =
               js.foldl (fun T e => rotateRightOnLeftSpine e.x T)
                 (spliceMinNat (puqPreEmbeddedState P kops t)) ∧
             ∀ j (hj : j < js.length),
               let Tj := (js.take j).foldl (fun T e => rotateRightOnLeftSpine e.x T)
                 (spliceMinNat (puqPreEmbeddedState P kops t))
-              _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST Tj ∧
+              _root_.BinaryTree.IsBST Tj ∧
                 ∃ pre suf,
                   leftSpineBottomUpNat Tj = pre ++ (js[j]'hj).x :: (js[j]'hj).y :: suf := by
     intro t ht s hop
@@ -17998,9 +18000,9 @@ by
           leftSpineBottomUpNat (cartesianRangeNat (birthStep kops) s s) = [] := by
         simp [cartesianRangeNat, cartesianRangeAux, leftSpineBottomUpNat, leftSpineBottomUpAux]
       rw [h1, hcart_nil, List.nil_append]
-    have hbst_Tt : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (puqPreEmbeddedState P kops t) :=
+    have hbst_Tt : _root_.BinaryTree.IsBST (puqPreEmbeddedState P kops t) :=
       (h_c1 t (le_of_lt ht)).2.1
-    have hbst_spTt : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (spliceMinNat (puqPreEmbeddedState P kops t)) :=
+    have hbst_spTt : _root_.BinaryTree.IsBST (spliceMinNat (puqPreEmbeddedState P kops t)) :=
       (h_splice_props _ hbst_Tt).1
     obtain ⟨hbst_F, hinord_F⟩ := hfold.fold_bst_inorder t (le_of_lt ht)
     obtain ⟨hp_inF, _, hhead_inF, hsub_lsF⟩ := h_bst_props F hbst_F
@@ -18144,20 +18146,20 @@ by
 theorem block_quotient_and_tamari_step_laws : PuqBlockQuotientLaws :=
 by
   have h_forall_imp : ∀ {p q : ℕ → Prop}, (∀ x, p x → q x) →
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p T → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree q T := by
+      ∀ (T : _root_.BinaryTree ℕ), _root_.SplayDeque.Direct.ForallTree p T → _root_.SplayDeque.Direct.ForallTree q T := by
     intro p q hpq T hT
     induction hT with
     | left => exact .left
     | node l k r _ hk _ ihl ihr => exact .node l k r ihl (hpq k hk) ihr
 
-  have h_forall_iff : ∀ (p : ℕ → Prop) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p T ↔ ∀ x ∈ inorderNat T, p x := by
+  have h_forall_iff : ∀ (p : ℕ → Prop) (T : _root_.BinaryTree ℕ),
+      _root_.SplayDeque.Direct.ForallTree p T ↔ ∀ x ∈ inorderNat T, p x := by
     intro p T
     induction T with
-    | empty =>
+    | nil =>
       simp only [inorderNat, List.not_mem_nil, IsEmpty.forall_iff, implies_true, iff_true]
       exact .left
-    | node l k r ihl ihr =>
+    | node k l r ihl ihr =>
       constructor
       · intro hft x hx
         cases hft with
@@ -18173,32 +18175,32 @@ by
         · simp [inorderNat]
         · simp [inorderNat, hx]
 
-  have h_ls_aux : ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List ℕ),
+  have h_ls_aux : ∀ (t : _root_.BinaryTree ℕ) (acc : List ℕ),
       leftSpineBottomUpAux t acc = leftSpineBottomUpAux t [] ++ acc := by
     intro t
     induction t with
-    | empty => intro acc; rfl
-    | node l k r ihl _ =>
+    | nil => intro acc; rfl
+    | node k l r ihl _ =>
       intro acc
       simp only [leftSpineBottomUpAux]
       rw [ihl (k :: acc), ihl [k], List.append_assoc]
       rfl
 
-  have h_ls_empty : leftSpineBottomUpNat .empty = [] := rfl
+  have h_ls_empty : leftSpineBottomUpNat .nil = [] := rfl
 
-  have h_ls_node : ∀ (l : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ) (r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      leftSpineBottomUpNat (.node l k r) = leftSpineBottomUpNat l ++ [k] := by
+  have h_ls_node : ∀ (l : _root_.BinaryTree ℕ) (k : ℕ) (r : _root_.BinaryTree ℕ),
+      leftSpineBottomUpNat (.node k l r) = leftSpineBottomUpNat l ++ [k] := by
     intro l k r
     unfold leftSpineBottomUpNat
     simp only [leftSpineBottomUpAux]
     exact h_ls_aux l [k]
   clear h_ls_aux
 
-  have h_c11 : ∀ (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G →
+  have h_c11 : ∀ (G : _root_.BinaryTree ℕ), _root_.BinaryTree.IsBST G →
       List.Pairwise (· < ·) (leftSpineBottomUpNat G) ∧
         ∀ u ∈ leftSpineBottomUpNat G, u ∈ inorderNat G := by
     intro G hbst
-    induction hbst with
+    induction hbst using isBSTRec with
     | left => simp [h_ls_empty, inorderNat]
     | node k l r hfl _ _ _ ihl _ =>
       rw [h_ls_node]
@@ -18214,8 +18216,8 @@ by
           simp [inorderNat, this]
         · simp [inorderNat]
 
-  have h_rest_forall : ∀ (p : ℕ → Prop) (lo hi : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p T → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p (restrictRangeNat lo hi T) := by
+  have h_rest_forall : ∀ (p : ℕ → Prop) (lo hi : ℕ) (T : _root_.BinaryTree ℕ),
+      _root_.SplayDeque.Direct.ForallTree p T → _root_.SplayDeque.Direct.ForallTree p (restrictRangeNat lo hi T) := by
     intro p lo hi T hT
     induction hT with
     | left => exact .left
@@ -18226,10 +18228,10 @@ by
       · exact ihl
       · exact .node _ k _ ihl hk ihr
 
-  have h_rest_bst : ∀ (lo hi : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (restrictRangeNat lo hi T) := by
+  have h_rest_bst : ∀ (lo hi : ℕ) (T : _root_.BinaryTree ℕ),
+      _root_.BinaryTree.IsBST T → _root_.BinaryTree.IsBST (restrictRangeNat lo hi T) := by
     intro lo hi T hT
-    induction hT with
+    induction hT using isBSTRec with
     | left => exact .left
     | node k l r hfl hfr _ _ ihl ihr =>
       simp only [restrictRangeNat]
@@ -18238,13 +18240,13 @@ by
       · exact ihl
       · exact .node k _ _ (h_rest_forall _ lo hi l hfl) (h_rest_forall _ lo hi r hfr) ihl ihr
 
-  have h_c6 : ∀ lo_b hi_b (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+  have h_c6 : ∀ lo_b hi_b (T : _root_.BinaryTree ℕ), _root_.BinaryTree.IsBST T →
       ∀ x0 ∈ leftSpineBottomUpNat T, lo_b ≤ x0 →
         ∀ r, x0 ≤ r → r < hi_b →
           (r ∈ leftSpineBottomUpNat (restrictRangeNat lo_b hi_b T) ↔
             r ∈ leftSpineBottomUpNat T) := by
     intro lo_b hi_b T hbst
-    induction hbst with
+    induction hbst using isBSTRec with
     | left =>
       intro x0 hx0
       simp [h_ls_empty] at hx0
@@ -18307,11 +18309,11 @@ by
         obtain ⟨h1, h2⟩ := ih B C' D heq' (fun x hx => hA x (by simp [hx])) (fun x hx => hC x (by simp [hx]))
         exact ⟨congrArg (a :: ·) h1, h2⟩
 
-  have h_bst_ico_split : ∀ (L : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ) (R : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a b : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node L k R) → inorderNat (.node L k R) = List.Ico a b →
+  have h_bst_ico_split : ∀ (L : _root_.BinaryTree ℕ) (k : ℕ) (R : _root_.BinaryTree ℕ) (a b : ℕ),
+      _root_.BinaryTree.IsBST (.node k L R) → inorderNat (.node k L R) = List.Ico a b →
         a ≤ k ∧ k < b ∧ inorderNat L = List.Ico a k ∧ inorderNat R = List.Ico (k + 1) b := by
     intro L k R a b hbst hin
-    cases hbst with
+    cases hbst using isBSTCases with
     | node _ _ _ hfl _ _ _ =>
       have hk_mem : k ∈ List.Ico a b := by
         rw [← hin]
@@ -18327,40 +18329,40 @@ by
       exact ⟨hak, hkb, hsp.1, hsp.2⟩
   clear h_split_pivot
 
-  have h_rm_ico : ∀ (R : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (cur b : ℕ),
-      cur < b → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST R → inorderNat R = List.Ico (cur + 1) b →
+  have h_rm_ico : ∀ (R : _root_.BinaryTree ℕ) (cur b : ℕ),
+      cur < b → _root_.BinaryTree.IsBST R → inorderNat R = List.Ico (cur + 1) b →
         rightmostKeyNat cur R = b - 1 := by
     intro R
     induction R with
-    | empty =>
+    | nil =>
       intro cur b hcb _ hin
       simp only [inorderNat] at hin
       by_cases hlt : cur + 1 < b
       · rw [List.Ico.eq_cons hlt] at hin
         simp at hin
       · simp only [rightmostKeyNat]; omega
-    | node rl rk rr _ ihrr =>
+    | node rk rl rr _ ihrr =>
       intro cur b _ hbst hin
       obtain ⟨_, hrkb, _, hin_rr⟩ := h_bst_ico_split rl rk rr (cur + 1) b hbst hin
-      cases hbst with
+      cases hbst using isBSTCases with
       | node _ _ _ _ _ _ hbst_rr =>
         simp only [rightmostKeyNat]
         exact ihrr rk b hrkb hbst_rr hin_rr
 
-  have h_c12_part1 : ∀ (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a b : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G → inorderNat G = List.Ico a b →
+  have h_c12_part1 : ∀ (G : _root_.BinaryTree ℕ) (a b : ℕ),
+      _root_.BinaryTree.IsBST G → inorderNat G = List.Ico a b →
         ∀ c, a ≤ c → c < b → c ≤ subtreeMaxNat G c ∧ subtreeMaxNat G c < b := by
     intro G
     induction G with
-    | empty =>
+    | nil =>
       intro a b _ hin c hac hcb
       have hlt : a < b := by omega
       rw [inorderNat, List.Ico.eq_cons hlt] at hin
       simp at hin
-    | node L k R ihL ihR =>
+    | node k L R ihL ihR =>
       intro a b hbst hin c hac hcb
       obtain ⟨hak, hkb, hinL, hinR⟩ := h_bst_ico_split L k R a b hbst hin
-      cases hbst with
+      cases hbst using isBSTCases with
       | node _ _ _ _ _ hbstL hbstR =>
         simp only [subtreeMaxNat]
         split_ifs with hck hkc
@@ -18372,15 +18374,15 @@ by
           rw [h_rm_ico R c b hkb hbstR hinR]
           omega
 
-  have h_c12 : ∀ (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a b : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G → inorderNat G = List.Ico a b →
+  have h_c12 : ∀ (G : _root_.BinaryTree ℕ) (a b : ℕ),
+      _root_.BinaryTree.IsBST G → inorderNat G = List.Ico a b →
         (∀ c, a ≤ c → c < b → c ≤ subtreeMaxNat G c ∧ subtreeMaxNat G c < b) ∧
           (∀ u ∈ leftSpineBottomUpNat G, ∀ v ∈ leftSpineBottomUpNat G,
             u < v → subtreeMaxNat G u < v) := by
     intro G a b hbst hin
     refine ⟨h_c12_part1 G a b hbst hin, ?_⟩
     revert a b hin
-    induction hbst with
+    induction hbst using isBSTRec with
     | left =>
       intro a b _ u hu
       simp [h_ls_empty] at hu
@@ -18405,9 +18407,9 @@ by
           hu_lt_k).2
   clear h_c12_part1
 
-  have h_c10 : ∀ (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a b u : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G → inorderNat G = List.Ico a b →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (rotateRightOnLeftSpine u G) ∧
+  have h_c10 : ∀ (G : _root_.BinaryTree ℕ) (a b u : ℕ),
+      _root_.BinaryTree.IsBST G → inorderNat G = List.Ico a b →
+        _root_.BinaryTree.IsBST (rotateRightOnLeftSpine u G) ∧
           inorderNat (rotateRightOnLeftSpine u G) = List.Ico a b ∧
           (∀ c ∈ leftSpineBottomUpNat (rotateRightOnLeftSpine u G),
             c ∈ leftSpineBottomUpNat G) ∧
@@ -18416,35 +18418,35 @@ by
     intro G a b u
     revert a b
     induction G with
-    | empty =>
+    | nil =>
       intro a b hbst hin
       exact ⟨hbst, hin, fun _ h => h, fun _ _ _ => le_rfl⟩
-    | node l y C ihl _ =>
+    | node y l C ihl _ =>
       intro a b hbst hin
-      rcases l with _ | ⟨A, x, B⟩
+      rcases l with _ | ⟨x, A, B⟩
       · exact ⟨hbst, hin, fun _ h => h, fun _ _ _ => le_rfl⟩
-      · obtain ⟨hay, hyb, hinL, hinC⟩ := h_bst_ico_split (.node A x B) y C a b hbst hin
-        cases hbst with
+      · obtain ⟨hay, hyb, hinL, hinC⟩ := h_bst_ico_split (.node x A B) y C a b hbst hin
+        cases hbst using isBSTCases with
         | node _ _ _ hfl_y hfr_y hbstL hbstC =>
           obtain ⟨hax, hxy, hinA, hinB⟩ := h_bst_ico_split A x B a y hbstL hinL
           simp only [rotateRightOnLeftSpine]
           split_ifs with hxu
           · subst hxu
-            cases hbstL with
+            cases hbstL using isBSTCases with
             | node _ _ _ hfl_x hfr_x hbstA hbstB =>
               cases hfl_y with
               | node _ _ _ _ _ hfl_By =>
-                have hbst_ByC : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node B y C) :=
+                have hbst_ByC : _root_.BinaryTree.IsBST (.node y B C) :=
                   .node y B C hfl_By hfr_y hbstB hbstC
-                have hfr_x_ByC : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => x < k) (.node B y C) :=
+                have hfr_x_ByC : _root_.SplayDeque.Direct.ForallTree (fun k => x < k) (.node y B C) :=
                   .node B y C hfr_x hxy (h_forall_imp (fun k hk => lt_trans hxy hk) C hfr_y)
-                have hbst' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node A x (.node B y C)) :=
-                  .node x A (.node B y C) hfl_x hfr_x_ByC hbstA hbst_ByC
-                have hin_ByC : inorderNat (.node B y C) = List.Ico (x + 1) b := by
+                have hbst' : _root_.BinaryTree.IsBST (.node x A (.node y B C)) :=
+                  .node x A (.node y B C) hfl_x hfr_x_ByC hbstA hbst_ByC
+                have hin_ByC : inorderNat (.node y B C) = List.Ico (x + 1) b := by
                   simp only [inorderNat, hinB, hinC, List.append_assoc, List.singleton_append]
                   rw [← List.Ico.eq_cons hyb, List.Ico.append_consecutive (by omega) (by omega)]
-                have hin' : inorderNat (.node A x (.node B y C)) = List.Ico a b := by
-                  change inorderNat A ++ [x] ++ inorderNat (.node B y C) = List.Ico a b
+                have hin' : inorderNat (.node x A (.node y B C)) = List.Ico a b := by
+                  change inorderNat A ++ [x] ++ inorderNat (.node y B C) = List.Ico a b
                   rw [hinA, hin_ByC]
                   simp only [List.append_assoc, List.singleton_append]
                   rw [← List.Ico.eq_cons (lt_trans hxy hyb), List.Ico.append_consecutive hax (by omega)]
@@ -18469,10 +18471,10 @@ by
                       subst hceqx
                       simp only [subtreeMaxNat, hxy, lt_irrefl, ite_true, ite_false]
                       rw [h_rm_ico B c y hxy hbstB hinB,
-                          h_rm_ico (.node B y C) c b (lt_trans hxy hyb) hbst_ByC hin_ByC]
+                          h_rm_ico (.node y B C) c b (lt_trans hxy hyb) hbst_ByC hin_ByC]
                       omega
           · obtain ⟨hbstL', hinL', hlsL', hmaxL'⟩ := ihl a y hbstL hinL
-            have hfl_y' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => k < y) (rotateRightOnLeftSpine u (.node A x B)) :=
+            have hfl_y' : _root_.SplayDeque.Direct.ForallTree (fun k => k < y) (rotateRightOnLeftSpine u (.node x A B)) :=
               (h_forall_iff _ _).mpr fun k hk => by rw [hinL', List.Ico.mem] at hk; exact hk.2
             refine ⟨.node y _ C hfl_y' hfr_y hbstL' hbstC, ?_, ?_, ?_⟩
             · simp only [inorderNat, hinL', hinC, List.append_assoc, List.singleton_append]
@@ -18490,17 +18492,17 @@ by
               · simp only [subtreeMaxNat, hcy, ite_false]
                 exact le_rfl
 
-  have h_lcrs_le_curP : ∀ (P_top : ℕ) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (curP x : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST U → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => k < curP) U →
+  have h_lcrs_le_curP : ∀ (P_top : ℕ) (U : _root_.BinaryTree ℕ) (curP x : ℕ),
+      _root_.BinaryTree.IsBST U → _root_.SplayDeque.Direct.ForallTree (fun k => k < curP) U →
         x ∈ inorderNat U → lcrsParentAux P_top curP x U ≤ curP := by
     intro P_top U
     induction U with
-    | empty =>
+    | nil =>
       intro curP x _ _ hx
       simp [inorderNat] at hx
-    | node l k r ihl ihr =>
+    | node k l r ihl ihr =>
       intro curP x hbst hfu hx
-      cases hbst with
+      cases hbst using isBSTCases with
       | node _ _ _ hfl hfr hbstL hbstR =>
         cases hfu with
         | node _ _ _ hful hk_lt hfur =>
@@ -18517,17 +18519,17 @@ by
             · exact ihr curP x hbstR hfur hxr
           · exact le_rfl
 
-  have h_c13_aux : ∀ (P_top : ℕ) (B : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (curP x u : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST B → x ∈ inorderNat B → u ∈ leftSpineBottomUpNat B → x < u →
+  have h_c13_aux : ∀ (P_top : ℕ) (B : _root_.BinaryTree ℕ) (curP x u : ℕ),
+      _root_.BinaryTree.IsBST B → x ∈ inorderNat B → u ∈ leftSpineBottomUpNat B → x < u →
         lcrsParentAux P_top curP x B ≤ u := by
     intro P_top B
     induction B with
-    | empty =>
+    | nil =>
       intro curP x u _ _ hu
       simp [h_ls_empty] at hu
-    | node l k r ihl _ =>
+    | node k l r ihl _ =>
       intro curP x u hbst hx hu hxu
-      cases hbst with
+      cases hbst using isBSTCases with
       | node _ _ _ hfl hfr hbstL _ =>
         rw [h_ls_node, List.mem_append, List.mem_singleton] at hu
         rcases hu with hul | rfl
@@ -18550,8 +18552,8 @@ by
           simp only [lcrsParentAux, hxu, ite_true]
           exact h_lcrs_le_curP P_top l u x hbstL hfl hxl
 
-  have h_c13 : ∀ (B : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (P_top x u : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST B → x ∈ inorderNat B → u ∈ leftSpineBottomUpNat B → x < u →
+  have h_c13 : ∀ (B : _root_.BinaryTree ℕ) (P_top x u : ℕ),
+      _root_.BinaryTree.IsBST B → x ∈ inorderNat B → u ∈ leftSpineBottomUpNat B → x < u →
         lcrsParent P_top B x ≤ u :=
     fun B P_top x u hbst hx hu hxu => h_c13_aux P_top B P_top x u hbst hx hu hxu
   clear h_c13_aux
@@ -18634,23 +18636,23 @@ by
     exact ⟨hc0_lo, hc0_hi, hc0_1, hc0_2⟩
   clear h_sbp_findIdx_eq
 
-  have h_bq_empty_of_le : ∀ (subs : List (ℕ × ℕ)) (c_lo c_hi : ℕ) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      c_hi ≤ c_lo → puqBlockQuotient subs c_lo c_hi U = .empty := by
+  have h_bq_empty_of_le : ∀ (subs : List (ℕ × ℕ)) (c_lo c_hi : ℕ) (U : _root_.BinaryTree ℕ),
+      c_hi ≤ c_lo → puqBlockQuotient subs c_lo c_hi U = .nil := by
     intro subs c_lo c_hi U hle
     cases U with
-    | empty => rfl
-    | node l k r => simp [puqBlockQuotient, hle]
+    | nil => rfl
+    | node k l r => simp [puqBlockQuotient, hle]
 
   have h_bq_bounds_bst : ∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (c_lo c_hi : ℕ), c_lo ≤ c_hi → c_hi ≤ subs.length →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => c_lo ≤ x ∧ x < c_hi) (puqBlockQuotient subs c_lo c_hi T) ∧
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (puqBlockQuotient subs c_lo c_hi T) := by
+      ∀ (T : _root_.BinaryTree ℕ) (c_lo c_hi : ℕ), c_lo ≤ c_hi → c_hi ≤ subs.length →
+        _root_.SplayDeque.Direct.ForallTree (fun x => c_lo ≤ x ∧ x < c_hi) (puqBlockQuotient subs c_lo c_hi T) ∧
+          _root_.BinaryTree.IsBST (puqBlockQuotient subs c_lo c_hi T) := by
     intro subs hsbp T
     induction T with
-    | empty =>
+    | nil =>
       intro c_lo c_hi _ _
       exact ⟨.left, .left⟩
-    | node l k r ihl ihr =>
+    | node k l r ihl ihr =>
       intro c_lo c_hi hle hchi
       by_cases hge : c_hi ≤ c_lo
       · rw [h_bq_empty_of_le subs c_lo c_hi _ hge]
@@ -18673,21 +18675,21 @@ by
 
   have h_c1 : ∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
       ∀ c_lo c_hi, c_lo ≤ c_hi → c_hi ≤ subs.length →
-      ∀ T, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (puqBlockQuotient subs c_lo c_hi T) :=
+      ∀ T, _root_.BinaryTree.IsBST T → _root_.BinaryTree.IsBST (puqBlockQuotient subs c_lo c_hi T) :=
     fun subs hsbp c_lo c_hi hle hchi T _ => (h_bq_bounds_bst subs hsbp T c_lo c_hi hle hchi).2
 
   have h_c2_aux : ∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (c_lo c_hi loT hiT : ℕ),
+      ∀ (T : _root_.BinaryTree ℕ) (c_lo c_hi loT hiT : ℕ),
         c_lo ≤ c_hi → c_hi ≤ subs.length →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T → inorderNat T = List.Ico loT hiT →
+        _root_.BinaryTree.IsBST T → inorderNat T = List.Ico loT hiT →
         (c_lo < c_hi → loT ≤ (subs.getD c_lo (0, 0)).1 ∧ (subs.getD (c_hi - 1) (0, 0)).2 ≤ hiT) →
         inorderNat (puqBlockQuotient subs c_lo c_hi T) = List.Ico c_lo c_hi := by
     intro subs hsbp T
     induction T with
-    | empty =>
+    | nil =>
       intro c_lo c_hi loT hiT hle hchi _ hin hcov
       by_cases hge : c_hi ≤ c_lo
-      · rw [h_bq_empty_of_le subs c_lo c_hi .empty hge, inorderNat, List.Ico.eq_nil_of_le hge]
+      · rw [h_bq_empty_of_le subs c_lo c_hi .nil hge, inorderNat, List.Ico.eq_nil_of_le hge]
       · have hlt : c_lo < c_hi := by omega
         obtain ⟨hcov1, hcov2⟩ := hcov hlt
         have hmono := h_sbp_le_mono subs hsbp c_lo (c_hi - 1) (by omega) (by omega)
@@ -18695,14 +18697,14 @@ by
         have hlo_lt_hi : loT < hiT := by omega
         rw [inorderNat, List.Ico.eq_cons hlo_lt_hi] at hin
         simp at hin
-    | node l k r ihl ihr =>
+    | node k l r ihl ihr =>
       intro c_lo c_hi loT hiT hle hchi hbst hin hcov
       by_cases hge : c_hi ≤ c_lo
       · rw [h_bq_empty_of_le subs c_lo c_hi _ hge, inorderNat, List.Ico.eq_nil_of_le hge]
       · have hlt : c_lo < c_hi := by omega
         obtain ⟨hcov1, hcov2⟩ := hcov hlt
         obtain ⟨hlo_k, hk_hi, hinL, hinR⟩ := h_bst_ico_split l k r loT hiT hbst hin
-        cases hbst with
+        cases hbst using isBSTCases with
         | node _ _ _ _ _ hbstL hbstR =>
           simp only [puqBlockQuotient, hge, ite_false]
           split_ifs with hk_lob hk_hib
@@ -18726,7 +18728,7 @@ by
 
   have h_c2 : ∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
       ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-      ∀ T loT hiT, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+      ∀ T loT hiT, _root_.BinaryTree.IsBST T →
         inorderNat T = List.Ico loT hiT →
         loT ≤ (subs.getD c_lo (0, 0)).1 →
         (subs.getD (c_hi - 1) (0, 0)).2 ≤ hiT →
@@ -18736,15 +18738,15 @@ by
   clear h_c2_aux
 
   have h_c3_aux : ∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
-      ∀ (lo_0 hi_0 : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (c_lo c_hi : ℕ),
+      ∀ (lo_0 hi_0 : ℕ) (T : _root_.BinaryTree ℕ) (c_lo c_hi : ℕ),
         c_lo ≤ c_hi → c_hi ≤ subs.length →
         (c_lo < c_hi → lo_0 ≤ (subs.getD c_lo (0, 0)).1 ∧ (subs.getD (c_hi - 1) (0, 0)).2 ≤ hi_0) →
         puqBlockQuotient subs c_lo c_hi (restrictRangeNat lo_0 hi_0 T) =
           puqBlockQuotient subs c_lo c_hi T := by
     intro subs hsbp lo_0 hi_0 T
     induction T with
-    | empty => intro c_lo c_hi _ _ _; rfl
-    | node l k r ihl ihr =>
+    | nil => intro c_lo c_hi _ _ _; rfl
+    | node k l r ihl ihr =>
       intro c_lo c_hi hle hchi hcov
       by_cases hge : c_hi ≤ c_lo
       · rw [h_bq_empty_of_le subs c_lo c_hi _ hge, h_bq_empty_of_le subs c_lo c_hi _ hge]
@@ -18778,7 +18780,7 @@ by
 
   have h_c3 : ∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
       ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-      ∀ T, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+      ∀ T, _root_.BinaryTree.IsBST T →
         puqBlockQuotient subs c_lo c_hi T =
           puqBlockQuotient subs c_lo c_hi
             (restrictRangeNat (subs.getD c_lo (0, 0)).1 (subs.getD (c_hi - 1) (0, 0)).2 T) :=
@@ -18786,20 +18788,20 @@ by
       (h_c3_aux subs hsbp _ _ T c_lo c_hi (le_of_lt hlt) hchi (fun _ => ⟨le_rfl, le_rfl⟩)).symm
   clear h_c3_aux
 
-  have h_rest_empty_of_le : ∀ (a b : ℕ) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      b ≤ a → restrictRangeNat a b U = .empty := by
+  have h_rest_empty_of_le : ∀ (a b : ℕ) (U : _root_.BinaryTree ℕ),
+      b ≤ a → restrictRangeNat a b U = .nil := by
     intro a b U hba
     induction U with
-    | empty => rfl
-    | node l k r ihl ihr =>
+    | nil => rfl
+    | node k l r ihl ihr =>
       simp only [restrictRangeNat]
       split_ifs with hk_a hk_b
       · exact ihr
       · exact ihl
       · omega
 
-  have h_rest_id : ∀ (a b : ℕ) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => a ≤ x ∧ x < b) U → restrictRangeNat a b U = U := by
+  have h_rest_id : ∀ (a b : ℕ) (U : _root_.BinaryTree ℕ),
+      _root_.SplayDeque.Direct.ForallTree (fun x => a ≤ x ∧ x < b) U → restrictRangeNat a b U = U := by
     intro a b U hft
     induction hft with
     | left => rfl
@@ -18808,8 +18810,8 @@ by
       have h2 : ¬(b ≤ k) := by omega
       simp [restrictRangeNat, h1, h2, ihl, ihr]
 
-  have h_rest_hi_congr : ∀ (a c c_hi : ℕ) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      c ≤ c_hi → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => x < c) U →
+  have h_rest_hi_congr : ∀ (a c c_hi : ℕ) (U : _root_.BinaryTree ℕ),
+      c ≤ c_hi → _root_.SplayDeque.Direct.ForallTree (fun x => x < c) U →
         restrictRangeNat a c_hi U = restrictRangeNat a c U := by
     intro a c c_hi U hle hft
     induction hft with
@@ -18824,17 +18826,17 @@ by
 
   have h_c4 : ∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
       ∀ c_lo c_lo' c_hi, c_lo ≤ c_lo' → c_lo' ≤ c_hi → c_hi ≤ subs.length →
-      ∀ T, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+      ∀ T, _root_.BinaryTree.IsBST T →
         restrictRangeNat c_lo' c_hi (puqBlockQuotient subs c_lo c_hi T) =
           puqBlockQuotient subs c_lo' c_hi T := by
     intro subs hsbp c_lo c_lo' c_hi h1 h2 hchi T hbst
     clear hbst
     revert c_lo c_lo' c_hi h1 h2 hchi
     induction T with
-    | empty =>
+    | nil =>
       intro c_lo c_lo' c_hi _ _ _
       rfl
-    | node l k r ihl ihr =>
+    | node k l r ihl ihr =>
       intro c_lo c_lo' c_hi h1 h2 hchi
       by_cases hge' : c_hi ≤ c_lo'
       · rw [h_rest_empty_of_le c_lo' c_hi _ hge', h_bq_empty_of_le subs c_lo' c_hi _ hge']
@@ -18880,14 +18882,14 @@ by
                   (h_forall_imp (fun x hx => ⟨by omega, hx.2⟩) _ hfr)
   clear h_rest_empty_of_le h_rest_id h_rest_hi_congr
 
-  have h_ls_rest_hi_congr : ∀ (lo_b hi_1 hi_2 : ℕ) (l : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+  have h_ls_rest_hi_congr : ∀ (lo_b hi_1 hi_2 : ℕ) (l : _root_.BinaryTree ℕ),
       hi_1 ≤ hi_2 → ∀ r < hi_1,
         (r ∈ leftSpineBottomUpNat (restrictRangeNat lo_b hi_1 l) ↔
           r ∈ leftSpineBottomUpNat (restrictRangeNat lo_b hi_2 l)) := by
     intro lo_b hi_1 hi_2 l h12 r hr
     induction l with
-    | empty => rfl
-    | node ll lk lr ihll ihlr =>
+    | nil => rfl
+    | node lk ll lr ihll ihlr =>
       simp only [restrictRangeNat]
       by_cases hlk_lo : lk < lo_b
       · simp only [hlk_lo, ite_true]
@@ -18905,7 +18907,7 @@ by
 
   have h_c5 : ∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
       ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-      ∀ T, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+      ∀ T, _root_.BinaryTree.IsBST T →
         let lo_b := (subs.getD c_lo (0, 0)).1
         let hi_b := (subs.getD (c_hi - 1) (0, 0)).2
         let T' := restrictRangeNat lo_b hi_b T
@@ -18915,7 +18917,7 @@ by
               (subs.getD c (0, 0)).1 ≤ r ∧ r < (subs.getD c (0, 0)).2) := by
     intro subs hsbp c_lo c_hi hlt hchi T hbst
     revert c_lo c_hi hlt hchi
-    induction hbst with
+    induction hbst using isBSTRec with
     | left =>
       intro c_lo c_hi _ _
       dsimp (config := { failIfUnchanged := false }) only
@@ -18985,43 +18987,43 @@ by
 
   have h_c7 : ∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
       ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (s : ℕ), _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+      ∀ (T : _root_.BinaryTree ℕ) (s : ℕ), _root_.BinaryTree.IsBST T →
         (inorderNat T).head? = some s →
         s < (subs.getD c_lo (0, 0)).1 →
         puqBlockQuotient subs c_lo c_hi (spliceMinNat T) = puqBlockQuotient subs c_lo c_hi T := by
     intro subs hsbp c_lo c_hi hlt hchi T s hbst hhead hslt
     revert c_lo c_hi hlt hchi hhead hslt
     induction T with
-    | empty =>
+    | nil =>
       intro c_lo c_hi _ _ hhead _
       simp [inorderNat] at hhead
-    | node l k R ihl _ =>
+    | node k l R ihl _ =>
       intro c_lo c_hi hlt hchi hhead hslt
       have hge : ¬(c_hi ≤ c_lo) := by omega
-      cases hbst with
+      cases hbst using isBSTCases with
       | node _ _ _ _ _ hbstL _ =>
-        rcases l with _ | ⟨la, ka, ra⟩
+        rcases l with _ | ⟨ka, la, ra⟩
         · simp only [inorderNat, List.nil_append, List.singleton_append, List.head?_cons,
             Option.some.injEq] at hhead
           subst hhead
           simp only [spliceMinNat, puqBlockQuotient, hge, hslt, ite_false, ite_true]
-        · have hsp : spliceMinNat (.node (.node la ka ra) k R) =
-              .node (spliceMinNat (.node la ka ra)) k R := by simp [spliceMinNat]
+        · have hsp : spliceMinNat (.node k (.node ka la ra) R) =
+              .node k (spliceMinNat (.node ka la ra)) R := by simp [spliceMinNat]
           rw [hsp]
-          set L := _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node la ka ra
+          set L := _root_.BinaryTree.node ka la ra
           have hne_l : inorderNat L ≠ [] := by simp [L, inorderNat]
           have hhead_l : (inorderNat L).head? = some s := by
-            have heq_in : inorderNat (.node L k R) = inorderNat L ++ ([k] ++ inorderNat R) := by
+            have heq_in : inorderNat (.node k L R) = inorderNat L ++ ([k] ++ inorderNat R) := by
               simp [inorderNat, List.append_assoc]
             rw [heq_in, h_head_append (inorderNat L) ([k] ++ inorderNat R) hne_l] at hhead
             exact hhead
           by_cases hk_lob : k < (subs.getD c_lo (0, 0)).1
           · simp only [puqBlockQuotient, hge, hk_lob, ite_false, ite_true]
           · by_cases hk_hib : (subs.getD (c_hi - 1) (0, 0)).2 ≤ k
-            · have h1 : puqBlockQuotient subs c_lo c_hi (.node (spliceMinNat L) k R) =
+            · have h1 : puqBlockQuotient subs c_lo c_hi (.node k (spliceMinNat L) R) =
                   puqBlockQuotient subs c_lo c_hi (spliceMinNat L) := by
                 simp only [puqBlockQuotient, hge, hk_lob, hk_hib, ite_false, ite_true]
-              have h2 : puqBlockQuotient subs c_lo c_hi (.node L k R) =
+              have h2 : puqBlockQuotient subs c_lo c_hi (.node k L R) =
                   puqBlockQuotient subs c_lo c_hi L := by
                 simp only [puqBlockQuotient, hge, hk_lob, hk_hib, ite_false, ite_true]
               rw [h1, h2]
@@ -19029,12 +19031,12 @@ by
             · obtain ⟨hc_lo, hc_hi, _, _⟩ :=
                 h_sbp_idx subs hsbp c_lo c_hi hlt hchi k (by omega) (by omega)
               set c := subs.findIdx (fun b => decide (b.1 ≤ k ∧ k < b.2))
-              have h1 : puqBlockQuotient subs c_lo c_hi (.node (spliceMinNat L) k R) =
-                  .node (puqBlockQuotient subs c_lo c (spliceMinNat L)) c
+              have h1 : puqBlockQuotient subs c_lo c_hi (.node k (spliceMinNat L) R) =
+                  .node c (puqBlockQuotient subs c_lo c (spliceMinNat L))
                     (puqBlockQuotient subs (c + 1) c_hi R) := by
                 simp only [puqBlockQuotient, hge, hk_lob, hk_hib, ite_false]; rfl
-              have h2 : puqBlockQuotient subs c_lo c_hi (.node L k R) =
-                  .node (puqBlockQuotient subs c_lo c L) c
+              have h2 : puqBlockQuotient subs c_lo c_hi (.node k L R) =
+                  .node c (puqBlockQuotient subs c_lo c L)
                     (puqBlockQuotient subs (c + 1) c_hi R) := by
                 simp only [puqBlockQuotient, hge, hk_lob, hk_hib, ite_false]; rfl
               rw [h1, h2]
@@ -19044,14 +19046,14 @@ by
               · exact ihl hbstL c_lo c (by omega) (by omega) hhead_l hslt
   clear h_head_append
 
-  have h_rot_eq_self : ∀ (w : ℕ) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => k ≠ w) U → rotateRightOnLeftSpine w U = U := by
+  have h_rot_eq_self : ∀ (w : ℕ) (U : _root_.BinaryTree ℕ),
+      _root_.SplayDeque.Direct.ForallTree (fun k => k ≠ w) U → rotateRightOnLeftSpine w U = U := by
     intro w U
     induction U with
-    | empty => intro _; rfl
-    | node l y C ihl _ =>
+    | nil => intro _; rfl
+    | node y l C ihl _ =>
       intro hft
-      rcases l with _ | ⟨a, x, b⟩
+      rcases l with _ | ⟨x, a, b⟩
       · rfl
       · cases hft with
         | node _ _ _ hfl _ _ =>
@@ -19061,14 +19063,14 @@ by
             rw [ihl (.node a x b hfla hxw hflb)]
 
   have h_bq_lt : ∀ subs c_lo c_hi l k r, c_lo < c_hi → k < (subs.getD c_lo (0, 0)).1 →
-      puqBlockQuotient subs c_lo c_hi (.node l k r) = puqBlockQuotient subs c_lo c_hi r := by
+      puqBlockQuotient subs c_lo c_hi (.node k l r) = puqBlockQuotient subs c_lo c_hi r := by
     intro subs c_lo c_hi l k r hlt hk
     have hge : ¬(c_hi ≤ c_lo) := by omega
     simp only [puqBlockQuotient, hge, hk, ite_false, ite_true]
 
   have h_bq_ge : ∀ subs c_lo c_hi l k r, c_lo < c_hi → ¬(k < (subs.getD c_lo (0, 0)).1) →
       (subs.getD (c_hi - 1) (0, 0)).2 ≤ k →
-      puqBlockQuotient subs c_lo c_hi (.node l k r) = puqBlockQuotient subs c_lo c_hi l := by
+      puqBlockQuotient subs c_lo c_hi (.node k l r) = puqBlockQuotient subs c_lo c_hi l := by
     intro subs c_lo c_hi l k r hlt hk1 hk2
     have hge : ¬(c_hi ≤ c_lo) := by omega
     simp only [puqBlockQuotient, hge, hk1, hk2, ite_false, ite_true]
@@ -19076,8 +19078,8 @@ by
   have h_bq_mid : ∀ subs c_lo c_hi l k r c, c_lo < c_hi → ¬(k < (subs.getD c_lo (0, 0)).1) →
       ¬((subs.getD (c_hi - 1) (0, 0)).2 ≤ k) →
       c = subs.findIdx (fun b => decide (b.1 ≤ k ∧ k < b.2)) →
-      puqBlockQuotient subs c_lo c_hi (.node l k r) =
-        .node (puqBlockQuotient subs c_lo c l) c (puqBlockQuotient subs (c + 1) c_hi r) := by
+      puqBlockQuotient subs c_lo c_hi (.node k l r) =
+        .node c (puqBlockQuotient subs c_lo c l) (puqBlockQuotient subs (c + 1) c_hi r) := by
     intro subs c_lo c_hi l k r c hlt hk1 hk2 hc
     have hge : ¬(c_hi ≤ c_lo) := by omega
     subst hc
@@ -19085,20 +19087,20 @@ by
 
   have h_root_rot : ∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
       ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-      ∀ (A B D : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (u y : ℕ), u < y →
+      ∀ (A B D : _root_.BinaryTree ℕ) (u y : ℕ), u < y →
         let lo_b := (subs.getD c_lo (0, 0)).1
         let hi_b := (subs.getD (c_hi - 1) (0, 0)).2
         let c_u := subs.findIdx (fun b => decide (b.1 ≤ u ∧ u < b.2))
         let c_y := subs.findIdx (fun b => decide (b.1 ≤ y ∧ y < b.2))
-        let G := puqBlockQuotient subs c_lo c_hi (.node (.node A u B) y D)
-        let G' := puqBlockQuotient subs c_lo c_hi (.node A u (.node B y D))
+        let G := puqBlockQuotient subs c_lo c_hi (.node y (.node u A B) D)
+        let G' := puqBlockQuotient subs c_lo c_hi (.node u A (.node y B D))
         G' = G ∨
           (lo_b ≤ u ∧ y < hi_b ∧ c_lo ≤ c_u ∧ c_u < c_y ∧ c_y < c_hi ∧
-            G = .node (.node (puqBlockQuotient subs c_lo c_u A) c_u
-                  (puqBlockQuotient subs (c_u + 1) c_y B)) c_y
+            G = .node c_y (.node c_u (puqBlockQuotient subs c_lo c_u A)
+                  (puqBlockQuotient subs (c_u + 1) c_y B))
                   (puqBlockQuotient subs (c_y + 1) c_hi D) ∧
-            G' = .node (puqBlockQuotient subs c_lo c_u A) c_u
-                  (.node (puqBlockQuotient subs (c_u + 1) c_y B) c_y
+            G' = .node c_u (puqBlockQuotient subs c_lo c_u A)
+                  (.node c_y (puqBlockQuotient subs (c_u + 1) c_y B)
                     (puqBlockQuotient subs (c_y + 1) c_hi D))) := by
     intro subs hsbp c_lo c_hi hlt hchi A B D u y huy
     have hmono_lohi := h_sbp_le_mono subs hsbp c_lo (c_hi - 1) (by omega) (by omega)
@@ -19143,7 +19145,7 @@ by
         · left
           rw [h_bq_lt subs c_lo c_hi _ u _ hlt hu_lob,
               h_bq_mid subs c_lo c_hi B y D c_y hlt hy_lob hy_hib rfl,
-              h_bq_mid subs c_lo c_hi (.node A u B) y D c_y hlt hy_lob hy_hib rfl]
+              h_bq_mid subs c_lo c_hi (.node u A B) y D c_y hlt hy_lob hy_hib rfl]
           congr 1
           by_cases hcy_le : c_y ≤ c_lo
           · rw [h_bq_empty_of_le subs c_lo c_y _ hcy_le,
@@ -19160,8 +19162,8 @@ by
             omega
           by_cases hcu_eq_cy : c_u = c_y
           · left
-            rw [h_bq_mid subs c_lo c_hi A u (.node B y D) c_u hlt hu_lob hu_hib rfl,
-                h_bq_mid subs c_lo c_hi (.node A u B) y D c_y hlt hy_lob hy_hib rfl,
+            rw [h_bq_mid subs c_lo c_hi A u (.node y B D) c_u hlt hu_lob hu_hib rfl,
+                h_bq_mid subs c_lo c_hi (.node u A B) y D c_y hlt hy_lob hy_hib rfl,
                 hcu_eq_cy]
             congr 1
             · by_cases hcy_le : c_y ≤ c_lo
@@ -19182,12 +19184,12 @@ by
           · right
             have hcu_lt_cy : c_u < c_y := by omega
             refine ⟨by omega, by omega, hcu_lo, hcu_lt_cy, hcy_hi, ?_, ?_⟩
-            · rw [h_bq_mid subs c_lo c_hi (.node A u B) y D c_y hlt hy_lob hy_hib rfl]
+            · rw [h_bq_mid subs c_lo c_hi (.node u A B) y D c_y hlt hy_lob hy_hib rfl]
               congr 1
               have hm_uy := (h_sbp_le_mono subs hsbp c_u (c_y - 1) (by omega) (by omega)).2
               have hnu_hi : ¬((subs.getD (c_y - 1) (0, 0)).2 ≤ u) := by omega
               exact h_bq_mid subs c_lo c_y A u B c_u (by omega) hu_lob hnu_hi rfl
-            · rw [h_bq_mid subs c_lo c_hi A u (.node B y D) c_u hlt hu_lob hu_hib rfl]
+            · rw [h_bq_mid subs c_lo c_hi A u (.node y B D) c_u hlt hu_lob hu_hib rfl]
               congr 1
               have hm_uy := (h_sbp_le_mono subs hsbp (c_u + 1) c_y (by omega) (by omega)).1
               have hny_lo : ¬(y < (subs.getD (c_u + 1) (0, 0)).1) := by omega
@@ -19196,7 +19198,7 @@ by
 
   have h_c8 : ∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
       ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (u : ℕ), _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+      ∀ (T : _root_.BinaryTree ℕ) (u : ℕ), _root_.BinaryTree.IsBST T →
         let G := puqBlockQuotient subs c_lo c_hi T
         let G' := puqBlockQuotient subs c_lo c_hi (rotateRightOnLeftSpine u T)
         let lo_b := (subs.getD c_lo (0, 0)).1
@@ -19207,14 +19209,14 @@ by
     intro subs hsbp c_lo c_hi hlt hchi T u hbst
     revert c_lo c_hi hlt hchi
     induction T with
-    | empty =>
+    | nil =>
       intro c_lo c_hi _ _
       exact ⟨fun _ => rfl, Or.inl rfl⟩
-    | node l y D ihl _ =>
+    | node y l D ihl _ =>
       intro c_lo c_hi hlt hchi
-      rcases l with _ | ⟨A, x, B⟩
+      rcases l with _ | ⟨x, A, B⟩
       · exact ⟨fun _ => rfl, Or.inl rfl⟩
-      · cases hbst with
+      · cases hbst using isBSTCases with
         | node _ _ _ hfl_y _ hbstL _ =>
           cases hfl_y with
           | node _ _ _ _ hxy _ =>
@@ -19231,17 +19233,17 @@ by
             · have hge : ¬(c_hi ≤ c_lo) := by omega
               by_cases hy_lob : y < (subs.getD c_lo (0, 0)).1
               · have heq : puqBlockQuotient subs c_lo c_hi
-                    (.node (rotateRightOnLeftSpine u (.node A x B)) y D) =
-                    puqBlockQuotient subs c_lo c_hi (.node (.node A x B) y D) := by
+                    (.node y (rotateRightOnLeftSpine u (.node x A B)) D) =
+                    puqBlockQuotient subs c_lo c_hi (.node y (.node x A B) D) := by
                   simp only [puqBlockQuotient, hge, hy_lob, ite_false, ite_true]
                 exact ⟨fun _ => heq, Or.inl heq⟩
               · by_cases hy_hib : (subs.getD (c_hi - 1) (0, 0)).2 ≤ y
                 · have heq1 : puqBlockQuotient subs c_lo c_hi
-                      (.node (rotateRightOnLeftSpine u (.node A x B)) y D) =
-                      puqBlockQuotient subs c_lo c_hi (rotateRightOnLeftSpine u (.node A x B)) := by
+                      (.node y (rotateRightOnLeftSpine u (.node x A B)) D) =
+                      puqBlockQuotient subs c_lo c_hi (rotateRightOnLeftSpine u (.node x A B)) := by
                     simp only [puqBlockQuotient, hge, hy_lob, hy_hib, ite_false, ite_true]
-                  have heq2 : puqBlockQuotient subs c_lo c_hi (.node (.node A x B) y D) =
-                      puqBlockQuotient subs c_lo c_hi (.node A x B) := by
+                  have heq2 : puqBlockQuotient subs c_lo c_hi (.node y (.node x A B) D) =
+                      puqBlockQuotient subs c_lo c_hi (.node x A B) := by
                     simp only [puqBlockQuotient, hge, hy_lob, hy_hib, ite_false, ite_true]
                   rw [heq1, heq2]
                   exact ihl hbstL c_lo c_hi hlt hchi
@@ -19249,14 +19251,14 @@ by
                     h_sbp_idx subs hsbp c_lo c_hi hlt hchi y (by omega) (by omega)
                   set c_y := subs.findIdx (fun b => decide (b.1 ≤ y ∧ y < b.2))
                   set c_u := subs.findIdx (fun b => decide (b.1 ≤ u ∧ u < b.2))
-                  have hG : puqBlockQuotient subs c_lo c_hi (.node (.node A x B) y D) =
-                      .node (puqBlockQuotient subs c_lo c_y (.node A x B)) c_y
+                  have hG : puqBlockQuotient subs c_lo c_hi (.node y (.node x A B) D) =
+                      .node c_y (puqBlockQuotient subs c_lo c_y (.node x A B))
                         (puqBlockQuotient subs (c_y + 1) c_hi D) := by
                     simp only [puqBlockQuotient, hge, hy_lob, hy_hib, ite_false]; rfl
                   have hG' : puqBlockQuotient subs c_lo c_hi
-                      (.node (rotateRightOnLeftSpine u (.node A x B)) y D) =
-                      .node (puqBlockQuotient subs c_lo c_y
-                        (rotateRightOnLeftSpine u (.node A x B))) c_y
+                      (.node y (rotateRightOnLeftSpine u (.node x A B)) D) =
+                      .node c_y (puqBlockQuotient subs c_lo c_y
+                        (rotateRightOnLeftSpine u (.node x A B)))
                         (puqBlockQuotient subs (c_y + 1) c_hi D) := by
                     simp only [puqBlockQuotient, hge, hy_lob, hy_hib, ite_false]; rfl
                   rw [hG, hG']
@@ -19273,35 +19275,35 @@ by
                       · have hm := (h_sbp_le_mono subs hsbp (c_y - 1) (c_hi - 1)
                           (by omega) (by omega)).2
                         exact Or.inr (le_trans hm h2)
-                    · set Ly := puqBlockQuotient subs c_lo c_y (.node A x B)
+                    · set Ly := puqBlockQuotient subs c_lo c_y (.node x A B)
                       set Ly' := puqBlockQuotient subs c_lo c_y
-                        (rotateRightOnLeftSpine u (.node A x B))
+                        (rotateRightOnLeftSpine u (.node x A B))
                       by_cases hLy_eq : Ly' = Ly
                       · left; rw [hLy_eq]
                       · rcases ih_dich with hcon | hLy_rot
                         · exact absurd hcon hLy_eq
                         · right
                           cases hLy_shape : Ly with
-                          | empty =>
-                            have hrot_emp : rotateRightOnLeftSpine c_u .empty = .empty := rfl
+                          | nil =>
+                            have hrot_emp : rotateRightOnLeftSpine c_u .nil = .nil := rfl
                             rw [hLy_shape, hrot_emp] at hLy_rot
                             rw [hLy_shape] at hLy_eq
                             exact absurd hLy_rot hLy_eq
-                          | node Pa kL Pb =>
+                          | node kL Pa Pb =>
                             have hkL_ne : kL ≠ c_u := by
                               intro hkL_eq
                               have hLy_rot' : Ly' = rotateRightOnLeftSpine kL Ly := by
                                 rw [← hkL_eq] at hLy_rot
                                 exact hLy_rot
-                              have hbst_Ly : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node Pa kL Pb) := by
+                              have hbst_Ly : _root_.BinaryTree.IsBST (.node kL Pa Pb) := by
                                 rw [← hLy_shape]
                                 exact h_c1 subs hsbp c_lo c_y hcy_lo (by omega) _ hbstL
-                              cases hbst_Ly with
+                              cases hbst_Ly using isBSTCases with
                               | node _ _ _ hfl_Pa _ _ _ =>
                                 have hne_Pa := h_forall_imp (fun k hk => ne_of_lt hk) Pa hfl_Pa
-                                have hrot_id : rotateRightOnLeftSpine kL (.node Pa kL Pb) =
-                                    .node Pa kL Pb := by
-                                  rcases Pa with _ | ⟨Paa, kaa, Pab⟩
+                                have hrot_id : rotateRightOnLeftSpine kL (.node kL Pa Pb) =
+                                    .node kL Pa Pb := by
+                                  rcases Pa with _ | ⟨kaa, Paa, Pab⟩
                                   · rfl
                                   · cases hne_Pa with
                                     | node _ _ _ hne_Paa hkaa_ne hne_Pab =>
@@ -19334,7 +19336,7 @@ by
 
   have h_c9 : ∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
       ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (u v c : ℕ), _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+      ∀ (T : _root_.BinaryTree ℕ) (u v c : ℕ), _root_.BinaryTree.IsBST T →
         (∃ pre suf, leftSpineBottomUpNat T = pre ++ u :: v :: suf) →
         c ∈ leftSpineBottomUpNat (puqBlockQuotient subs c_lo c_hi T) →
         c ∉ leftSpineBottomUpNat (puqBlockQuotient subs c_lo c_hi (rotateRightOnLeftSpine u T)) →
@@ -19344,17 +19346,17 @@ by
     intro subs hsbp c_lo c_hi hlt hchi T u v c hbst hex hmem hnmem
     revert c_lo c_hi hlt hchi hex hmem hnmem
     induction T with
-    | empty =>
+    | nil =>
       intro c_lo c_hi _ _ _ hmem _
       simp [puqBlockQuotient, h_ls_empty] at hmem
-    | node l y D ihl _ =>
+    | node y l D ihl _ =>
       intro c_lo c_hi hlt hchi ⟨pre, suf, hls_eq⟩ hmem hnmem
-      rcases l with _ | ⟨A, x, B⟩
+      rcases l with _ | ⟨x, A, B⟩
       · rw [h_ls_node, h_ls_empty] at hls_eq
         have hlen := congrArg List.length hls_eq
         simp at hlen
         omega
-      · cases hbst with
+      · cases hbst using isBSTCases with
         | node _ _ _ hfl_y _ hbstL _ =>
           cases hfl_y with
           | node _ _ _ _ hxy _ =>
@@ -19377,7 +19379,7 @@ by
                 · exact ⟨hlo_x, hxy, hy_hi, hcx_lt_cy, rfl⟩
             · obtain ⟨mid, last, hsuf_eq⟩ := h_nonempty_snoc (s0 :: suf') (by simp)
               rw [h_ls_node, hsuf_eq] at hls_eq
-              have h1 : leftSpineBottomUpNat (.node A x B) ++ [y] =
+              have h1 : leftSpineBottomUpNat (.node x A B) ++ [y] =
                   (pre ++ u :: v :: mid) ++ [last] := by
                 simpa [List.append_assoc] using hls_eq
               obtain ⟨hls_L, _⟩ := h_snoc_inj _ _ _ _ h1
@@ -19389,33 +19391,33 @@ by
               obtain ⟨hls_A, _⟩ := h_snoc_inj _ _ _ _ h2
               have hu_mem_A : u ∈ leftSpineBottomUpNat A := by
                 rw [hls_A]; simp
-              cases hbstL with
+              cases hbstL using isBSTCases with
               | node _ _ _ hfl_x hfr_x hbstA hbstB =>
-                have hbstL' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node A x B) := .node x A B hfl_x hfr_x hbstA hbstB
+                have hbstL' : _root_.BinaryTree.IsBST (.node x A B) := .node x A B hfl_x hfr_x hbstA hbstB
                 have hux : u < x :=
                   (h_forall_iff _ A).mp hfl_x u ((h_c11 A hbstA).2 u hu_mem_A)
                 have hxu_ne : x ≠ u := ne_of_gt hux
                 simp only [rotateRightOnLeftSpine, hxu_ne, ite_false] at hnmem
                 have hge : ¬(c_hi ≤ c_lo) := by omega
                 by_cases hy_lob : y < (subs.getD c_lo (0, 0)).1
-                · have hG : puqBlockQuotient subs c_lo c_hi (.node (.node A x B) y D) =
+                · have hG : puqBlockQuotient subs c_lo c_hi (.node y (.node x A B) D) =
                       puqBlockQuotient subs c_lo c_hi D := by
                     simp only [puqBlockQuotient, hge, hy_lob, ite_false, ite_true]
                   have hG' : puqBlockQuotient subs c_lo c_hi
-                      (.node (rotateRightOnLeftSpine u (.node A x B)) y D) =
+                      (.node y (rotateRightOnLeftSpine u (.node x A B)) D) =
                       puqBlockQuotient subs c_lo c_hi D := by
                     simp only [puqBlockQuotient, hge, hy_lob, ite_false, ite_true]
                   rw [hG] at hmem
                   rw [hG'] at hnmem
                   exact absurd hmem hnmem
                 · by_cases hy_hib : (subs.getD (c_hi - 1) (0, 0)).2 ≤ y
-                  · have hG : puqBlockQuotient subs c_lo c_hi (.node (.node A x B) y D) =
-                        puqBlockQuotient subs c_lo c_hi (.node A x B) := by
+                  · have hG : puqBlockQuotient subs c_lo c_hi (.node y (.node x A B) D) =
+                        puqBlockQuotient subs c_lo c_hi (.node x A B) := by
                       simp only [puqBlockQuotient, hge, hy_lob, hy_hib, ite_false, ite_true]
                     have hG' : puqBlockQuotient subs c_lo c_hi
-                        (.node (rotateRightOnLeftSpine u (.node A x B)) y D) =
+                        (.node y (rotateRightOnLeftSpine u (.node x A B)) D) =
                         puqBlockQuotient subs c_lo c_hi
-                          (rotateRightOnLeftSpine u (.node A x B)) := by
+                          (rotateRightOnLeftSpine u (.node x A B)) := by
                       simp only [puqBlockQuotient, hge, hy_lob, hy_hib, ite_false, ite_true]
                     rw [hG] at hmem
                     rw [hG'] at hnmem
@@ -19423,14 +19425,14 @@ by
                   · obtain ⟨hcy_lo, hcy_hi, _, _⟩ :=
                       h_sbp_idx subs hsbp c_lo c_hi hlt hchi y (by omega) (by omega)
                     set c_y := subs.findIdx (fun b => decide (b.1 ≤ y ∧ y < b.2))
-                    have hG : puqBlockQuotient subs c_lo c_hi (.node (.node A x B) y D) =
-                        .node (puqBlockQuotient subs c_lo c_y (.node A x B)) c_y
+                    have hG : puqBlockQuotient subs c_lo c_hi (.node y (.node x A B) D) =
+                        .node c_y (puqBlockQuotient subs c_lo c_y (.node x A B))
                           (puqBlockQuotient subs (c_y + 1) c_hi D) := by
                       simp only [puqBlockQuotient, hge, hy_lob, hy_hib, ite_false]; rfl
                     have hG' : puqBlockQuotient subs c_lo c_hi
-                        (.node (rotateRightOnLeftSpine u (.node A x B)) y D) =
-                        .node (puqBlockQuotient subs c_lo c_y
-                          (rotateRightOnLeftSpine u (.node A x B))) c_y
+                        (.node y (rotateRightOnLeftSpine u (.node x A B)) D) =
+                        .node c_y (puqBlockQuotient subs c_lo c_y
+                          (rotateRightOnLeftSpine u (.node x A B)))
                           (puqBlockQuotient subs (c_y + 1) c_hi D) := by
                       simp only [puqBlockQuotient, hge, hy_lob, hy_hib, ite_false]; rfl
                     rw [hG, h_ls_node, List.mem_append, List.mem_singleton] at hmem
@@ -19438,7 +19440,7 @@ by
                     rcases hmem with hmem_Ly | rfl
                     · have hnmem_Ly : c ∉ leftSpineBottomUpNat
                           (puqBlockQuotient subs c_lo c_y
-                            (rotateRightOnLeftSpine u (.node A x B))) :=
+                            (rotateRightOnLeftSpine u (.node x A B))) :=
                         fun h => hnmem (Or.inl h)
                       have hcy_gt : c_lo < c_y := by
                         by_contra hle
@@ -19452,12 +19454,12 @@ by
                     · exact absurd (Or.inr rfl) hnmem
   clear h_root_rot h_snoc_inj h_nonempty_snoc
 
-  have h_rm_lt : ∀ (R : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (cur m : ℕ),
-      cur < m → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => x < m) R → rightmostKeyNat cur R < m := by
+  have h_rm_lt : ∀ (R : _root_.BinaryTree ℕ) (cur m : ℕ),
+      cur < m → _root_.SplayDeque.Direct.ForallTree (fun x => x < m) R → rightmostKeyNat cur R < m := by
     intro R
     induction R with
-    | empty => intro cur m h _; exact h
-    | node rl rk rr _ ihrr =>
+    | nil => intro cur m h _; exact h
+    | node rk rl rr _ ihrr =>
       intro cur m _ hft
       cases hft with
       | node _ _ _ _ hrk_lt hfrr =>
@@ -19465,8 +19467,8 @@ by
 
   have h_upper_aux : ∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
       ∀ (P_top c_y c_w : ℕ), c_y < c_w → c_w < subs.length →
-      ∀ (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (c_lo c_hi curP : ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST U → c_lo ≤ c_y → c_hi ≤ subs.length →
+      ∀ (U : _root_.BinaryTree ℕ) (c_lo c_hi curP : ℕ),
+        _root_.BinaryTree.IsBST U → c_lo ≤ c_y → c_hi ≤ subs.length →
         (curP < (subs.getD c_w (0, 0)).2 → c_hi ≤ c_w) →
         (c_hi ≤ c_w ∨
           ∀ r, (subs.getD c_y (0, 0)).1 ≤ r → r < (subs.getD c_y (0, 0)).2 →
@@ -19474,15 +19476,15 @@ by
         subtreeMaxNat (puqBlockQuotient subs c_lo c_hi U) c_y < c_w := by
     intro subs hsbp P_top c_y c_w hcy_lt_cw hcw_len U
     induction U with
-    | empty =>
+    | nil =>
       intro c_lo c_hi curP _ _ _ _ _
       exact hcy_lt_cw
-    | node l k R ihl ihR =>
+    | node k l R ihl ihR =>
       intro c_lo c_hi curP hbst hclo_cy hchi_len hI1 hI2
       by_cases hge : c_hi ≤ c_lo
       · rw [h_bq_empty_of_le subs c_lo c_hi _ hge]
         exact hcy_lt_cw
-      · cases hbst with
+      · cases hbst using isBSTCases with
         | node _ _ _ hfl hfr hbstL hbstR =>
           simp only [puqBlockQuotient, hge, ite_false]
           split_ifs with hk_lob hk_hib
@@ -19494,7 +19496,7 @@ by
               have hm := (h_sbp_le_mono subs hsbp c_lo c_y hclo_cy (by omega)).1
               have hkr : k < r := by omega
               have hnrk : ¬(r < k) := by omega
-              have hrU : r ∈ inorderNat (.node l k R) := by simp [inorderNat, hrR]
+              have hrU : r ∈ inorderNat (.node k l R) := by simp [inorderNat, hrR]
               have h := hr_bound r hr1 hr2 hrU
               simpa [lcrsParentAux, hnrk, hkr] using h
           · refine ihl c_lo c_hi k hbstL hclo_cy hchi_len ?_ ?_
@@ -19507,7 +19509,7 @@ by
               · right
                 intro r hr1 hr2 hrl
                 have hrk : r < k := (h_forall_iff _ l).mp hfl r hrl
-                have hrU : r ∈ inorderNat (.node l k R) := by simp [inorderNat, hrl]
+                have hrU : r ∈ inorderNat (.node k l R) := by simp [inorderNat, hrl]
                 have h := hr_bound r hr1 hr2 hrU
                 simpa [lcrsParentAux, hrk] using h
           · obtain ⟨hc_lo, hc_hi, hck1, hck2⟩ :=
@@ -19525,7 +19527,7 @@ by
                 · right
                   intro r hr1 hr2 hrl
                   have hrk : r < k := (h_forall_iff _ l).mp hfl r hrl
-                  have hrU : r ∈ inorderNat (.node l k R) := by simp [inorderNat, hrl]
+                  have hrU : r ∈ inorderNat (.node k l R) := by simp [inorderNat, hrl]
                   have h := hr_bound r hr1 hr2 hrU
                   simpa [lcrsParentAux, hrk] using h
             · refine ihR (c + 1) c_hi curP hbstR (by omega) hchi_len hI1 ?_
@@ -19535,7 +19537,7 @@ by
                 intro r hr1 hr2 hrR
                 have hkr : k < r := (h_forall_iff _ R).mp hfr r hrR
                 have hnrk : ¬(r < k) := by omega
-                have hrU : r ∈ inorderNat (.node l k R) := by simp [inorderNat, hrR]
+                have hrU : r ∈ inorderNat (.node k l R) := by simp [inorderNat, hrR]
                 have h := hr_bound r hr1 hr2 hrU
                 simpa [lcrsParentAux, hnrk, hkr] using h
             · have hc_eq : c = c_y := by omega
@@ -19543,7 +19545,7 @@ by
                 rcases hI2 with hle | hr_bound
                 · exact hle
                 · apply hI1
-                  have hkU : k ∈ inorderNat (.node l k R) := by simp [inorderNat]
+                  have hkU : k ∈ inorderNat (.node k l R) := by simp [inorderNat]
                   have h := hr_bound k (by rw [← hc_eq]; exact hck1) (by rw [← hc_eq]; exact hck2) hkU
                   simpa [lcrsParentAux] using h
               have hfr_qR := (h_bq_bounds_bst subs hsbp R (c + 1) c_hi (by omega) hchi_len).1
@@ -19552,8 +19554,8 @@ by
 
   have h_c14 : ∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
       ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (loT hiT P_top c_y c_w : ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+      ∀ (T : _root_.BinaryTree ℕ) (loT hiT P_top c_y c_w : ℕ),
+        _root_.BinaryTree.IsBST T →
         inorderNat T = List.Ico loT hiT →
         loT ≤ (subs.getD c_lo (0, 0)).1 →
         (subs.getD (c_hi - 1) (0, 0)).2 ≤ hiT →
@@ -19573,8 +19575,8 @@ by
   have h_lower_aux : ∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
       ∀ (P_top c_a c_w x : ℕ), c_a < c_w → c_w ≤ subs.length →
         (subs.getD c_a (0, 0)).1 ≤ x → x < (subs.getD c_a (0, 0)).2 →
-      ∀ (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (c_lo c_hi loU hiU curP : ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST U → inorderNat U = List.Ico loU hiU →
+      ∀ (U : _root_.BinaryTree ℕ) (c_lo c_hi loU hiU curP : ℕ),
+        _root_.BinaryTree.IsBST U → inorderNat U = List.Ico loU hiU →
         c_lo ≤ c_a → c_w ≤ c_hi → c_hi ≤ subs.length →
         loU ≤ (subs.getD c_lo (0, 0)).1 → (subs.getD (c_hi - 1) (0, 0)).2 ≤ hiU →
         (subs.getD (c_w - 1) (0, 0)).2 ≤ curP →
@@ -19582,18 +19584,18 @@ by
         c_w ≤ subtreeMaxNat (puqBlockQuotient subs c_lo c_hi U) c_a + 1 := by
     intro subs hsbp P_top c_a c_w x hca_cw hcw_len hx1 hx2 U
     induction U with
-    | empty =>
+    | nil =>
       intro c_lo c_hi loU hiU curP _ hin hclo_ca hcw_chi hchi_len hloU hhiU _ _
       have hm1 := (h_sbp_le_mono subs hsbp c_lo c_a hclo_ca (by omega)).1
       have hm2 := (h_sbp_le_mono subs hsbp c_a (c_hi - 1) (by omega) (by omega)).2
       have hlt_lohi : loU < hiU := by omega
       rw [inorderNat, List.Ico.eq_cons hlt_lohi] at hin
       simp at hin
-    | node l k R ihl ihR =>
+    | node k l R ihl ihR =>
       intro c_lo c_hi loU hiU curP hbst hin hclo_ca hcw_chi hchi_len hloU hhiU hcurP hlcrs
       have hge : ¬(c_hi ≤ c_lo) := by omega
       obtain ⟨hlo_k, hk_hi, hinL, hinR⟩ := h_bst_ico_split l k R loU hiU hbst hin
-      cases hbst with
+      cases hbst using isBSTCases with
       | node _ _ _ hfl hfr hbstL hbstR =>
         have hm_lo_ca := (h_sbp_le_mono subs hsbp c_lo c_a hclo_ca (by omega)).1
         have hm_ca_hi := (h_sbp_le_mono subs hsbp c_a (c_hi - 1) (by omega) (by omega)).2
@@ -19652,8 +19654,8 @@ by
 
   have h_c15 : ∀ (subs : List (ℕ × ℕ)), PuqIsSubblockPart subs →
       ∀ c_lo c_hi, c_lo < c_hi → c_hi ≤ subs.length →
-      ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (loT hiT P_top c_a c_w : ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+      ∀ (T : _root_.BinaryTree ℕ) (loT hiT P_top c_a c_w : ℕ),
+        _root_.BinaryTree.IsBST T →
         inorderNat T = List.Ico loT hiT →
         loT ≤ (subs.getD c_lo (0, 0)).1 →
         (subs.getD (c_hi - 1) (0, 0)).2 ≤ hiT →
@@ -22353,9 +22355,9 @@ by
             (match (jumps kops)[id]? with
             | none => false
             | some e => decide (b.1 ≤ e.s ∧ e.z < b.2)) = true)).card)).sum := by
-    have h_forall_and : ∀ {p q : ℕ → Prop} {T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ},
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p T → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree q T →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => p x ∧ q x) T := by
+    have h_forall_and : ∀ {p q : ℕ → Prop} {T : _root_.BinaryTree ℕ},
+        _root_.SplayDeque.Direct.ForallTree p T → _root_.SplayDeque.Direct.ForallTree q T →
+        _root_.SplayDeque.Direct.ForallTree (fun x => p x ∧ q x) T := by
       intro p q T hp hq
       induction hp with
       | left => exact .left
@@ -22364,26 +22366,26 @@ by
         | node _ _ _ hl' hk' hr' =>
           exact .node l key r (ihl hl') ⟨hk, hk'⟩ (ihr hr')
 
-    have h_forall_imp : ∀ {p q : ℕ → Prop} {T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ},
-        (∀ x, p x → q x) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p T → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree q T := by
+    have h_forall_imp : ∀ {p q : ℕ → Prop} {T : _root_.BinaryTree ℕ},
+        (∀ x, p x → q x) → _root_.SplayDeque.Direct.ForallTree p T → _root_.SplayDeque.Direct.ForallTree q T := by
       intro p q T hpq hT
       induction hT with
       | left => exact .left
       | node l key r _ hk _ ihl ihr => exact .node l key r ihl (hpq key hk) ihr
 
-    have h_bst_ls_aux : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+    have h_bst_ls_aux : ∀ (T : _root_.BinaryTree ℕ) (acc : List ℕ),
+        _root_.BinaryTree.IsBST T →
         List.Pairwise (· < ·) acc →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => ∀ a ∈ acc, x < a) T →
+        _root_.SplayDeque.Direct.ForallTree (fun x => ∀ a ∈ acc, x < a) T →
         List.Pairwise (· < ·) (leftSpineBottomUpAux T acc) := by
       intro T
       induction T with
-      | empty =>
+      | nil =>
         intro acc _ hpw _
         exact hpw
-      | node l k r ihl _ =>
+      | node k l r ihl _ =>
         intro acc hbst hpw hfa
-        cases hbst with
+        cases hbst using isBSTCases with
         | node _ _ _ hl_lt _ hl_bst _ =>
           cases hfa with
           | node _ _ _ hl_fa hk_acc _ =>
@@ -22395,15 +22397,15 @@ by
             · exact hxk
             · exact hxacc a ha'
 
-    have h_bst_ls : ∀ T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ,
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T → List.Pairwise (· < ·) (leftSpineBottomUpNat T) := by
+    have h_bst_ls : ∀ T : _root_.BinaryTree ℕ,
+        _root_.BinaryTree.IsBST T → List.Pairwise (· < ·) (leftSpineBottomUpNat T) := by
       intro T hbst
       refine h_bst_ls_aux T [] hbst List.Pairwise.nil ?_
-      have h_true : ∀ U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => ∀ a ∈ ([] : List ℕ), x < a) U := by
+      have h_true : ∀ U : _root_.BinaryTree ℕ, _root_.SplayDeque.Direct.ForallTree (fun x => ∀ a ∈ ([] : List ℕ), x < a) U := by
         intro U
         induction U with
-        | empty => exact .left
-        | node l k r ihl ihr => exact .node l k r ihl (by simp) ihr
+        | nil => exact .left
+        | node k l r ihl ihr => exact .node l k r ihl (by simp) ihr
       exact h_true T
 
     have h_part8 : (jumps kops).length =
@@ -22588,9 +22590,9 @@ by
 
 
   have hpost : (B_3_post S P L kops).card ≤ countKeyedRslr kops := by
-    have h_forall_and : ∀ {p q : ℕ → Prop} {T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ},
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p T → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree q T →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => p x ∧ q x) T := by
+    have h_forall_and : ∀ {p q : ℕ → Prop} {T : _root_.BinaryTree ℕ},
+        _root_.SplayDeque.Direct.ForallTree p T → _root_.SplayDeque.Direct.ForallTree q T →
+        _root_.SplayDeque.Direct.ForallTree (fun x => p x ∧ q x) T := by
       intro p q T hp hq
       induction hp with
       | left => exact .left
@@ -22598,24 +22600,24 @@ by
         cases hq with
         | node _ _ _ hl' hk' hr' => exact .node l key r (ihl hl') ⟨hk, hk'⟩ (ihr hr')
 
-    have h_forall_imp : ∀ {p q : ℕ → Prop} {T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ},
-        (∀ x, p x → q x) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p T → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree q T := by
+    have h_forall_imp : ∀ {p q : ℕ → Prop} {T : _root_.BinaryTree ℕ},
+        (∀ x, p x → q x) → _root_.SplayDeque.Direct.ForallTree p T → _root_.SplayDeque.Direct.ForallTree q T := by
       intro p q T hpq hT
       induction hT with
       | left => exact .left
       | node l key r _ hk _ ihl ihr => exact .node l key r ihl (hpq key hk) ihr
 
-    have h_bst_ls_aux : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+    have h_bst_ls_aux : ∀ (T : _root_.BinaryTree ℕ) (acc : List ℕ),
+        _root_.BinaryTree.IsBST T →
         List.Pairwise (· < ·) acc →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => ∀ a ∈ acc, x < a) T →
+        _root_.SplayDeque.Direct.ForallTree (fun x => ∀ a ∈ acc, x < a) T →
         List.Pairwise (· < ·) (leftSpineBottomUpAux T acc) := by
       intro T
       induction T with
-      | empty => intro acc _ hpw _; exact hpw
-      | node l k r ihl _ =>
+      | nil => intro acc _ hpw _; exact hpw
+      | node k l r ihl _ =>
         intro acc hbst hpw hfa
-        cases hbst with
+        cases hbst using isBSTCases with
         | node _ _ _ hl_lt _ hl_bst _ =>
           cases hfa with
           | node _ _ _ hl_fa hk_acc _ =>
@@ -22627,17 +22629,17 @@ by
             · exact hxk
             · exact hxacc a ha'
 
-    have h_bst_ls : ∀ T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ,
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T → List.Pairwise (· < ·) (leftSpineBottomUpNat T) := by
+    have h_bst_ls : ∀ T : _root_.BinaryTree ℕ,
+        _root_.BinaryTree.IsBST T → List.Pairwise (· < ·) (leftSpineBottomUpNat T) := by
       intro T hbst
       refine h_bst_ls_aux T [] hbst List.Pairwise.nil ?_
-      have h_true : ∀ U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => ∀ a ∈ ([] : List ℕ), x < a) U := by
+      have h_true : ∀ U : _root_.BinaryTree ℕ, _root_.SplayDeque.Direct.ForallTree (fun x => ∀ a ∈ ([] : List ℕ), x < a) U := by
         intro U; induction U with
-        | empty => exact .left
-        | node l k r ihl ihr => exact .node l k r ihl (by simp) ihr
+        | nil => exact .left
+        | node k l r ihl ihr => exact .node l k r ihl (by simp) ihr
       exact h_true T
 
-    have h_exec_append : ∀ (H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (xs ys : List KeyedCoreOp),
+    have h_exec_append : ∀ (H : _root_.BinaryTree ℕ) (xs ys : List KeyedCoreOp),
         execKeyedList H (xs ++ ys) = execKeyedList (execKeyedList H xs) ys := by
       intro H xs ys
       induction xs generalizing H with
@@ -22688,12 +22690,12 @@ by
       have := h_aux (t2 - t1) t1
       rwa [Nat.add_sub_of_le hle] at this
 
-    have h_hasKey_iff : ∀ (lo hi : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+    have h_hasKey_iff : ∀ (lo hi : ℕ) (T : _root_.BinaryTree ℕ),
         psspHasKeyIn lo hi T = true ↔ ∃ v ∈ inorderNat T, lo ≤ v ∧ v < hi := by
       intro lo hi T
       induction T with
-      | empty => simp [psspHasKeyIn, inorderNat]
-      | node l k r ihl ihr =>
+      | nil => simp [psspHasKeyIn, inorderNat]
+      | node k l r ihl ihr =>
         simp only [psspHasKeyIn, inorderNat, Bool.or_eq_true, decide_eq_true_eq, ihl, ihr,
           List.mem_append, List.mem_singleton]
         constructor
@@ -22706,13 +22708,13 @@ by
           · exact Or.inl (Or.inl hvb)
           · exact Or.inr ⟨v, hv, hvb⟩
 
-    have h_ancDesc_imp_hasKey : ∀ (lo_p hi_p lo_q hi_q : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+    have h_ancDesc_imp_hasKey : ∀ (lo_p hi_p lo_q hi_q : ℕ) (T : _root_.BinaryTree ℕ),
         psspHasAncDesc lo_p hi_p lo_q hi_q T = true →
         psspHasKeyIn lo_p hi_p T = true := by
       intro lo_p hi_p lo_q hi_q T
       induction T with
-      | empty => simp [psspHasAncDesc]
-      | node l k r ihl ihr =>
+      | nil => simp [psspHasAncDesc]
+      | node k l r ihl ihr =>
         simp only [psspHasAncDesc, psspHasKeyIn, Bool.or_eq_true, Bool.and_eq_true]
         rintro ((⟨_, hlr⟩ | hl) | hr)
         · rcases hlr with hl | hr
@@ -22721,8 +22723,8 @@ by
         · exact Or.inl (Or.inr (ihl hl))
         · exact Or.inr (ihr hr)
 
-    have h_forall_no_key : ∀ (lo hi : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun v => v < lo ∨ hi ≤ v) T →
+    have h_forall_no_key : ∀ (lo hi : ℕ) (T : _root_.BinaryTree ℕ),
+        _root_.SplayDeque.Direct.ForallTree (fun v => v < lo ∨ hi ≤ v) T →
         psspHasKeyIn lo hi T = false := by
       intro lo hi T hfa
       induction hfa with
@@ -22732,8 +22734,8 @@ by
           rw [decide_eq_false_iff_not]; omega
         simp [psspHasKeyIn, hk_f, ihl, ihr]
 
-    have h_forall_no_ancDesc : ∀ (lo_p hi_p lo_q hi_q : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun v => v < lo_q ∨ hi_q ≤ v) T →
+    have h_forall_no_ancDesc : ∀ (lo_p hi_p lo_q hi_q : ℕ) (T : _root_.BinaryTree ℕ),
+        _root_.SplayDeque.Direct.ForallTree (fun v => v < lo_q ∨ hi_q ≤ v) T →
         psspHasAncDesc lo_p hi_p lo_q hi_q T = false := by
       intro lo_p hi_p lo_q hi_q T hfa
       induction hfa with
@@ -22743,26 +22745,26 @@ by
           rw [decide_eq_false_iff_not]; omega
         simp [psspHasAncDesc, hk_f, ihl, ihr]
 
-    have h_hasKey_rotL : ∀ (lo hi d : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+    have h_hasKey_rotL : ∀ (lo hi d : ℕ) (T : _root_.BinaryTree ℕ),
         psspHasKeyIn lo hi (rotateLeftAtRightDepthNat T d) = psspHasKeyIn lo hi T := by
       intro lo hi d
       induction d with
       | zero =>
         intro T
-        rcases T with _ | ⟨a, x, _ | ⟨b, y, c⟩⟩
+        rcases T with _ | ⟨x, a, _ | ⟨y, b, c⟩⟩
         · rfl
         · rfl
-        · simp only [rotateLeftAtRightDepthNat, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft, psspHasKeyIn]
+        · simp only [rotateLeftAtRightDepthNat, _root_.BinaryTree.rotateLeft, psspHasKeyIn]
           cases decide (lo ≤ x ∧ x < hi) <;> cases decide (lo ≤ y ∧ y < hi) <;>
             cases psspHasKeyIn lo hi a <;> cases psspHasKeyIn lo hi b <;>
             cases psspHasKeyIn lo hi c <;> rfl
       | succ d ih =>
         intro T
-        rcases T with _ | ⟨l, k, r⟩
+        rcases T with _ | ⟨k, l, r⟩
         · rfl
         · simp only [rotateLeftAtRightDepthNat, psspHasKeyIn, ih r]
 
-    have h_ancDesc_rotL_gain : ∀ (lo_p hi_p lo_q hi_q d : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+    have h_ancDesc_rotL_gain : ∀ (lo_p hi_p lo_q hi_q d : ℕ) (T : _root_.BinaryTree ℕ),
         psspHasAncDesc lo_p hi_p lo_q hi_q (rotateLeftAtRightDepthNat T d) = true →
         psspHasAncDesc lo_p hi_p lo_q hi_q T = false →
         let y := (rightSpineTopDownNat T).getD (d + 1) 0
@@ -22771,15 +22773,15 @@ by
       induction d with
       | zero =>
         intro T h1 h2
-        rcases T with _ | ⟨a, x, _ | ⟨b, y, c⟩⟩
-        · simp [rotateLeftAtRightDepthNat, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft, psspHasAncDesc] at h1
-        · simp [rotateLeftAtRightDepthNat, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft] at h1
+        rcases T with _ | ⟨x, a, _ | ⟨y, b, c⟩⟩
+        · simp [rotateLeftAtRightDepthNat, _root_.BinaryTree.rotateLeft, psspHasAncDesc] at h1
+        · simp [rotateLeftAtRightDepthNat, _root_.BinaryTree.rotateLeft] at h1
           rw [h1] at h2; cases h2
-        · dsimp (config := { failIfUnchanged := false }) only [rotateLeftAtRightDepthNat, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft] at h1
-          have hy_mem : (rightSpineTopDownNat (.node a x (.node b y c))).getD 1 0 ∈
-              inorderNat (.node a x (.node b y c)) := by
+        · dsimp (config := { failIfUnchanged := false }) only [rotateLeftAtRightDepthNat, _root_.BinaryTree.rotateLeft] at h1
+          have hy_mem : (rightSpineTopDownNat (.node x a (.node y b c))).getD 1 0 ∈
+              inorderNat (.node x a (.node y b c)) := by
             simp [rightSpineTopDownNat, inorderNat]
-          have hy_eq : (rightSpineTopDownNat (.node a x (.node b y c))).getD 1 0 = y := rfl
+          have hy_eq : (rightSpineTopDownNat (.node x a (.node y b c))).getD 1 0 = y := rfl
           rw [hy_eq] at hy_mem ⊢
           simp only [psspHasAncDesc, psspHasKeyIn, Bool.or_eq_false_iff] at h2
           obtain ⟨⟨hroot_x, ha_f⟩, ⟨hroot_y, hb_f⟩, hc_f⟩ := h2
@@ -22788,17 +22790,17 @@ by
             revert hroot_x
             cases decide (lo_q ≤ x ∧ x < hi_q) <;> cases psspHasKeyIn lo_p hi_p a <;>
               cases psspHasKeyIn lo_p hi_p b <;> simp
-          have hab_f : psspHasAncDesc lo_p hi_p lo_q hi_q (.node a x b) = false := by
+          have hab_f : psspHasAncDesc lo_p hi_p lo_q hi_q (.node x a b) = false := by
             unfold psspHasAncDesc
             rw [hx_sub_f, ha_f, hb_f]
             rfl
           simp only [rotateLeftAtRightDepthNat,
-            _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft] at h1
+            _root_.BinaryTree.rotateLeft] at h1
           unfold psspHasAncDesc at h1
           rw [hab_f, hc_f] at h1
           simp only [Bool.or_false, Bool.and_eq_true, decide_eq_true_eq] at h1
           obtain ⟨⟨hy_lo, hy_hi⟩, hp_key⟩ := h1
-          have hp_T : psspHasKeyIn lo_p hi_p (.node a x (.node b y c)) = true := by
+          have hp_T : psspHasKeyIn lo_p hi_p (.node x a (.node y b c)) = true := by
             revert hp_key
             simp only [psspHasKeyIn]
             cases decide (lo_p ≤ y ∧ y < hi_p) <;> cases decide (lo_p ≤ x ∧ x < hi_p) <;>
@@ -22807,7 +22809,7 @@ by
           exact ⟨hy_mem, hy_lo, hy_hi, hp_T⟩
       | succ d ih =>
         intro T h1 h2
-        rcases T with _ | ⟨l, k, r⟩
+        rcases T with _ | ⟨k, l, r⟩
         · simp [rotateLeftAtRightDepthNat, psspHasAncDesc] at h1
         · simp only [rotateLeftAtRightDepthNat, psspHasAncDesc, h_hasKey_rotL lo_p hi_p d r] at h1
           simp only [psspHasAncDesc, Bool.or_eq_false_iff] at h2
@@ -22815,43 +22817,43 @@ by
           rw [hroot_k, hl_f] at h1
           simp only [Bool.false_or] at h1
           obtain ⟨hy_mem, hy_lo, hy_hi, hp_r⟩ := ih r h1 hr_f
-          have hy_eq : (rightSpineTopDownNat (.node l k r)).getD (d + 1 + 1) 0 =
+          have hy_eq : (rightSpineTopDownNat (.node k l r)).getD (d + 1 + 1) 0 =
               (rightSpineTopDownNat r).getD (d + 1) 0 := rfl
           rw [hy_eq]
           refine ⟨?_, hy_lo, hy_hi, ?_⟩
           · simp only [inorderNat, List.mem_append]; exact Or.inr hy_mem
           · simp [psspHasKeyIn, hp_r]
 
-    have h_descend_decomp : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)),
-        T ≠ .empty →
+    have h_descend_decomp : ∀ (T : _root_.BinaryTree ℕ) (acc : List (ℕ × _root_.BinaryTree ℕ)),
+        T ≠ .nil →
         ∃ s0 : ℕ,
           leftSpineBottomUpAux T (acc.map Prod.fst) =
             s0 :: (descendLeftNat T acc).2.map Prod.fst ∧
-          twAttachPoly (.node .empty s0 (descendLeftNat T acc).1) (descendLeftNat T acc).2 =
+          twAttachPoly (.node s0 .nil (descendLeftNat T acc).1) (descendLeftNat T acc).2 =
             twAttachPoly T acc := by
       intro T
       induction T with
-      | empty => intro _ h; exact absurd rfl h
-      | node l k r ihl _ =>
+      | nil => intro _ h; exact absurd rfl h
+      | node k l r ihl _ =>
         intro acc _
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · refine ⟨k, ?_, ?_⟩ <;> simp [leftSpineBottomUpAux, descendLeftNat]
         · simpa [leftSpineBottomUpAux, descendLeftNat, twAttachPoly] using
             ihl ((k, r) :: acc) (by simp)
 
-    have h_attach_append : ∀ (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (p1 p2 : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)),
+    have h_attach_append : ∀ (U : _root_.BinaryTree ℕ) (p1 p2 : List (ℕ × _root_.BinaryTree ℕ)),
         twAttachPoly U (p1 ++ p2) = twAttachPoly (twAttachPoly U p1) p2 := by
       intro U p1 p2
       induction p1 generalizing U with
       | nil => rfl
-      | cons kr rest ih => exact ih (.node U kr.1 kr.2)
+      | cons kr rest ih => exact ih (.node kr.1 U kr.2)
 
-    have h_attach_bst : ∀ (ps : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (twAttachPoly U ps) →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST U ∧
+    have h_attach_bst : ∀ (ps : List (ℕ × _root_.BinaryTree ℕ)) (U : _root_.BinaryTree ℕ),
+        _root_.BinaryTree.IsBST (twAttachPoly U ps) →
+        _root_.BinaryTree.IsBST U ∧
           ∀ p ∈ ps,
-            _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun v => v < p.1) U ∧
-            _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun v => p.1 < v) p.2 := by
+            _root_.SplayDeque.Direct.ForallTree (fun v => v < p.1) U ∧
+            _root_.SplayDeque.Direct.ForallTree (fun v => p.1 < v) p.2 := by
       intro ps
       induction ps with
       | nil =>
@@ -22859,8 +22861,8 @@ by
         exact ⟨hbst, by simp⟩
       | cons kr rest ih =>
         intro U hbst
-        obtain ⟨hbst_node, hrest⟩ := ih (.node U kr.1 kr.2) hbst
-        cases hbst_node with
+        obtain ⟨hbst_node, hrest⟩ := ih (.node kr.1 U kr.2) hbst
+        cases hbst_node using isBSTCases with
         | node _ _ _ hl_lt hr_gt hl_bst _ =>
           refine ⟨hl_bst, ?_⟩
           intro p hp
@@ -22870,18 +22872,18 @@ by
             cases hnode_lt with
             | node _ _ _ hU_lt _ _ => exact ⟨hU_lt, hp2_gt⟩
 
-    have h_attach_hasKey : ∀ (lo hi : ℕ) (ps : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+    have h_attach_hasKey : ∀ (lo hi : ℕ) (ps : List (ℕ × _root_.BinaryTree ℕ)) (U : _root_.BinaryTree ℕ),
         psspHasKeyIn lo hi U = true → psspHasKeyIn lo hi (twAttachPoly U ps) = true := by
       intro lo hi ps
       induction ps with
       | nil => intro U h; exact h
       | cons kr rest ih =>
         intro U h
-        apply ih (.node U kr.1 kr.2)
+        apply ih (.node kr.1 U kr.2)
         simp [psspHasKeyIn, h]
 
     have h_attach_ancDesc : ∀ (lo_p hi_p lo_q hi_q : ℕ)
-        (ps : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+        (ps : List (ℕ × _root_.BinaryTree ℕ)) (U : _root_.BinaryTree ℕ),
         psspHasAncDesc lo_p hi_p lo_q hi_q U = true →
         psspHasAncDesc lo_p hi_p lo_q hi_q (twAttachPoly U ps) = true := by
       intro lo_p hi_p lo_q hi_q ps
@@ -22889,11 +22891,11 @@ by
       | nil => intro U h; exact h
       | cons kr rest ih =>
         intro U h
-        apply ih (.node U kr.1 kr.2)
+        apply ih (.node kr.1 U kr.2)
         simp [psspHasAncDesc, h]
 
     have h_splay_sub_attach : ∀ (lo_p hi_p lo_q hi_q n : ℕ)
-        (path : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (c t0 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+        (path : List (ℕ × _root_.BinaryTree ℕ)) (c t0 : _root_.BinaryTree ℕ),
         path.length ≤ n →
         psspHasKeyIn lo_p hi_p t0 = true →
         (psspHasAncDesc lo_p hi_p lo_q hi_q c = true →
@@ -22919,11 +22921,11 @@ by
           · exact Or.inr hr1
         · simp only [splayLeftSpineNat] at hs
           simp only [twAttachPoly]
-          apply ih rest (.node c k1 (.node r1 k2 r2)) (.node (.node t0 k1 r1) k2 r2)
+          apply ih rest (.node k1 c (.node k2 r1 r2)) (.node k2 (.node k1 t0 r1) r2)
             (by simp at hlen; omega)
           · simp [psspHasKeyIn, ht0]
           · intro hc'
-            have ht0_1 : psspHasKeyIn lo_p hi_p (.node t0 k1 r1) = true := by
+            have ht0_1 : psspHasKeyIn lo_p hi_p (.node k1 t0 r1) = true := by
               simp [psspHasKeyIn, ht0]
             simp only [psspHasAncDesc, Bool.or_eq_true, Bool.and_eq_true] at hc'
             simp only [psspHasAncDesc, ht0, ht0_1, Bool.true_or, Bool.and_true, Bool.or_eq_true]
@@ -22935,7 +22937,7 @@ by
             · exact Or.inr hr2
           · exact hs
 
-    have h_splay_even_append : ∀ (j : ℕ) (pre post : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+    have h_splay_even_append : ∀ (j : ℕ) (pre post : List (ℕ × _root_.BinaryTree ℕ)) (c : _root_.BinaryTree ℕ),
         pre.length = 2 * j →
         splayLeftSpineNat c (pre ++ post) = splayLeftSpineNat (splayLeftSpineNat c pre) post := by
       intro j
@@ -22951,14 +22953,14 @@ by
         · simp at hlen
         · simp at hlen; omega
         · simp only [List.cons_append, splayLeftSpineNat]
-          exact ih rest post (.node c k1 (.node r1 k2 r2)) (by simp at hlen; omega)
+          exact ih rest post (.node k1 c (.node k2 r1 r2)) (by simp at hlen; omega)
 
-    have h_splay_forall : ∀ (p : ℕ → Prop) (n : ℕ) (path : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ))
-        (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+    have h_splay_forall : ∀ (p : ℕ → Prop) (n : ℕ) (path : List (ℕ × _root_.BinaryTree ℕ))
+        (c : _root_.BinaryTree ℕ),
         path.length ≤ n →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p c →
-        (∀ kr ∈ path, p kr.1 ∧ _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p kr.2) →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p (splayLeftSpineNat c path) := by
+        _root_.SplayDeque.Direct.ForallTree p c →
+        (∀ kr ∈ path, p kr.1 ∧ _root_.SplayDeque.Direct.ForallTree p kr.2) →
+        _root_.SplayDeque.Direct.ForallTree p (splayLeftSpineNat c path) := by
       intro p n
       induction n with
       | zero =>
@@ -22974,16 +22976,16 @@ by
           exact .node c k1 r1 hc hk1 hr1
         · obtain ⟨hk1, hr1⟩ := hpath (k1, r1) (by simp)
           obtain ⟨hk2, hr2⟩ := hpath (k2, r2) (by simp)
-          refine ih rest (.node c k1 (.node r1 k2 r2)) (by simp at hlen; omega)
-            (.node c k1 (.node r1 k2 r2) hc hk1 (.node r1 k2 r2 hr1 hk2 hr2)) ?_
+          refine ih rest (.node k1 c (.node k2 r1 r2)) (by simp at hlen; omega)
+            (.node c k1 (.node k2 r1 r2) hc hk1 (.node r1 k2 r2 hr1 hk2 hr2)) ?_
           intro kr hkr
           exact hpath kr (by simp [hkr])
 
     have h_splay_kill_tail : ∀ (lo_p hi_p lo_q hi_q n : ℕ)
-        (tail : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+        (tail : List (ℕ × _root_.BinaryTree ℕ)) (c : _root_.BinaryTree ℕ),
         tail.length ≤ n →
         psspHasAncDesc lo_p hi_p lo_q hi_q c = false →
-        (∀ kr ∈ tail, hi_q ≤ kr.1 ∧ _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun v => hi_q ≤ v) kr.2) →
+        (∀ kr ∈ tail, hi_q ≤ kr.1 ∧ _root_.SplayDeque.Direct.ForallTree (fun v => hi_q ≤ v) kr.2) →
         psspHasAncDesc lo_p hi_p lo_q hi_q (splayLeftSpineNat c tail) = false := by
       intro lo_p hi_p lo_q hi_q n
       induction n with
@@ -23015,9 +23017,9 @@ by
           have hr2_f : psspHasAncDesc lo_p hi_p lo_q hi_q r2 = false :=
             h_forall_no_ancDesc lo_p hi_p lo_q hi_q r2
               (h_forall_imp (fun _ hv => Or.inr hv) hr2)
-          have hc' : psspHasAncDesc lo_p hi_p lo_q hi_q (.node c k1 (.node r1 k2 r2)) = false := by
+          have hc' : psspHasAncDesc lo_p hi_p lo_q hi_q (.node k1 c (.node k2 r1 r2)) = false := by
             simp [psspHasAncDesc, hk1_f, hk2_f, hc, hr1_f, hr2_f]
-          refine ih rest (.node c k1 (.node r1 k2 r2)) (by simp at hlen; omega) hc' ?_
+          refine ih rest (.node k1 c (.node k2 r1 r2)) (by simp at hlen; omega) hc' ?_
           intro kr hkr
           exact htail kr (by simp [hkr])
 
@@ -23452,7 +23454,7 @@ by
           exact Option.some.inj hls_head
         rw [hs0_eq] at hls_eq0 hattach0
         have hls_eq : leftSpineBottomUpNat Ht = s :: path.map Prod.fst := hls_eq0
-        have hHt_attach : Ht = twAttachPoly (.node .empty s c0) path := hattach0.symm
+        have hHt_attach : Ht = twAttachPoly (.node s .nil c0) path := hattach0.symm
         have hHt_next : keyedState kops (t + 1) = splayLeftSpineNat c0 path := by
           rw [hnext]
           rfl
@@ -23487,14 +23489,14 @@ by
               exact hkvalid.popIdx_after_popStep s hs_P
             omega
           rw [hHt_next] at hanc_next
-          have ht0_key : psspHasKeyIn (subP q0).1 (subP q0).2 (.node .empty s c0) = true := by
+          have ht0_key : psspHasKeyIn (subP q0).1 (subP q0).2 (.node s .nil c0) = true := by
             have hs_dec : decide ((subP q0).1 ≤ s ∧ s < (subP q0).2) = true :=
               decide_eq_true ⟨hs_ge_lo, hs_lt_hi⟩
             simp [psspHasKeyIn, hs_dec]
           have hanc_cur : psspHasAncDesc (subP q0).1 (subP q0).2 (subQ q0).1 (subQ q0).2 Ht = true := by
             rw [hHt_attach]
             exact h_splay_sub_attach (subP q0).1 (subP q0).2 (subQ q0).1 (subQ q0).2
-              path.length path c0 (.node .empty s c0) le_rfl ht0_key
+              path.length path c0 (.node s .nil c0) le_rfl ht0_key
               (fun hc => by simp [psspHasAncDesc, hc]) hanc_next
           simp only [active, Bool.and_eq_true, decide_eq_true_eq]
           exact ⟨htE, hanc_cur⟩
@@ -23660,9 +23662,9 @@ by
                   rw [hx_pair, hy_pair, hz_pair]; simp [List.append_assoc]
           have hpre_len : path_pre.length = 2 * e.j := by
             simp [path_pre]; omega
-          set T_pre := twAttachPoly (.node .empty s c0) path_pre
+          set T_pre := twAttachPoly (.node s .nil c0) path_pre
           have hHt_decomp : Ht = twAttachPoly
-              (.node (.node (.node T_pre e.x rx) e.y ry) e.z rz) path_post := by
+              (.node e.z (.node e.y (.node e.x T_pre rx) ry) rz) path_post := by
             rw [hHt_attach, hpath_split, List.append_assoc, h_attach_append]
             rfl
           have hs_in_sp : (subP (ℓ, Xi, p, q)).1 ≤ s ∧ s < (subP (ℓ, Xi, p, q)).2 := by
@@ -23683,35 +23685,35 @@ by
             have hy_dec : decide ((subQ (ℓ, Xi, p, q)).1 ≤ e.y ∧ e.y < (subQ (ℓ, Xi, p, q)).2) = true :=
               decide_eq_true hy_in_sq
             have hx_key : psspHasKeyIn (subP (ℓ, Xi, p, q)).1 (subP (ℓ, Xi, p, q)).2
-                (.node T_pre e.x rx) = true := by
+                (.node e.x T_pre rx) = true := by
               simp [psspHasKeyIn, hTpre_key]
             have hy_anc : psspHasAncDesc (subP (ℓ, Xi, p, q)).1 (subP (ℓ, Xi, p, q)).2
                 (subQ (ℓ, Xi, p, q)).1 (subQ (ℓ, Xi, p, q)).2
-                (.node (.node T_pre e.x rx) e.y ry) = true := by
+                (.node e.y (.node e.x T_pre rx) ry) = true := by
               simp [psspHasAncDesc, hy_dec, hx_key]
             unfold psspHasAncDesc
             rw [hy_anc]
             simp
-          have hHt_bst : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST Ht := hkvalid.isBST_state t (by omega)
+          have hHt_bst : _root_.BinaryTree.IsBST Ht := hkvalid.isBST_state t (by omega)
           rw [hHt_decomp] at hHt_bst
           obtain ⟨hbst_z, hpost_bst⟩ := h_attach_bst path_post _ hHt_bst
-          cases hbst_z with
+          cases hbst_z using isBSTCases with
           | node _ _ _ _ hrz_gt hbst_y _ =>
-            cases hbst_y with
+            cases hbst_y using isBSTCases with
             | node _ _ _ _ hry_gt hbst_x _ =>
-              cases hbst_x with
+              cases hbst_x using isBSTCases with
               | node _ _ _ hTpre_lt hrx_gt hTpre_bst _ =>
-                have h_attach_forall : ∀ (ps : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-                    _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun v => v < e.x) (twAttachPoly U ps) →
-                    _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun v => v < e.x) U ∧
-                      ∀ kr ∈ ps, kr.1 < e.x ∧ _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun v => v < e.x) kr.2 := by
+                have h_attach_forall : ∀ (ps : List (ℕ × _root_.BinaryTree ℕ)) (U : _root_.BinaryTree ℕ),
+                    _root_.SplayDeque.Direct.ForallTree (fun v => v < e.x) (twAttachPoly U ps) →
+                    _root_.SplayDeque.Direct.ForallTree (fun v => v < e.x) U ∧
+                      ∀ kr ∈ ps, kr.1 < e.x ∧ _root_.SplayDeque.Direct.ForallTree (fun v => v < e.x) kr.2 := by
                   intro ps
                   induction ps with
                   | nil =>
                     intro U hf; exact ⟨hf, by simp⟩
                   | cons kr rest ih =>
                     intro U hf
-                    obtain ⟨hnode_f, hrest_f⟩ := ih (.node U kr.1 kr.2) hf
+                    obtain ⟨hnode_f, hrest_f⟩ := ih (.node kr.1 U kr.2) hf
                     cases hnode_f with
                     | node _ _ _ hU_f hkr1 hkr2 =>
                       refine ⟨hU_f, ?_⟩
@@ -23719,31 +23721,31 @@ by
                       rcases List.mem_cons.mp hkr' with rfl | hmem
                       · exact ⟨hkr1, hkr2⟩
                       · exact hrest_f kr' hmem
-                obtain ⟨hnode_s_lt, hpre_lt⟩ := h_attach_forall path_pre (.node .empty s c0) hTpre_lt
-                have hc0_lt : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun v => v < e.x) c0 := by
+                obtain ⟨hnode_s_lt, hpre_lt⟩ := h_attach_forall path_pre (.node s .nil c0) hTpre_lt
+                have hc0_lt : _root_.SplayDeque.Direct.ForallTree (fun v => v < e.x) c0 := by
                   cases hnode_s_lt with
                   | node _ _ _ _ _ hc0_f => exact hc0_f
                 set cj := splayLeftSpineNat c0 path_pre
-                have hcj_lt : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun v => v < e.x) cj :=
+                have hcj_lt : _root_.SplayDeque.Direct.ForallTree (fun v => v < e.x) cj :=
                   h_splay_forall (fun v => v < e.x) path_pre.length path_pre c0 le_rfl hc0_lt hpre_lt
                 have hcj_anc_f : psspHasAncDesc (subP (ℓ, Xi, p, q)).1 (subP (ℓ, Xi, p, q)).2
                     (subQ (ℓ, Xi, p, q)).1 (subQ (ℓ, Xi, p, q)).2 cj = false :=
                   h_forall_no_ancDesc _ _ _ _ cj
                     (h_forall_imp (fun v hv => Or.inl (by rw [hsubQ_eq]; omega)) hcj_lt)
-                have hrxy_gt_sp : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree
+                have hrxy_gt_sp : _root_.SplayDeque.Direct.ForallTree
                     (fun v => v < (subP (ℓ, Xi, p, q)).1 ∨ (subP (ℓ, Xi, p, q)).2 ≤ v)
-                    (.node rx e.y ry) := by
+                    (.node e.y rx ry) := by
                   refine .node rx e.y ry ?_ (Or.inr (by rw [hsubP_eq]; omega)) ?_
                   · exact h_forall_imp (fun v hv => Or.inr (by rw [hsubP_eq]; omega)) hrx_gt
                   · exact h_forall_imp (fun v hv => Or.inr (by rw [hsubP_eq]; omega)) hry_gt
                 have hrxy_key_f : psspHasKeyIn (subP (ℓ, Xi, p, q)).1 (subP (ℓ, Xi, p, q)).2
-                    (.node rx e.y ry) = false :=
+                    (.node e.y rx ry) = false :=
                   h_forall_no_key _ _ _ hrxy_gt_sp
                 have hrxy_anc_f : psspHasAncDesc (subP (ℓ, Xi, p, q)).1 (subP (ℓ, Xi, p, q)).2
-                    (subQ (ℓ, Xi, p, q)).1 (subQ (ℓ, Xi, p, q)).2 (.node rx e.y ry) = false := by
+                    (subQ (ℓ, Xi, p, q)).1 (subQ (ℓ, Xi, p, q)).2 (.node e.y rx ry) = false := by
                   cases h : psspHasAncDesc (subP (ℓ, Xi, p, q)).1
                       (subP (ℓ, Xi, p, q)).2 (subQ (ℓ, Xi, p, q)).1 (subQ (ℓ, Xi, p, q)).2
-                      (.node rx e.y ry)
+                      (.node e.y rx ry)
                   · rfl
                   · have hkey := h_ancDesc_imp_hasKey _ _ _ _ _ h
                     rw [hrxy_key_f] at hkey; cases hkey
@@ -23751,12 +23753,12 @@ by
                   rw [decide_eq_false_iff_not, hsubQ_eq]; omega
                 have hcinit_anc_f : psspHasAncDesc (subP (ℓ, Xi, p, q)).1 (subP (ℓ, Xi, p, q)).2
                     (subQ (ℓ, Xi, p, q)).1 (subQ (ℓ, Xi, p, q)).2
-                    (.node cj e.x (.node rx e.y ry)) = false := by
+                    (.node e.x cj (.node e.y rx ry)) = false := by
                   unfold psspHasAncDesc
                   rw [hx_q_f, hcj_anc_f, hrxy_anc_f]
                   rfl
                 have hnext_splay : keyedState kops (t + 1) =
-                    splayLeftSpineNat (.node cj e.x (.node rx e.y ry))
+                    splayLeftSpineNat (.node e.x cj (.node e.y rx ry))
                       ((e.z, rz) :: path_post) := by
                   rw [hHt_next, hpath_split, List.append_assoc,
                     h_splay_even_append e.j path_pre _ c0 hpre_len]
@@ -23943,9 +23945,9 @@ by
           | some e => decide (lo ≤ e.s ∧ e.z < hi)) = true)).card ≤
             coreCascadeCost subOps := by
     intro lo hi hlo_hi hhi_P
-    have h_forall_and : ∀ {p q : ℕ → Prop} {T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ},
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p T → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree q T →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => p x ∧ q x) T := by
+    have h_forall_and : ∀ {p q : ℕ → Prop} {T : _root_.BinaryTree ℕ},
+        _root_.SplayDeque.Direct.ForallTree p T → _root_.SplayDeque.Direct.ForallTree q T →
+        _root_.SplayDeque.Direct.ForallTree (fun x => p x ∧ q x) T := by
       intro p q T hp hq
       induction hp with
       | left => exact .left
@@ -23953,24 +23955,24 @@ by
         cases hq with
         | node _ _ _ hl' hk' hr' => exact .node l key r (ihl hl') ⟨hk, hk'⟩ (ihr hr')
 
-    have h_forall_imp : ∀ {p q : ℕ → Prop} {T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ},
-        (∀ x, p x → q x) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p T → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree q T := by
+    have h_forall_imp : ∀ {p q : ℕ → Prop} {T : _root_.BinaryTree ℕ},
+        (∀ x, p x → q x) → _root_.SplayDeque.Direct.ForallTree p T → _root_.SplayDeque.Direct.ForallTree q T := by
       intro p q T hpq hT
       induction hT with
       | left => exact .left
       | node l key r _ hk _ ihl ihr => exact .node l key r ihl (hpq key hk) ihr
 
-    have h_bst_ls_aux : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+    have h_bst_ls_aux : ∀ (T : _root_.BinaryTree ℕ) (acc : List ℕ),
+        _root_.BinaryTree.IsBST T →
         List.Pairwise (· < ·) acc →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => ∀ a ∈ acc, x < a) T →
+        _root_.SplayDeque.Direct.ForallTree (fun x => ∀ a ∈ acc, x < a) T →
         List.Pairwise (· < ·) (leftSpineBottomUpAux T acc) := by
       intro T
       induction T with
-      | empty => intro acc _ hpw _; exact hpw
-      | node l k r ihl _ =>
+      | nil => intro acc _ hpw _; exact hpw
+      | node k l r ihl _ =>
         intro acc hbst hpw hfa
-        cases hbst with
+        cases hbst using isBSTCases with
         | node _ _ _ hl_lt _ hl_bst _ =>
           cases hfa with
           | node _ _ _ hl_fa hk_acc _ =>
@@ -23982,56 +23984,56 @@ by
             · exact hxk
             · exact hxacc a ha'
 
-    have h_bst_ls : ∀ T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ,
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T → List.Pairwise (· < ·) (leftSpineBottomUpNat T) := by
+    have h_bst_ls : ∀ T : _root_.BinaryTree ℕ,
+        _root_.BinaryTree.IsBST T → List.Pairwise (· < ·) (leftSpineBottomUpNat T) := by
       intro T hbst
       refine h_bst_ls_aux T [] hbst List.Pairwise.nil ?_
-      have h_true : ∀ U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => ∀ a ∈ ([] : List ℕ), x < a) U := by
+      have h_true : ∀ U : _root_.BinaryTree ℕ, _root_.SplayDeque.Direct.ForallTree (fun x => ∀ a ∈ ([] : List ℕ), x < a) U := by
         intro U; induction U with
-        | empty => exact .left
-        | node l k r ihl ihr => exact .node l k r ihl (by simp) ihr
+        | nil => exact .left
+        | node k l r ihl ihr => exact .node l k r ihl (by simp) ihr
       exact h_true T
 
-    have h_erase_eq_empty : ∀ T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ, eraseNatKeys T = .empty ↔ T = .empty := by
+    have h_erase_eq_empty : ∀ T : _root_.BinaryTree ℕ, eraseNatKeys T = .nil ↔ T = .nil := by
       intro T
       cases T <;> simp [eraseNatKeys]
 
-    have h_erase_rs : ∀ T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ,
+    have h_erase_rs : ∀ T : _root_.BinaryTree ℕ,
         rightSpineLen (eraseNatKeys T) = (rightSpineTopDownNat T).length := by
       intro T
       induction T with
-      | empty => rfl
-      | node l k r _ ihr =>
+      | nil => rfl
+      | node k l r _ ihr =>
         simp only [eraseNatKeys, rightSpineLen, rightSpineTopDownNat, List.length_cons, ihr]
         omega
 
-    have h_erase_rotL : ∀ (d : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+    have h_erase_rotL : ∀ (d : ℕ) (T : _root_.BinaryTree ℕ),
         eraseNatKeys (rotateLeftAtRightDepthNat T d) = rotateLeftAtRightDepth (eraseNatKeys T) d := by
       intro d
       induction d with
       | zero =>
         intro T
-        rcases T with _ | ⟨a, x, _ | ⟨b, y, c⟩⟩ <;> rfl
+        rcases T with _ | ⟨x, a, _ | ⟨y, b, c⟩⟩ <;> rfl
       | succ d ih =>
         intro T
-        rcases T with _ | ⟨l, k, r⟩
+        rcases T with _ | ⟨k, l, r⟩
         · rfl
         · simp only [rotateLeftAtRightDepthNat, eraseNatKeys, rotateLeftAtRightDepth, ih r]
 
-    have h_erase_descend : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)),
+    have h_erase_descend : ∀ (T : _root_.BinaryTree ℕ) (acc : List (ℕ × _root_.BinaryTree ℕ)),
         descendLeft (eraseNatKeys T) (acc.map (fun p => eraseNatKeys p.2)) =
           (eraseNatKeys (descendLeftNat T acc).1,
             (descendLeftNat T acc).2.map (fun p => eraseNatKeys p.2)) := by
       intro T
       induction T with
-      | empty => intro acc; simp [eraseNatKeys, descendLeft, descendLeftNat]
-      | node l k r ihl _ =>
+      | nil => intro acc; simp [eraseNatKeys, descendLeft, descendLeftNat]
+      | node k l r ihl _ =>
         intro acc
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · simp [eraseNatKeys, descendLeft, descendLeftNat]
         · simpa [eraseNatKeys, descendLeft, descendLeftNat] using ihl ((k, r) :: acc)
 
-    have h_erase_splay : ∀ (n : ℕ) (path : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+    have h_erase_splay : ∀ (n : ℕ) (path : List (ℕ × _root_.BinaryTree ℕ)) (c : _root_.BinaryTree ℕ),
         path.length ≤ n →
         splayLeftSpine (eraseNatKeys c) (path.map (fun p => eraseNatKeys p.2)) =
           eraseNatKeys (splayLeftSpineNat c path) := by
@@ -24048,9 +24050,9 @@ by
         · rfl
         · rfl
         · simp only [List.map_cons, splayLeftSpine, splayLeftSpineNat]
-          exact ih rest (.node c k1 (.node r1 k2 r2)) (by simp at hlen; omega)
+          exact ih rest (.node k1 c (.node k2 r1 r2)) (by simp at hlen; omega)
 
-    have h_erase_pop : ∀ T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ,
+    have h_erase_pop : ∀ T : _root_.BinaryTree ℕ,
         eraseNatKeys (popNat T) = popUnlabeled (eraseNatKeys T) := by
       intro T
       unfold popNat popUnlabeled
@@ -24060,63 +24062,63 @@ by
       exact (h_erase_splay (descendLeftNat T []).2.length (descendLeftNat T []).2
         (descendLeftNat T []).1 le_rfl).symm
 
-    have h_erase_ls_len : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)),
-        T ≠ .empty →
+    have h_erase_ls_len : ∀ (T : _root_.BinaryTree ℕ) (acc : List (ℕ × _root_.BinaryTree ℕ)),
+        T ≠ .nil →
         (descendLeftNat T acc).2.length + 1 = leftSpineLen (eraseNatKeys T) + acc.length := by
       intro T
       induction T with
-      | empty => intro _ h; exact absurd rfl h
-      | node l k r ihl _ =>
+      | nil => intro _ h; exact absurd rfl h
+      | node k l r ihl _ =>
         intro acc _
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · simp [descendLeftNat, eraseNatKeys, leftSpineLen]; omega
         · have h1 := ihl ((k, r) :: acc) (by simp)
           simp only [descendLeftNat, List.length_cons, eraseNatKeys, leftSpineLen] at h1 ⊢
           omega
 
-    let listNodes : List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) → ℕ := fun xs =>
+    let listNodes : List (_root_.BinaryTree Unit) → ℕ := fun xs =>
       xs.foldr (fun x acc => 1 + x.num_nodes + acc) 0
 
     have h_rotL_nodes :
-        ∀ (d : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit), (rotateLeftAtRightDepth t d).num_nodes = t.num_nodes := by
+        ∀ (d : ℕ) (t : _root_.BinaryTree Unit), (rotateLeftAtRightDepth t d).num_nodes = t.num_nodes := by
       intro d
       induction d with
       | zero =>
         intro t
-        rcases t with _ | ⟨a, u1, _ | ⟨b, u2, c⟩⟩ <;>
-          (simp [rotateLeftAtRightDepth, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; try omega)
+        rcases t with _ | ⟨u1, a, _ | ⟨u2, b, c⟩⟩ <;>
+          (simp [rotateLeftAtRightDepth, _root_.BinaryTree.rotateLeft, _root_.BinaryTree.num_nodes]; try omega)
       | succ d ih =>
         intro t
-        rcases t with _ | ⟨l, u, r⟩
+        rcases t with _ | ⟨u, l, r⟩
         · rfl
-        · simp only [rotateLeftAtRightDepth, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, ih r]
+        · simp only [rotateLeftAtRightDepth, _root_.BinaryTree.num_nodes, ih r]
 
     have h_descend_nodes :
-        ∀ (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (acc : List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit)),
-          u ≠ .empty →
+        ∀ (u : _root_.BinaryTree Unit) (acc : List (_root_.BinaryTree Unit)),
+          u ≠ .nil →
           (descendLeft u acc).1.num_nodes + listNodes (descendLeft u acc).2 + 1 =
             u.num_nodes + listNodes acc := by
       intro u
       induction u with
-      | empty => intro _ h; exact absurd rfl h
-      | node l u0 r ihl _ =>
+      | nil => intro _ h; exact absurd rfl h
+      | node u0 l r ihl _ =>
         intro acc _
-        rcases l with _ | ⟨ll, lu, lr⟩
+        rcases l with _ | ⟨lu, ll, lr⟩
         · simp only [descendLeft]
           change r.num_nodes + listNodes acc + 1 = (1 + 0 + r.num_nodes) + listNodes acc
           omega
         · have h1 := ihl (r :: acc) (by simp)
           simp only [descendLeft]
-          change (descendLeft (.node ll lu lr) (r :: acc)).1.num_nodes +
-            listNodes (descendLeft (.node ll lu lr) (r :: acc)).2 + 1 =
+          change (descendLeft (.node lu ll lr) (r :: acc)).1.num_nodes +
+            listNodes (descendLeft (.node lu ll lr) (r :: acc)).2 + 1 =
             (1 + (1 + ll.num_nodes + lr.num_nodes) + r.num_nodes) + listNodes acc
-          change (descendLeft (.node ll lu lr) (r :: acc)).1.num_nodes +
-            listNodes (descendLeft (.node ll lu lr) (r :: acc)).2 + 1 =
+          change (descendLeft (.node lu ll lr) (r :: acc)).1.num_nodes +
+            listNodes (descendLeft (.node lu ll lr) (r :: acc)).2 + 1 =
             (1 + ll.num_nodes + lr.num_nodes) + (1 + r.num_nodes + listNodes acc) at h1
           omega
 
     have h_splay_nodes :
-        ∀ (n : ℕ) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (path : List (_root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit)),
+        ∀ (n : ℕ) (c : _root_.BinaryTree Unit) (path : List (_root_.BinaryTree Unit)),
           path.length ≤ n →
           (splayLeftSpine c path).num_nodes = c.num_nodes + listNodes path := by
       intro n
@@ -24132,14 +24134,14 @@ by
         · change c.num_nodes = c.num_nodes + 0; omega
         · change 1 + c.num_nodes + r1.num_nodes = c.num_nodes + (1 + r1.num_nodes + 0); omega
         · have hrest : rest.length ≤ n := by simp at hlen; omega
-          have h1 := ih (.node c () (.node r1 () r2)) rest hrest
-          change (splayLeftSpine (.node c () (.node r1 () r2)) rest).num_nodes =
+          have h1 := ih (.node () c (.node () r1 r2)) rest hrest
+          change (splayLeftSpine (.node () c (.node () r1 r2)) rest).num_nodes =
             c.num_nodes + (1 + r1.num_nodes + (1 + r2.num_nodes + listNodes rest))
-          simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at h1
+          simp only [_root_.BinaryTree.num_nodes] at h1
           omega
 
     have h_pop_nodes :
-        ∀ t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit, t ≠ .empty → (popUnlabeled t).num_nodes + 1 = t.num_nodes := by
+        ∀ t : _root_.BinaryTree Unit, t ≠ .nil → (popUnlabeled t).num_nodes + 1 = t.num_nodes := by
       intro t ht
       unfold popUnlabeled
       have hd := h_descend_nodes t [] ht
@@ -24150,7 +24152,7 @@ by
       dsimp (config := { failIfUnchanged := false }) only at hs ⊢
       omega
 
-    have h_steps_append : ∀ (ops1 ops2 : List CoreOp) (u1 u2 u3 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+    have h_steps_append : ∀ (ops1 ops2 : List CoreOp) (u1 u2 u3 : _root_.BinaryTree Unit),
         TwValidCoreSteps u1 ops1 u2 → TwValidCoreSteps u2 ops2 u3 →
         TwValidCoreSteps u1 (ops1 ++ ops2) u3 := by
       intro ops1
@@ -24161,23 +24163,23 @@ by
       | cons op rest ih =>
         intro ops2 u1 u2 u3 h1 h2
         cases op with
-        | push => exact ih ops2 (.node .empty () u1) u2 u3 h1 h2
+        | push => exact ih ops2 (.node () .nil u1) u2 u3 h1 h2
         | pop => exact ⟨h1.1, ih ops2 (popUnlabeled u1) u2 u3 h1.2 h2⟩
         | rslr d => exact ⟨h1.1, ih ops2 (rotateLeftAtRightDepth u1 d) u2 u3 h1.2 h2⟩
 
-    have h_steps_to_aux : ∀ (ops : List CoreOp) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
-        TwValidCoreSteps u ops .empty → ValidCoreSeqAux u ops := by
+    have h_steps_to_aux : ∀ (ops : List CoreOp) (u : _root_.BinaryTree Unit),
+        TwValidCoreSteps u ops .nil → ValidCoreSeqAux u ops := by
       intro ops
       induction ops with
       | nil => intro u h; exact h
       | cons op rest ih =>
         intro u h
         cases op with
-        | push => exact ih (.node .empty () u) h
+        | push => exact ih (.node () .nil u) h
         | pop => exact ⟨h.1, ih (popUnlabeled u) h.2⟩
         | rslr d => exact ⟨h.1, ih (rotateLeftAtRightDepth u d) h.2⟩
 
-    have h_cost_append : ∀ (ops1 ops2 : List CoreOp) (u1 u2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+    have h_cost_append : ∀ (ops1 ops2 : List CoreOp) (u1 u2 : _root_.BinaryTree Unit),
         TwValidCoreSteps u1 ops1 u2 →
         coreCascadeCostAux u1 (ops1 ++ ops2) =
           coreCascadeCostAux u1 ops1 + coreCascadeCostAux u2 ops2 := by
@@ -24221,7 +24223,7 @@ by
         · simp [countCorePop, ih]; omega
         · simp [countCorePop, ih]
 
-    have h_steps_nodes : ∀ (ops : List CoreOp) (u1 u2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+    have h_steps_nodes : ∀ (ops : List CoreOp) (u1 u2 : _root_.BinaryTree Unit),
         TwValidCoreSteps u1 ops u2 →
         u1.num_nodes + countCorePush ops = u2.num_nodes + countCorePop ops := by
       intro ops
@@ -24233,8 +24235,8 @@ by
         intro u1 u2 h
         cases op with
         | push =>
-          have h1 := ih (.node .empty () u1) u2 h
-          simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, countCorePush, countCorePop] at h1 ⊢
+          have h1 := ih (.node () .nil u1) u2 h
+          simp only [_root_.BinaryTree.num_nodes, countCorePush, countCorePop] at h1 ⊢
           omega
         | pop =>
           have h1 := ih (popUnlabeled u1) u2 h.2
@@ -24246,101 +24248,101 @@ by
           rw [h_rotL_nodes d u1] at h1
           simpa [countCorePush, countCorePop] using h1
 
-    have h_rs_le_nodes : ∀ u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit, rightSpineLen u ≤ u.num_nodes := by
+    have h_rs_le_nodes : ∀ u : _root_.BinaryTree Unit, rightSpineLen u ≤ u.num_nodes := by
       intro u
       induction u with
-      | empty => simp [rightSpineLen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
-      | node l _ r _ ihr =>
-        simp only [rightSpineLen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+      | nil => simp [rightSpineLen, _root_.BinaryTree.num_nodes]
+      | node _ l r _ ihr =>
+        simp only [rightSpineLen, _root_.BinaryTree.num_nodes]
         omega
 
-    have h_build_aux : ∀ (fuel : ℕ) (u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+    have h_build_aux : ∀ (fuel : ℕ) (u : _root_.BinaryTree Unit),
         2 * u.num_nodes - rightSpineLen u ≤ fuel →
-        TwValidCoreSteps .empty (twBuildFromEmptyAux fuel u) u ∧
+        TwValidCoreSteps .nil (twBuildFromEmptyAux fuel u) u ∧
         countCorePush (twBuildFromEmptyAux fuel u) = u.num_nodes ∧
         countCorePop (twBuildFromEmptyAux fuel u) = 0 := by
       intro fuel
       induction fuel with
       | zero =>
         intro u hfuel
-        rcases u with _ | ⟨l, _, r⟩
+        rcases u with _ | ⟨_, l, r⟩
         · exact ⟨rfl, rfl, rfl⟩
         · have hrs := h_rs_le_nodes r
-          simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, rightSpineLen] at hfuel
+          simp only [_root_.BinaryTree.num_nodes, rightSpineLen] at hfuel
           omega
       | succ fuel ih =>
         intro u hfuel
-        rcases u with _ | ⟨_ | ⟨a, _, b⟩, _, r⟩
+        rcases u with _ | ⟨_, _ | ⟨_, a, b⟩, r⟩
         · exact ⟨rfl, rfl, rfl⟩
         · have hrs := h_rs_le_nodes r
           have hsub : 2 * r.num_nodes - rightSpineLen r ≤ fuel := by
-            simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, rightSpineLen] at hfuel
+            simp only [_root_.BinaryTree.num_nodes, rightSpineLen] at hfuel
             omega
           obtain ⟨hst, hpush, hpop⟩ := ih r hsub
           simp only [twBuildFromEmptyAux]
-          refine ⟨h_steps_append _ [.push] .empty r _ hst rfl, ?_, ?_⟩
-          · rw [h_push_append, hpush]; simp [countCorePush, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]; omega
+          refine ⟨h_steps_append _ [.push] .nil r _ hst rfl, ?_, ?_⟩
+          · rw [h_push_append, hpush]; simp [countCorePush, _root_.BinaryTree.num_nodes]; omega
           · rw [h_pop_append, hpop]; rfl
         · have hrs := h_rs_le_nodes r
-          let u' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit := .node a () (.node b () r)
+          let u' : _root_.BinaryTree Unit := .node () a (.node () b r)
           have hsub : 2 * u'.num_nodes - rightSpineLen u' ≤ fuel := by
-            simp only [u', _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, rightSpineLen] at hfuel ⊢
+            simp only [u', _root_.BinaryTree.num_nodes, rightSpineLen] at hfuel ⊢
             omega
           obtain ⟨hst, hpush, hpop⟩ := ih u' hsub
           simp only [twBuildFromEmptyAux]
-          have hrslr_step : TwValidCoreSteps u' [.rslr 0] (.node (.node a () b) () r) := by
+          have hrslr_step : TwValidCoreSteps u' [.rslr 0] (.node () (.node () a b) r) := by
             refine ⟨?_, rfl⟩
             simp [u', rightSpineLen]
             omega
-          refine ⟨h_steps_append _ [.rslr 0] .empty u' _ hst hrslr_step, ?_, ?_⟩
+          refine ⟨h_steps_append _ [.rslr 0] .nil u' _ hst hrslr_step, ?_, ?_⟩
           · rw [h_push_append, hpush]
-            simp [u', countCorePush, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes]
+            simp [u', countCorePush, _root_.BinaryTree.num_nodes]
             omega
           · rw [h_pop_append, hpop]; rfl
 
-    have h_build : ∀ u : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit,
-        TwValidCoreSteps .empty (twBuildFromEmpty u) u ∧
+    have h_build : ∀ u : _root_.BinaryTree Unit,
+        TwValidCoreSteps .nil (twBuildFromEmpty u) u ∧
         countCorePush (twBuildFromEmpty u) = u.num_nodes ∧
         countCorePop (twBuildFromEmpty u) = 0 :=
       fun u => h_build_aux (2 * u.num_nodes - rightSpineLen u) u le_rfl
 
-    have hR_node : ∀ (l : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ) (r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        restrictRangeNat 0 hi (.node l k r) =
+    have hR_node : ∀ (l : _root_.BinaryTree ℕ) (k : ℕ) (r : _root_.BinaryTree ℕ),
+        restrictRangeNat 0 hi (.node k l r) =
           if hi ≤ k then restrictRangeNat 0 hi l
-          else .node (restrictRangeNat 0 hi l) k (restrictRangeNat 0 hi r) := by
+          else .node k (restrictRangeNat 0 hi l) (restrictRangeNat 0 hi r) := by
       intro l k r
       simp [restrictRangeNat]
 
-    have hR_all_ge : ∀ T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ,
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun v => hi ≤ v) T → restrictRangeNat 0 hi T = .empty := by
+    have hR_all_ge : ∀ T : _root_.BinaryTree ℕ,
+        _root_.SplayDeque.Direct.ForallTree (fun v => hi ≤ v) T → restrictRangeNat 0 hi T = .nil := by
       intro T hfa
       induction hfa with
       | left => rfl
       | node l k r _ hk _ ihl _ =>
         rw [hR_node, if_pos hk, ihl]
 
-    have h_rs_forall : ∀ {p : ℕ → Prop} (idx : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p T →
+    have h_rs_forall : ∀ {p : ℕ → Prop} (idx : ℕ) (T : _root_.BinaryTree ℕ),
+        _root_.SplayDeque.Direct.ForallTree p T →
         idx < (rightSpineTopDownNat T).length →
         p ((rightSpineTopDownNat T).getD idx hi) := by
       intro p idx
       induction idx with
       | zero =>
         intro T hfa hlen
-        rcases T with _ | ⟨l, k, r⟩
+        rcases T with _ | ⟨k, l, r⟩
         · simp [rightSpineTopDownNat] at hlen
         · cases hfa with
           | node _ _ _ _ hk _ => exact hk
       | succ idx ih =>
         intro T hfa hlen
-        rcases T with _ | ⟨l, k, r⟩
+        rcases T with _ | ⟨k, l, r⟩
         · simp [rightSpineTopDownNat] at hlen
         · cases hfa with
           | node _ _ _ _ _ hr =>
             exact ih r hr (by simp [rightSpineTopDownNat] at hlen; omega)
 
-    have hR_rslr : ∀ (d : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
+    have hR_rslr : ∀ (d : ℕ) (T : _root_.BinaryTree ℕ),
+        _root_.BinaryTree.IsBST T →
         d + 2 ≤ (rightSpineTopDownNat T).length →
         let y := (rightSpineTopDownNat T).getD (d + 1) hi
         if y < hi then
@@ -24354,14 +24356,14 @@ by
       induction d with
       | zero =>
         intro T hbst hlen
-        rcases T with _ | ⟨a, x, _ | ⟨b, y, c⟩⟩
+        rcases T with _ | ⟨x, a, _ | ⟨y, b, c⟩⟩
         · simp [rightSpineTopDownNat] at hlen
         · simp [rightSpineTopDownNat] at hlen
-        · cases hbst with
+        · cases hbst using isBSTCases with
           | node _ _ _ _ hx_gt _ hbc_bst =>
             cases hx_gt with
             | node _ _ _ _ hxy _ =>
-              have hy_eq : (rightSpineTopDownNat (.node a x (.node b y c))).getD 1 hi = y := rfl
+              have hy_eq : (rightSpineTopDownNat (.node x a (.node y b c))).getD 1 hi = y := rfl
               dsimp (config := { failIfUnchanged := false }) only
               rw [hy_eq]
               by_cases hy_lt : y < hi
@@ -24372,27 +24374,27 @@ by
                 · simp only [hR_node, if_neg hx_not, if_neg hy_not, rightSpineTopDownNat,
                     List.length_cons]
                   omega
-                · simp only [rotateLeftAtRightDepthNat, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft, hR_node,
+                · simp only [rotateLeftAtRightDepthNat, _root_.BinaryTree.rotateLeft, hR_node,
                     if_neg hx_not, if_neg hy_not]
               · rw [if_neg hy_lt]
                 have hy_ge : hi ≤ y := by omega
-                simp only [rotateLeftAtRightDepthNat, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateLeft]
-                rw [hR_node (.node a x b) y c, if_pos hy_ge]
+                simp only [rotateLeftAtRightDepthNat, _root_.BinaryTree.rotateLeft]
+                rw [hR_node (.node x a b) y c, if_pos hy_ge]
                 by_cases hx_ge : hi ≤ x
-                · rw [hR_node a x b, if_pos hx_ge, hR_node a x (.node b y c), if_pos hx_ge]
-                · rw [hR_node a x b, if_neg hx_ge, hR_node a x (.node b y c), if_neg hx_ge,
+                · rw [hR_node a x b, if_pos hx_ge, hR_node a x (.node y b c), if_pos hx_ge]
+                · rw [hR_node a x b, if_neg hx_ge, hR_node a x (.node y b c), if_neg hx_ge,
                     hR_node b y c, if_pos hy_ge]
       | succ d ih =>
         intro T hbst hlen
-        rcases T with _ | ⟨l, k, r⟩
+        rcases T with _ | ⟨k, l, r⟩
         · simp [rightSpineTopDownNat] at hlen
-        · cases hbst with
+        · cases hbst using isBSTCases with
           | node _ _ _ _ hk_gt _ hr_bst =>
             have hr_len : d + 2 ≤ (rightSpineTopDownNat r).length := by
               simp [rightSpineTopDownNat] at hlen; omega
             have hk_lt_y : k < (rightSpineTopDownNat r).getD (d + 1) hi :=
               h_rs_forall (d + 1) r hk_gt (by omega)
-            have hy_eq : (rightSpineTopDownNat (.node l k r)).getD (d + 1 + 1) hi =
+            have hy_eq : (rightSpineTopDownNat (.node k l r)).getD (d + 1 + 1) hi =
                 (rightSpineTopDownNat r).getD (d + 1) hi := rfl
             dsimp (config := { failIfUnchanged := false }) only
             rw [hy_eq]
@@ -24412,41 +24414,41 @@ by
               · rw [hR_node l k _, if_pos hk_ge, hR_node l k r, if_pos hk_ge]
               · rw [hR_node l k _, if_neg hk_ge, hR_node l k r, if_neg hk_ge, h_ih]
 
-    have h_descend_decomp : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)),
-        T ≠ .empty →
+    have h_descend_decomp : ∀ (T : _root_.BinaryTree ℕ) (acc : List (ℕ × _root_.BinaryTree ℕ)),
+        T ≠ .nil →
         ∃ s0 : ℕ,
           leftSpineBottomUpAux T (acc.map Prod.fst) =
             s0 :: (descendLeftNat T acc).2.map Prod.fst ∧
-          twAttachPoly (.node .empty s0 (descendLeftNat T acc).1) (descendLeftNat T acc).2 =
+          twAttachPoly (.node s0 .nil (descendLeftNat T acc).1) (descendLeftNat T acc).2 =
             twAttachPoly T acc := by
       intro T
       induction T with
-      | empty => intro _ h; exact absurd rfl h
-      | node l k r ihl _ =>
+      | nil => intro _ h; exact absurd rfl h
+      | node k l r ihl _ =>
         intro acc _
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · refine ⟨k, ?_, ?_⟩ <;> simp [leftSpineBottomUpAux, descendLeftNat]
         · simpa [leftSpineBottomUpAux, descendLeftNat, twAttachPoly] using
             ihl ((k, r) :: acc) (by simp)
 
-    have h_descend_nat_append : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (a1 a2 : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)),
-        T ≠ .empty →
+    have h_descend_nat_append : ∀ (T : _root_.BinaryTree ℕ) (a1 a2 : List (ℕ × _root_.BinaryTree ℕ)),
+        T ≠ .nil →
         descendLeftNat T (a1 ++ a2) = ((descendLeftNat T a1).1, (descendLeftNat T a1).2 ++ a2) := by
       intro T
       induction T with
-      | empty => intro _ _ h; exact absurd rfl h
-      | node l k r ihl _ =>
+      | nil => intro _ _ h; exact absurd rfl h
+      | node k l r ihl _ =>
         intro a1 a2 _
-        rcases l with _ | ⟨ll, lk, lr⟩
+        rcases l with _ | ⟨lk, ll, lr⟩
         · simp [descendLeftNat]
         · simp only [descendLeftNat]
           rw [← List.cons_append]
           exact ihl ((k, r) :: a1) a2 (by simp)
 
-    have h_descend_attach : ∀ (ps : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (V : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)
-        (acc : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)),
-        V ≠ .empty →
-        twAttachPoly V ps ≠ .empty ∧
+    have h_descend_attach : ∀ (ps : List (ℕ × _root_.BinaryTree ℕ)) (V : _root_.BinaryTree ℕ)
+        (acc : List (ℕ × _root_.BinaryTree ℕ)),
+        V ≠ .nil →
+        twAttachPoly V ps ≠ .nil ∧
         descendLeftNat (twAttachPoly V ps) acc =
           ((descendLeftNat V []).1, (descendLeftNat V []).2 ++ ps ++ acc) := by
       intro ps
@@ -24458,25 +24460,25 @@ by
         exact ⟨hV, by simpa using hd⟩
       | cons kr rest ih =>
         intro V acc hV
-        rcases V with _ | ⟨vl, vk, vr⟩
+        rcases V with _ | ⟨vk, vl, vr⟩
         · exact absurd rfl hV
-        · obtain ⟨hne, hdesc⟩ := ih (.node (.node vl vk vr) kr.1 kr.2) acc (by simp)
-          have hstep : descendLeftNat (.node (.node vl vk vr) kr.1 kr.2) [] =
-              ((descendLeftNat (.node vl vk vr) []).1,
-                (descendLeftNat (.node vl vk vr) []).2 ++ [kr]) := by
+        · obtain ⟨hne, hdesc⟩ := ih (.node kr.1 (.node vk vl vr) kr.2) acc (by simp)
+          have hstep : descendLeftNat (.node kr.1 (.node vk vl vr) kr.2) [] =
+              ((descendLeftNat (.node vk vl vr) []).1,
+                (descendLeftNat (.node vk vl vr) []).2 ++ [kr]) := by
             simp only [descendLeftNat]
-            have hd := h_descend_nat_append (.node vl vk vr) [] [kr] (by simp)
+            have hd := h_descend_nat_append (.node vk vl vr) [] [kr] (by simp)
             simpa using hd
           rw [hstep] at hdesc
           simp only [twAttachPoly, List.append_assoc, List.singleton_append] at hdesc ⊢
           exact ⟨hne, hdesc⟩
 
-    have h_attach_bst : ∀ (ps : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (twAttachPoly U ps) →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST U ∧
+    have h_attach_bst : ∀ (ps : List (ℕ × _root_.BinaryTree ℕ)) (U : _root_.BinaryTree ℕ),
+        _root_.BinaryTree.IsBST (twAttachPoly U ps) →
+        _root_.BinaryTree.IsBST U ∧
           ∀ p ∈ ps,
-            _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun v => v < p.1) U ∧
-            _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun v => p.1 < v) p.2 := by
+            _root_.SplayDeque.Direct.ForallTree (fun v => v < p.1) U ∧
+            _root_.SplayDeque.Direct.ForallTree (fun v => p.1 < v) p.2 := by
       intro ps
       induction ps with
       | nil =>
@@ -24484,8 +24486,8 @@ by
         exact ⟨hbst, by simp⟩
       | cons kr rest ih =>
         intro U hbst
-        obtain ⟨hbst_node, hrest⟩ := ih (.node U kr.1 kr.2) hbst
-        cases hbst_node with
+        obtain ⟨hbst_node, hrest⟩ := ih (.node kr.1 U kr.2) hbst
+        cases hbst_node using isBSTCases with
         | node _ _ _ hl_lt hr_gt hl_bst _ =>
           refine ⟨hl_bst, ?_⟩
           intro p hp
@@ -24495,7 +24497,7 @@ by
             cases hnode_lt with
             | node _ _ _ hU_lt _ _ => exact ⟨hU_lt, hp2_gt⟩
 
-    have hR_attach_tail : ∀ (ps : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (V : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+    have hR_attach_tail : ∀ (ps : List (ℕ × _root_.BinaryTree ℕ)) (V : _root_.BinaryTree ℕ),
         (∀ p ∈ ps, hi ≤ p.1) →
         restrictRangeNat 0 hi (twAttachPoly V ps) = restrictRangeNat 0 hi V := by
       intro ps
@@ -24504,11 +24506,11 @@ by
       | cons kr rest ih =>
         intro V hge
         have hkr : hi ≤ kr.1 := hge kr (by simp)
-        rw [twAttachPoly, ih (.node V kr.1 kr.2) (fun p hp => hge p (by simp [hp])),
+        rw [twAttachPoly, ih (.node kr.1 V kr.2) (fun p hp => hge p (by simp [hp])),
           hR_node, if_pos hkr]
 
-    have hR_attach_comm : ∀ (ps : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (U : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (twAttachPoly U ps) →
+    have hR_attach_comm : ∀ (ps : List (ℕ × _root_.BinaryTree ℕ)) (U : _root_.BinaryTree ℕ),
+        _root_.BinaryTree.IsBST (twAttachPoly U ps) →
         restrictRangeNat 0 hi (twAttachPoly U ps) =
           twAttachPoly (restrictRangeNat 0 hi U) (psspProjPath hi ps) := by
       intro ps
@@ -24520,9 +24522,9 @@ by
         by_cases hk : k < hi
         · have hk_not : ¬(hi ≤ k) := by omega
           simp only [psspProjPath, if_pos hk, twAttachPoly]
-          rw [ih (.node U k r) hbst, hR_node U k r, if_neg hk_not]
+          rw [ih (.node k U r) hbst, hR_node U k r, if_neg hk_not]
         · simp only [psspProjPath, if_neg hk, twAttachPoly]
-          obtain ⟨_, hrest_gt⟩ := h_attach_bst rest (.node U k r) hbst
+          obtain ⟨_, hrest_gt⟩ := h_attach_bst rest (.node k U r) hbst
           have htail_ge : ∀ p ∈ (k, r) :: rest, hi ≤ p.1 := by
             intro p hp
             rcases List.mem_cons.mp hp with rfl | hp_rest
@@ -24532,7 +24534,7 @@ by
               | node _ _ _ _ hk_lt_p _ => omega
           exact hR_attach_tail ((k, r) :: rest) U htail_ge
 
-    have hR_splay_tail : ∀ (n : ℕ) (ps : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+    have hR_splay_tail : ∀ (n : ℕ) (ps : List (ℕ × _root_.BinaryTree ℕ)) (c : _root_.BinaryTree ℕ),
         ps.length ≤ n →
         (∀ p ∈ ps, hi ≤ p.1) →
         restrictRangeNat 0 hi (splayLeftSpineNat c ps) = restrictRangeNat 0 hi c := by
@@ -24551,10 +24553,10 @@ by
           simp only [splayLeftSpineNat, hR_node, if_pos hk1]
         · have hk1 : hi ≤ k1 := hge (k1, r1) (by simp)
           simp only [splayLeftSpineNat]
-          rw [ih rest (.node c k1 (.node r1 k2 r2)) (by simp at hlen; omega)
+          rw [ih rest (.node k1 c (.node k2 r1 r2)) (by simp at hlen; omega)
             (fun p hp => hge p (by simp [hp])), hR_node, if_pos hk1]
 
-    have hR_splay_comm : ∀ (n : ℕ) (path : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)) (c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+    have hR_splay_comm : ∀ (n : ℕ) (path : List (ℕ × _root_.BinaryTree ℕ)) (c : _root_.BinaryTree ℕ),
         path.length ≤ n →
         List.Pairwise (· < ·) (path.map Prod.fst) →
         restrictRangeNat 0 hi (splayLeftSpineNat c path) =
@@ -24583,7 +24585,7 @@ by
             by_cases hk2 : k2 < hi
             · have hk2_not : ¬(hi ≤ k2) := by omega
               simp only [psspProjPath, if_pos hk1, if_pos hk2, splayLeftSpineNat]
-              rw [ih rest (.node c k1 (.node r1 k2 r2)) (by simp at hlen; omega) hrest_pw,
+              rw [ih rest (.node k1 c (.node k2 r1 r2)) (by simp at hlen; omega) hrest_pw,
                 hR_node c k1 _, if_neg hk1_not, hR_node r1 k2 r2, if_neg hk2_not]
             · simp only [psspProjPath, if_pos hk1, if_neg hk2, splayLeftSpineNat]
               have hk2_ge : hi ≤ k2 := by omega
@@ -24591,7 +24593,7 @@ by
                 intro p hp
                 have : k2 < p.1 := hk2_lt_rest p.1 (List.mem_map_of_mem hp)
                 omega
-              rw [hR_splay_tail rest.length rest (.node c k1 (.node r1 k2 r2)) le_rfl hrest_ge,
+              rw [hR_splay_tail rest.length rest (.node k1 c (.node k2 r1 r2)) le_rfl hrest_ge,
                 hR_node c k1 _, if_neg hk1_not, hR_node r1 k2 r2, if_pos hk2_ge]
           · simp only [psspProjPath, if_neg hk1, splayLeftSpineNat]
             have hk1_ge : hi ≤ k1 := by omega
@@ -24605,7 +24607,7 @@ by
               ((k1, r1) :: (k2, r2) :: rest) c le_rfl hall_ge
             simpa [splayLeftSpineNat] using htail
 
-    have h_projPath_prefix_len : ∀ (m : ℕ) (ps : List (ℕ × _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ)),
+    have h_projPath_prefix_len : ∀ (m : ℕ) (ps : List (ℕ × _root_.BinaryTree ℕ)),
         ∀ hm : m ≤ ps.length,
         (∀ idx (h : idx < m), (ps[idx]'(lt_of_lt_of_le h hm)).1 < hi) →
         m ≤ (psspProjPath hi ps).length := by
@@ -24635,33 +24637,33 @@ by
       · have := hkvalid.popStep_mono lo (hi - 1) (by omega) hhi1_P
         omega
 
-    let UState : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit := fun t =>
+    let UState : ℕ → _root_.BinaryTree Unit := fun t =>
       eraseNatKeys (restrictRangeNat 0 hi (keyedState kops t))
 
-    have h_inorder_forall : ∀ {p : ℕ → Prop} (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        (∀ v ∈ inorderNat T, p v) → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p T := by
+    have h_inorder_forall : ∀ {p : ℕ → Prop} (T : _root_.BinaryTree ℕ),
+        (∀ v ∈ inorderNat T, p v) → _root_.SplayDeque.Direct.ForallTree p T := by
       intro p T
       induction T with
-      | empty => intro _; exact .left
-      | node l k r ihl ihr =>
+      | nil => intro _; exact .left
+      | node k l r ihl ihr =>
         intro h
         refine .node l k r (ihl ?_) (h k (by simp [inorderNat])) (ihr ?_)
         · intro v hv; exact h v (by simp [inorderNat, hv])
         · intro v hv; exact h v (by simp [inorderNat, hv])
 
-    have hUt1_empty : UState t1 = .empty := by
+    have hUt1_empty : UState t1 = .nil := by
       have hpidx : popIdx kops t1 = hi := by
         have := hkvalid.popIdx_after_popStep (hi - 1) hhi1_P
         dsimp (config := { failIfUnchanged := false }) only [t1]
         omega
-      have hfa : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun v => hi ≤ v) (keyedState kops t1) := by
+      have hfa : _root_.SplayDeque.Direct.ForallTree (fun v => hi ≤ v) (keyedState kops t1) := by
         apply h_inorder_forall
         intro v hv
         have hb := hkvalid.popIdx_bound t1 ht1_le_len v hv
         omega
       simp [UState, hR_all_ge _ hfa, eraseNatKeys]
 
-    have h_exec_append : ∀ (H : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (xs ys : List KeyedCoreOp),
+    have h_exec_append : ∀ (H : _root_.BinaryTree ℕ) (xs ys : List KeyedCoreOp),
         execKeyedList H (xs ++ ys) = execKeyedList (execKeyedList H xs) ys := by
       intro H xs ys
       induction xs generalizing H with
@@ -24743,7 +24745,7 @@ by
         by_cases hw : w < hi
         · rw [if_pos hw]
           have hw_not : ¬(hi ≤ w) := by omega
-          have hU_next : UState (t + 1) = .node .empty () (UState t) := by
+          have hU_next : UState (t + 1) = .node () .nil (UState t) := by
             simp only [UState, hnext, execKeyedOp, hR_node, if_neg hw_not]
             simp [restrictRangeNat, eraseNatKeys]
           refine ⟨by rw [hU_next]; rfl, ?_, by simp [hj0]⟩
@@ -24751,7 +24753,7 @@ by
           omega
         · rw [if_neg hw]
           have hw_ge : hi ≤ w := by omega
-          have hHt_emp : restrictRangeNat 0 hi (keyedState kops t) = .empty :=
+          have hHt_emp : restrictRangeNat 0 hi (keyedState kops t) = .nil :=
             hR_all_ge _ (h_forall_imp (fun v hv => by omega) hforall_w)
           have hU_eq : UState (t + 1) = UState t := by
             simp only [UState, hnext, execKeyedOp, hR_node, if_pos hw_ge, hHt_emp]
@@ -24803,26 +24805,26 @@ by
           rw [hls_eq0, List.head?_cons] at hls_head
           exact Option.some.inj hls_head
         rw [hs0_eq] at hls_eq0 hattach0
-        have hHt_bst : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST Ht := hkvalid.isBST_state t (by omega)
+        have hHt_bst : _root_.BinaryTree.IsBST Ht := hkvalid.isBST_state t (by omega)
         have hls_pw : List.Pairwise (· < ·) (leftSpineBottomUpNat Ht) := h_bst_ls Ht hHt_bst
         have hpath_pw : List.Pairwise (· < ·) (path.map Prod.fst) := by
           change leftSpineBottomUpNat Ht = s :: path.map Prod.fst at hls_eq0
           rw [hls_eq0, List.pairwise_cons] at hls_pw
           exact hls_pw.2
-        have hHt_attach : Ht = twAttachPoly (.node .empty s c0) path := hattach0.symm
+        have hHt_attach : Ht = twAttachPoly (.node s .nil c0) path := hattach0.symm
         have hs_not_ge : ¬(hi ≤ s) := by omega
         have hR_Ht : restrictRangeNat 0 hi Ht =
-            twAttachPoly (.node .empty s (restrictRangeNat 0 hi c0)) (psspProjPath hi path) := by
-          rw [hHt_attach, hR_attach_comm path (.node .empty s c0) (hHt_attach ▸ hHt_bst),
+            twAttachPoly (.node s .nil (restrictRangeNat 0 hi c0)) (psspProjPath hi path) := by
+          rw [hHt_attach, hR_attach_comm path (.node s .nil c0) (hHt_attach ▸ hHt_bst),
             hR_node, if_neg hs_not_ge]
           rfl
         obtain ⟨hRHt_ne, hdesc_RHt⟩ :=
           h_descend_attach (psspProjPath hi path)
-            (.node .empty s (restrictRangeNat 0 hi c0)) [] (by simp)
+            (.node s .nil (restrictRangeNat 0 hi c0)) [] (by simp)
         simp only [descendLeftNat, List.nil_append, List.append_nil] at hdesc_RHt
-        have hUt_ne : UState t ≠ .empty := by
+        have hUt_ne : UState t ≠ .nil := by
           intro hemp
-          change eraseNatKeys (restrictRangeNat 0 hi Ht) = .empty at hemp
+          change eraseNatKeys (restrictRangeNat 0 hi Ht) = .nil at hemp
           rw [hR_Ht] at hemp
           exact hRHt_ne ((h_erase_eq_empty _).mp hemp)
         have hR_pop : restrictRangeNat 0 hi (popNat Ht) = popNat (restrictRangeNat 0 hi Ht) := by
@@ -25006,20 +25008,20 @@ by
       have hpidx_t1 : popIdx kops t1 = hi := by
         have := hkvalid.popIdx_after_popStep (hi - 1) hhi1_P
         dsimp (config := { failIfUnchanged := false }) only [t1]; omega
-      have hact_steps_emp : TwValidCoreSteps (UState t0) activeOps .empty := by
+      have hact_steps_emp : TwValidCoreSteps (UState t0) activeOps .nil := by
         rwa [hUt1_empty] at h_act_steps
-      have hnodes_eq := h_steps_nodes activeOps (UState t0) .empty hact_steps_emp
-      simp only [_root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes] at hnodes_eq
-      have hfull_steps : TwValidCoreSteps .empty subOps .empty :=
-        h_steps_append _ activeOps .empty (UState t0) .empty h_bld_steps hact_steps_emp
-      refine ⟨?_, ?_, h_steps_to_aux subOps .empty hfull_steps⟩
+      have hnodes_eq := h_steps_nodes activeOps (UState t0) .nil hact_steps_emp
+      simp only [_root_.BinaryTree.num_nodes] at hnodes_eq
+      have hfull_steps : TwValidCoreSteps .nil subOps .nil :=
+        h_steps_append _ activeOps .nil (UState t0) .nil h_bld_steps hact_steps_emp
+      refine ⟨?_, ?_, h_steps_to_aux subOps .nil hfull_steps⟩
       · dsimp (config := { failIfUnchanged := false }) only [subOps]
         rw [h_push_append, h_bld_push]
         omega
       · dsimp (config := { failIfUnchanged := false }) only [subOps]
         rw [h_pop_append, h_bld_pop]
         omega
-    · have hcost_full := h_cost_append _ activeOps .empty (UState t0) h_bld_steps
+    · have hcost_full := h_cost_append _ activeOps .nil (UState t0) h_bld_steps
       rw [h_jumps_eq_sum]
       unfold coreCascadeCost
       dsimp (config := { failIfUnchanged := false }) only [subOps]
@@ -25738,12 +25740,12 @@ theorem epoch_tree_weights_and_buckets (P L r : ℕ) (addr : ℕ → Fin r → �
   -- =========================================================================
   -- Shared Spine-Lock, Jump, and Scale-Partition Helpers
   -- =========================================================================
-  have h_ls_aux : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List ℕ) (u : ℕ),
+  have h_ls_aux : ∀ (T : _root_.BinaryTree ℕ) (acc : List ℕ) (u : ℕ),
       u ∈ leftSpineBottomUpAux T acc → u ∈ inorderNat T ∨ u ∈ acc := by
     intro T
     induction T with
-    | empty => intro acc u hu; exact Or.inr hu
-    | node l k r ihl _ =>
+    | nil => intro acc u hu; exact Or.inr hu
+    | node k l r ihl _ =>
       intro acc u hu
       simp only [leftSpineBottomUpAux] at hu
       rcases ihl (k :: acc) u hu with hl | hacc
@@ -25754,7 +25756,7 @@ theorem epoch_tree_weights_and_buckets (P L r : ℕ) (addr : ℕ → Fin r → �
         · left; simp [inorderNat]
         · exact Or.inr hacc'
 
-  have h_ls_mem_inorder : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (u : ℕ),
+  have h_ls_mem_inorder : ∀ (T : _root_.BinaryTree ℕ) (u : ℕ),
       u ∈ leftSpineBottomUpNat T → u ∈ inorderNat T := by
     intro T u hu
     rcases h_ls_aux T [] u hu with h | h
@@ -27571,7 +27573,7 @@ theorem epoch_tree_weights_and_buckets (P L r : ℕ) (addr : ℕ → Fin r → �
         omega
 
     have hPhi0 : Phi 0 = 0 := by
-      have h0 : keyedState kops 0 = .empty := rfl
+      have h0 : keyedState kops 0 = .nil := rfl
       simp [Phi, V, h0, inorderNat]
     have hPhi_end : Phi kops.length = 0 := by
       simp [Phi, V, hkvalid.end_empty, inorderNat]
@@ -28229,8 +28231,8 @@ theorem active_exit_first_mover_reduction_omega (P L : ℕ) (S : ℕ → ℕ) (k
   have h_pop_mono : ∀ t1 t2, t1 ≤ t2 → popIdx kops t1 ≤ popIdx kops t2 :=
     (plug_unborn_trajectory_laws P kops hP hkvalid hjump hfold).2.1
 
-  have h_forall_inorder : ∀ {p : ℕ → Prop} {T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ},
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree p T → ∀ w ∈ inorderNat T, p w := by
+  have h_forall_inorder : ∀ {p : ℕ → Prop} {T : _root_.BinaryTree ℕ},
+      _root_.SplayDeque.Direct.ForallTree p T → ∀ w ∈ inorderNat T, p w := by
     intro p T hft
     induction hft with
     | left => intro w hw; simp [inorderNat] at hw
@@ -28242,28 +28244,28 @@ theorem active_exit_first_mover_reduction_omega (P L : ℕ) (S : ℕ → ℕ) (k
       · exact hk
       · exact ihr w hw
 
-  have h_ls_aux : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List ℕ),
+  have h_ls_aux : ∀ (T : _root_.BinaryTree ℕ) (acc : List ℕ),
       leftSpineBottomUpAux T acc = leftSpineBottomUpAux T [] ++ acc := by
     intro T
     induction T with
-    | empty => intro acc; rfl
-    | node l k _ ihl _ =>
+    | nil => intro acc; rfl
+    | node k l _ ihl _ =>
       intro acc
       simp only [leftSpineBottomUpAux]
       rw [ihl (k :: acc), ihl [k]]
       simp
 
-  have h_ls_node : ∀ (l : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (k : ℕ) (r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      leftSpineBottomUpNat (.node l k r) = leftSpineBottomUpNat l ++ [k] := by
+  have h_ls_node : ∀ (l : _root_.BinaryTree ℕ) (k : ℕ) (r : _root_.BinaryTree ℕ),
+      leftSpineBottomUpNat (.node k l r) = leftSpineBottomUpNat l ++ [k] := by
     intro l k r
     unfold leftSpineBottomUpNat
     simpa [leftSpineBottomUpAux] using h_ls_aux l [k]
 
-  have h_ls_sub_inorder : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ), ∀ u ∈ leftSpineBottomUpNat T, u ∈ inorderNat T := by
+  have h_ls_sub_inorder : ∀ (T : _root_.BinaryTree ℕ), ∀ u ∈ leftSpineBottomUpNat T, u ∈ inorderNat T := by
     intro T
     induction T with
-    | empty => intro u hu; simp [leftSpineBottomUpNat, leftSpineBottomUpAux] at hu
-    | node l k r ihl _ =>
+    | nil => intro u hu; simp [leftSpineBottomUpNat, leftSpineBottomUpAux] at hu
+    | node k l r ihl _ =>
       intro u hu
       rw [h_ls_node, List.mem_append, List.mem_singleton] at hu
       simp only [inorderNat, List.mem_append, List.mem_singleton]
@@ -30138,15 +30140,15 @@ by
       omega
 
   have h_rot_quot :
-      ∀ (subs : List (ℕ × ℕ)) (c_lo : ℕ) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (u : ℕ),
+      ∀ (subs : List (ℕ × ℕ)) (c_lo : ℕ) (T : _root_.BinaryTree ℕ) (u : ℕ),
         PuqIsSubblockPart subs →
         c_lo < subs.length →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (puqBlockQuotient subs c_lo subs.length T) →
+        _root_.BinaryTree.IsBST T →
+        _root_.BinaryTree.IsBST (puqBlockQuotient subs c_lo subs.length T) →
         inorderNat (puqBlockQuotient subs c_lo subs.length T) = List.Ico c_lo subs.length →
         let Q := puqBlockQuotient subs c_lo subs.length T
         let Q' := puqBlockQuotient subs c_lo subs.length (rotateRightOnLeftSpine u T)
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST Q' ∧
+        _root_.BinaryTree.IsBST Q' ∧
           inorderNat Q' = List.Ico c_lo subs.length ∧
           (∀ c ∈ leftSpineBottomUpNat Q', c ∈ leftSpineBottomUpNat Q) ∧
           (∀ c, c_lo ≤ c → c < subs.length → subtreeMaxNat Q c ≤ subtreeMaxNat Q' c) := by
@@ -30170,8 +30172,8 @@ by
         let KX := subs.length
         let G1 := puqBlockQuotient subs c_lo KX (puqPreEmbeddedState P kops t1)
         let G2 := puqBlockQuotient subs c_lo KX (puqPreEmbeddedState P kops t2)
-        (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G1 ∧ inorderNat G1 = List.Ico c_lo KX) ∧
-        (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G2 ∧ inorderNat G2 = List.Ico c_lo KX) ∧
+        (_root_.BinaryTree.IsBST G1 ∧ inorderNat G1 = List.Ico c_lo KX) ∧
+        (_root_.BinaryTree.IsBST G2 ∧ inorderNat G2 = List.Ico c_lo KX) ∧
         (∀ c ∈ leftSpineBottomUpNat G2, c ∈ leftSpineBottomUpNat G1) ∧
         (∀ c, c_lo ≤ c → c < KX → subtreeMaxNat G1 c ≤ subtreeMaxNat G2 c) := by
     intro subs c_lo t1 t2 hpart_sub h_hiP hc_lo ht12 ht2_pop
@@ -30186,7 +30188,7 @@ by
     have h_pop_lob_lt : popStep kops lo_b < kops.length :=
       (hkvalid.birth_lt_pop lo_b h_lob_lt_P).2
     have h_pt : ∀ t ≤ popStep kops lo_b,
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (puqBlockQuotient subs c_lo KX (puqPreEmbeddedState P kops t)) ∧
+        _root_.BinaryTree.IsBST (puqBlockQuotient subs c_lo KX (puqPreEmbeddedState P kops t)) ∧
         inorderNat (puqBlockQuotient subs c_lo KX (puqPreEmbeddedState P kops t)) =
           List.Ico c_lo KX := by
       intro t ht
@@ -30212,9 +30214,9 @@ by
         have h_iter : ∀ k : ℕ,
             let U_k := (rotateRightOnLeftSpine w)^[k] (puqPreEmbeddedState P kops t)
             let Q_k := puqBlockQuotient subs c_lo KX U_k
-            _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST U_k ∧
+            _root_.BinaryTree.IsBST U_k ∧
             inorderNat U_k = List.Ico (popIdx kops t) P ∧
-            _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST Q_k ∧
+            _root_.BinaryTree.IsBST Q_k ∧
             inorderNat Q_k = List.Ico c_lo KX ∧
             (∀ c ∈ leftSpineBottomUpNat Q_k,
               c ∈ leftSpineBottomUpNat
@@ -30260,7 +30262,7 @@ by
             let M_j := (js.take j).foldl (fun T e => rotateRightOnLeftSpine e.x T)
               (spliceMinNat (puqPreEmbeddedState P kops t))
             let Q_j := puqBlockQuotient subs c_lo KX M_j
-            _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST Q_j ∧
+            _root_.BinaryTree.IsBST Q_j ∧
             inorderNat Q_j = List.Ico c_lo KX ∧
             (∀ c ∈ leftSpineBottomUpNat Q_j,
               c ∈ leftSpineBottomUpNat
@@ -30280,7 +30282,7 @@ by
             intro hj_le
             have hj_lt : j < js.length := by omega
             obtain ⟨hbstQ, hinQ, hlsQ, hsmaxQ⟩ := ih (le_of_lt hj_lt)
-            have hbstM : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST
+            have hbstM : _root_.BinaryTree.IsBST
                 ((js.take j).foldl (fun T e => rotateRightOnLeftSpine e.x T)
                   (spliceMinNat (puqPreEmbeddedState P kops t))) :=
               (hjs_bst j hj_lt).1
@@ -30423,8 +30425,8 @@ by
     exact ⟨hte_bounds.1, le_trans hte_bounds.2 h_thi_le, h_pop_sp1_lt, hpop_te⟩
 
   have h_pkg_phase : ∀ p < NX,
-      (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (pkg.G_init p) ∧ inorderNat (pkg.G_init p) = List.Ico (p + 1) KX) ∧
-      (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (pkg.G_end p) ∧ inorderNat (pkg.G_end p) = List.Ico (p + 1) KX) ∧
+      (_root_.BinaryTree.IsBST (pkg.G_init p) ∧ inorderNat (pkg.G_init p) = List.Ico (p + 1) KX) ∧
+      (_root_.BinaryTree.IsBST (pkg.G_end p) ∧ inorderNat (pkg.G_end p) = List.Ico (p + 1) KX) ∧
       (∀ c, p + 1 ≤ c → c < KX →
         subtreeMaxNat (pkg.G_init p) c ≤ subtreeMaxNat (pkg.G_end p) c) := by
     intro p hp
@@ -30544,7 +30546,7 @@ by
       omega
     have hp1_ca : p + 1 ≤ ca := by omega
     have hca_lt_cy : ca < c_y := by omega
-    have hbst_Te : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (puqPreEmbeddedState P kops e.step) :=
+    have hbst_Te : _root_.BinaryTree.IsBST (puqPreEmbeddedState P kops e.step) :=
       (hplug_bst e.step (le_of_lt he_step)).2.1
     have hls_Te_eq :
         leftSpineBottomUpNat (puqPreEmbeddedState P kops e.step) =
@@ -30841,7 +30843,7 @@ by
         obtain ⟨hts1_lt, hte1_le, _, _⟩ := h_phase_win (p + 1) hp1
         have hte_len : tEmpty kops (subs.getD p (0, 0)).1 (subs.getD p (0, 0)).2 ≤ kops.length :=
           le_of_lt (lt_of_le_of_lt hte_le_pop1 hpop1_lt)
-        have hbst_te : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST
+        have hbst_te : _root_.BinaryTree.IsBST
             (puqPreEmbeddedState P kops
               (tEmpty kops (subs.getD p (0, 0)).1 (subs.getD p (0, 0)).2)) :=
           (hplug_bst _ hte_len).2.1
@@ -30934,12 +30936,12 @@ by
         · exact absurd rfl hnr.1
         · exact ih d r (by omega) hmem hnr.2
 
-  have h_rs_sub_inord : ∀ (B : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (v : ℕ),
+  have h_rs_sub_inord : ∀ (B : _root_.BinaryTree ℕ) (v : ℕ),
       v ∈ rightSpineTopDownNat B → v ∈ inorderNat B := by
     intro B
     induction B with
-    | empty => intro v hv; simp [rightSpineTopDownNat] at hv
-    | node l k r _ ihr =>
+    | nil => intro v hv; simp [rightSpineTopDownNat] at hv
+    | node k l r _ ihr =>
       intro v hv
       simp only [rightSpineTopDownNat, List.mem_cons] at hv
       simp only [inorderNat, List.mem_append, List.mem_singleton]
@@ -30947,8 +30949,8 @@ by
       · exact Or.inl (Or.inr rfl)
       · exact Or.inr (ihr v hvr)
 
-  have h_forall_inord : ∀ (q : ℕ → Prop) (B : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree q B → ∀ v ∈ inorderNat B, q v := by
+  have h_forall_inord : ∀ (q : ℕ → Prop) (B : _root_.BinaryTree ℕ),
+      _root_.SplayDeque.Direct.ForallTree q B → ∀ v ∈ inorderNat B, q v := by
     intro q B hB
     induction hB with
     | left => intro v hv; simp [inorderNat] at hv
@@ -31091,7 +31093,7 @@ by
     rw [hfold.fold_leftSpine t ht] at hpw
     exact (List.pairwise_append.mp hpw).1
 
-  have h_ls_last : ∀ t ≤ kops.length, keyedState kops t ≠ .empty →
+  have h_ls_last : ∀ t ≤ kops.length, keyedState kops t ≠ .nil →
       leftSpineBottomUpNat (keyedState kops t) ≠ [] ∧
       (leftSpineBottomUpNat (keyedState kops t))[(leftSpineBottomUpNat (keyedState kops t)).length - 1]? =
         some (foldBST P (keyedState kops t)).2 := by
@@ -31108,15 +31110,15 @@ by
         have := List.length_pos_iff_ne_nil.mpr hls_ne; omega
       rw [List.getElem?_eq_getElem hlen_lt, hb0]
 
-  have h_rs_ge_b0 : ∀ t ≤ kops.length, keyedState kops t ≠ .empty →
+  have h_rs_ge_b0 : ∀ t ≤ kops.length, keyedState kops t ≠ .nil →
       (∀ v ∈ rightSpineTopDownNat (keyedState kops t), (foldBST P (keyedState kops t)).2 ≤ v) ∧
       (∀ v ∈ (rightSpineTopDownNat (keyedState kops t)).tail, (foldBST P (keyedState kops t)).2 < v) := by
     intro t ht hne
     have hbst := hkvalid.isBST_state t ht
-    rcases hH : keyedState kops t with _ | ⟨l0, b0, r0⟩
+    rcases hH : keyedState kops t with _ | ⟨b0, l0, r0⟩
     · exact absurd hH hne
     · rw [hH] at hbst
-      cases hbst with
+      cases hbst using isBSTCases with
       | node _ _ _ _ hr_gt _ _ =>
         have htail : ∀ v ∈ rightSpineTopDownNat r0, b0 < v :=
           fun v hv => h_forall_inord (fun k => b0 < k) r0 hr_gt v (h_rs_sub_inord r0 v hv)
@@ -31130,7 +31132,7 @@ by
           simp only [foldBST, rightSpineTopDownNat, List.tail_cons] at hv ⊢
           exact htail v hv
 
-  have h_root_dichotomy : ∀ t ≤ kops.length, keyedState kops t ≠ .empty →
+  have h_root_dichotomy : ∀ t ≤ kops.length, keyedState kops t ≠ .nil →
       ∀ r_c ∈ leftSpineBottomUpNat (foldBST P (keyedState kops t)).1,
         (r_c < (foldBST P (keyedState kops t)).2 → r_c ∈ leftSpineBottomUpNat (keyedState kops t)) ∧
         ((foldBST P (keyedState kops t)).2 ≤ r_c → r_c ∈ rightSpineTopDownNat (keyedState kops t)) := by
@@ -31471,13 +31473,13 @@ by
         exact absurd (h_eraseIdx_mem _ d r_c hin_add1) hout_add
 
 
-  let T : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ := fun t => puqPreEmbeddedState P kops t
-  let G : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ := fun t => puqBlockQuotient subs (p + 1) subs.length (T t)
+  let T : ℕ → _root_.BinaryTree ℕ := fun t => puqPreEmbeddedState P kops t
+  let G : ℕ → _root_.BinaryTree ℕ := fun t => puqBlockQuotient subs (p + 1) subs.length (T t)
   let pi0 := leftSpineBottomUpNat ((puqConcretePkg S P L kops ℓ Xi).G_init p)
   have hpi0_eq : pi0 = leftSpineBottomUpNat (G ts) := rfl
 
   have hG_valid : ∀ t, ts ≤ t → t < te →
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (G t) ∧ inorderNat (G t) = List.Ico (p + 1) subs.length := by
+      _root_.BinaryTree.IsBST (G t) ∧ inorderNat (G t) = List.Ico (p + 1) subs.length := by
     intro t hts_t ht_te
     have ht_le : t ≤ kops.length := by omega
     obtain ⟨_, hT_bst, hT_inord⟩ := hplug_bst t ht_le
@@ -31502,7 +31504,7 @@ by
         have := h_forall_inord (fun k => w < k) _ hsv.2.2 v0 hv0_mem; omega
       obtain ⟨N, hN_eq⟩ := hplug_push t ht_lt w hop
       have h_iter : ∀ n : ℕ,
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST ((rotateRightOnLeftSpine w)^[n] (T t)) ∧
+          _root_.BinaryTree.IsBST ((rotateRightOnLeftSpine w)^[n] (T t)) ∧
           inorderNat ((rotateRightOnLeftSpine w)^[n] (T t)) = List.Ico (popIdx kops t) P ∧
           puqBlockQuotient subs (p + 1) subs.length ((rotateRightOnLeftSpine w)^[n] (T t)) = G t := by
         intro n
@@ -31538,11 +31540,11 @@ by
         hbq_splice subs hsub_part (p + 1) subs.length hp1_lt le_rfl (T t) s hT_bst hhead_s hs_lt_lob
       obtain ⟨_, _, hsp_bst, hT1_eq, hTj_props⟩ := hplug_pop t ht_lt s hop
       let js := popJumpsAt 0 t s (leftSpineBottomUpNat (keyedState kops t))
-      let Tj : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ := fun j =>
+      let Tj : ℕ → _root_.BinaryTree ℕ := fun j =>
         (js.take j).foldl (fun B e => rotateRightOnLeftSpine e.x B) (spliceMinNat (T t))
-      let Qj : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ := fun j => puqBlockQuotient subs (p + 1) subs.length (Tj j)
+      let Qj : ℕ → _root_.BinaryTree ℕ := fun j => puqBlockQuotient subs (p + 1) subs.length (Tj j)
       have hQj_inv : ∀ j ≤ js.length,
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (Qj j) ∧
+          _root_.BinaryTree.IsBST (Qj j) ∧
           inorderNat (Qj j) = List.Ico (p + 1) subs.length ∧
           (∀ c ∈ leftSpineBottomUpNat (Qj j), c ∈ leftSpineBottomUpNat (G t)) := by
         intro j
@@ -31555,7 +31557,7 @@ by
           intro hj_le
           have hj_lt : j < js.length := by omega
           obtain ⟨hq_bst, hq_inord, hq_sub⟩ := ih (by omega)
-          have hTj_bst : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (Tj j) := (hTj_props j hj_lt).1
+          have hTj_bst : _root_.BinaryTree.IsBST (Tj j) := (hTj_props j hj_lt).1
           have hTj_succ : Tj (j + 1) = rotateRightOnLeftSpine (js[j]'hj_lt).x (Tj j) := by
             simp only [Tj, List.take_succ_eq_append_getElem hj_lt, List.foldl_append, List.foldl_cons, List.foldl_nil]
           have hQj_succ : Qj (j + 1) = puqBlockQuotient subs (p + 1) subs.length
@@ -31690,7 +31692,7 @@ by
     have hex_mem_T : e.x ∈ leftSpineBottomUpNat (T e.step) := by
       rw [(hplug_pop e.step he_step_len e.s he_op).2.1, hfold.fold_leftSpine e.step (by omega)]
       exact List.mem_append_left _ hex_mem_ls
-    have hTe_bst : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (T e.step) := (hplug_bst e.step (by omega)).2.1
+    have hTe_bst : _root_.BinaryTree.IsBST (T e.step) := (hplug_bst e.step (by omega)).2.1
     have hex_mem_T' : e.x ∈ leftSpineBottomUpNat (restrictRangeNat lo_b hi_b (T e.step)) :=
       (hbq_rest_ls lo_b hi_b (T e.step) hTe_bst e.x hex_mem_T hlob_le_ex e.x le_rfl
         (by rw [hhi_b_eq]; exact hx_in_X.2)).mpr hex_mem_T
@@ -31766,7 +31768,7 @@ by
       rw [List.getElem?_eq_getElem he_step_len] at he_op?; injection he_op?
     have hsv_e := hkvalid.step_valid e.step he_step_len
     rw [he_op] at hsv_e
-    have hne_e : keyedState kops e.step ≠ .empty := hsv_e.2.2.2.1
+    have hne_e : keyedState kops e.step ≠ .nil := hsv_e.2.2.2.1
     have hey_le_b0 : e.y ≤ (foldBST P (keyedState kops e.step)).2 := by
       rcases lt_or_ge (2 * e.j + 2) (leftSpineBottomUpNat (keyedState kops e.step)).length with hlen_lt | hge
       · rw [List.getElem?_eq_getElem hlen_lt] at hey_ls?
@@ -31850,7 +31852,7 @@ by
     by_cases hc_in_G : c ∈ leftSpineBottomUpNat (G ea.step)
     ·
       refine Or.inr (Or.inr ⟨hida, ?_⟩)
-      have hTea_bst : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (T ea.step) := (hplug_bst ea.step (by omega)).2.1
+      have hTea_bst : _root_.BinaryTree.IsBST (T ea.step) := (hplug_bst ea.step (by omega)).2.1
       obtain ⟨_, _, r_c, hrc_T', hrc1, hrc2⟩ :=
         (hbq_ls_iff subs hsub_part (p + 1) subs.length hp1_lt le_rfl (T ea.step) hTea_bst c).mp hc_in_G
       have heax_mem_ls : ea.x ∈ leftSpineBottomUpNat (keyedState kops ea.step) := by
@@ -31887,7 +31889,7 @@ by
           have := h_forall_inord (fun k => w < k) _ hsv_ev.2.2 v0 hv0_mem; omega
         obtain ⟨N, hN_eq⟩ := hplug_push tev htev_len w hop_ev
         have h_iter : ∀ n : ℕ,
-            _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST ((rotateRightOnLeftSpine w)^[n] (T tev)) ∧
+            _root_.BinaryTree.IsBST ((rotateRightOnLeftSpine w)^[n] (T tev)) ∧
             inorderNat ((rotateRightOnLeftSpine w)^[n] (T tev)) = List.Ico (popIdx kops tev) P ∧
             puqBlockQuotient subs (p + 1) subs.length ((rotateRightOnLeftSpine w)^[n] (T tev)) = G tev := by
           intro n
@@ -31930,9 +31932,9 @@ by
         obtain ⟨_, _, _, hT1_eq, hTj_props⟩ := hplug_pop tev htev_len s hop_ev
         let ls_ev := leftSpineBottomUpNat (keyedState kops tev)
         let js := popJumpsAt 0 tev s ls_ev
-        let Tj : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ := fun j =>
+        let Tj : ℕ → _root_.BinaryTree ℕ := fun j =>
           (js.take j).foldl (fun B e => rotateRightOnLeftSpine e.x B) (spliceMinNat (T tev))
-        let Qj : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ := fun j => puqBlockQuotient subs (p + 1) subs.length (Tj j)
+        let Qj : ℕ → _root_.BinaryTree ℕ := fun j => puqBlockQuotient subs (p + 1) subs.length (Tj j)
         have hc_Q0 : c ∈ leftSpineBottomUpNat (Qj 0) := by
           simp only [Qj, Tj, List.take_zero, List.foldl_nil, hQ0_eq]; exact hc_tev
         have hc_not_Qlen : c ∉ leftSpineBottomUpNat (Qj js.length) := by
@@ -32167,7 +32169,7 @@ by
       rw [List.getElem?_eq_getElem hea_len] at hea_op?; injection hea_op?
     have hsv_ea := hkvalid.step_valid t_dag hea_len
     rw [hea_op] at hsv_ea
-    have hne_dag : H_dag ≠ .empty := hsv_ea.2.2.2.1
+    have hne_dag : H_dag ≠ .nil := hsv_ea.2.2.2.1
     have hpw_ls : List.Pairwise (· < ·) ls := h_ls_pw t_dag (by omega)
     obtain ⟨hls_ne, hls_last⟩ := h_ls_last t_dag (by omega) hne_dag
     change ls ≠ [] at hls_ne
@@ -32555,7 +32557,7 @@ by
       rw [List.getElem?_eq_getElem hea_len] at hea_op?; injection hea_op?
     have hsv_ea := hkvalid.step_valid ea.step hea_len
     rw [hea_op] at hsv_ea
-    have hne_ea : keyedState kops ea.step ≠ .empty := hsv_ea.2.2.2.1
+    have hne_ea : keyedState kops ea.step ≠ .nil := hsv_ea.2.2.2.1
     have hrmax_max_ls : ∀ u ∈ leftSpineBottomUpNat (keyedState kops ea.step),
         r_max < u → (subs.getD c (0, 0)).2 ≤ u := by
       intro u hu_ls hgt_u
@@ -33381,7 +33383,7 @@ theorem tamari_odd_cascade_and_multiscale_sum_omega
     25 * totalPkgMovers S P L pkgs ≤ 25 * P + totalGapWeight S P L pkgs :=
 by
   have _ := hL
-  have h_seq_append : ∀ (Δ' k : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (s1 s2 : List RightRotOp),
+  have h_seq_append : ∀ (Δ' k : ℕ) (t : _root_.BinaryTree Unit) (s1 s2 : List RightRotOp),
       ValidRightRotSeq Δ' k t s1 →
       ValidRightRotSeq Δ' k (execRightRotSeq t s1) s2 →
       ValidRightRotSeq Δ' k t (s1 ++ s2) ∧
@@ -33398,11 +33400,11 @@ by
       refine ⟨⟨hop, hv⟩, he, ?_⟩
       rcases op with pos | ⟨pos, gaps⟩ <;> simp [countGappedCascades, hc, Nat.add_assoc]
 
-  have h_shift_L : ∀ (Δ' k : ℕ) (l r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (s : List RightRotOp),
+  have h_shift_L : ∀ (Δ' k : ℕ) (l r : _root_.BinaryTree Unit) (s : List RightRotOp),
       ValidRightRotSeq Δ' k l s →
-      ValidRightRotSeq Δ' k (.node l () r) (s.map (tocShiftDir .L)) ∧
-        execRightRotSeq (.node l () r) (s.map (tocShiftDir .L)) =
-          .node (execRightRotSeq l s) () r ∧
+      ValidRightRotSeq Δ' k (.node () l r) (s.map (tocShiftDir .L)) ∧
+        execRightRotSeq (.node () l r) (s.map (tocShiftDir .L)) =
+          .node () (execRightRotSeq l s) r ∧
         countGappedCascades (s.map (tocShiftDir .L)) = countGappedCascades s := by
     intro Δ' k l r s
     induction s generalizing l with
@@ -33411,10 +33413,10 @@ by
       exact ⟨trivial, rfl, rfl⟩
     | cons op rest ih =>
       intro ⟨hop, hrest⟩
-      have hop' : validRightRotOp Δ' k (.node l () r) (tocShiftDir .L op) := by
+      have hop' : validRightRotOp Δ' k (.node () l r) (tocShiftDir .L op) := by
         rcases op with pos | ⟨pos, gaps⟩ <;> exact hop
-      have hexec' : execRightRotOp (.node l () r) (tocShiftDir .L op) =
-          .node (execRightRotOp l op) () r := by
+      have hexec' : execRightRotOp (.node () l r) (tocShiftDir .L op) =
+          .node () (execRightRotOp l op) r := by
         rcases op with pos | ⟨pos, gaps⟩ <;> rfl
       obtain ⟨hv, he, hc⟩ := ih (execRightRotOp l op) hrest
       refine ⟨⟨hop', ?_⟩, ?_, ?_⟩
@@ -33422,11 +33424,11 @@ by
       · simp only [List.map_cons, execRightRotSeq, hexec', he]
       · rcases op with pos | ⟨pos, gaps⟩ <;> simp [tocShiftDir, countGappedCascades, hc]
 
-  have h_shift_R : ∀ (Δ' k : ℕ) (l r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (s : List RightRotOp),
+  have h_shift_R : ∀ (Δ' k : ℕ) (l r : _root_.BinaryTree Unit) (s : List RightRotOp),
       ValidRightRotSeq Δ' k r s →
-      ValidRightRotSeq Δ' k (.node l () r) (s.map (tocShiftDir .R)) ∧
-        execRightRotSeq (.node l () r) (s.map (tocShiftDir .R)) =
-          .node l () (execRightRotSeq r s) ∧
+      ValidRightRotSeq Δ' k (.node () l r) (s.map (tocShiftDir .R)) ∧
+        execRightRotSeq (.node () l r) (s.map (tocShiftDir .R)) =
+          .node () l (execRightRotSeq r s) ∧
         countGappedCascades (s.map (tocShiftDir .R)) = countGappedCascades s := by
     intro Δ' k l r s
     induction s generalizing r with
@@ -33435,10 +33437,10 @@ by
       exact ⟨trivial, rfl, rfl⟩
     | cons op rest ih =>
       intro ⟨hop, hrest⟩
-      have hop' : validRightRotOp Δ' k (.node l () r) (tocShiftDir .R op) := by
+      have hop' : validRightRotOp Δ' k (.node () l r) (tocShiftDir .R op) := by
         rcases op with pos | ⟨pos, gaps⟩ <;> exact hop
-      have hexec' : execRightRotOp (.node l () r) (tocShiftDir .R op) =
-          .node l () (execRightRotOp r op) := by
+      have hexec' : execRightRotOp (.node () l r) (tocShiftDir .R op) =
+          .node () l (execRightRotOp r op) := by
         rcases op with pos | ⟨pos, gaps⟩ <;> rfl
       obtain ⟨hv, he, hc⟩ := ih (execRightRotOp r op) hrest
       refine ⟨⟨hop', ?_⟩, ?_, ?_⟩
@@ -33446,14 +33448,14 @@ by
       · simp only [List.map_cons, execRightRotSeq, hexec', he]
       · rcases op with pos | ⟨pos, gaps⟩ <;> simp [tocShiftDir, countGappedCascades, hc]
 
-  have h_forall_inorder : ∀ (P : ℕ → Prop) (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree P T ↔ ∀ x ∈ inorderNat T, P x := by
+  have h_forall_inorder : ∀ (P : ℕ → Prop) (T : _root_.BinaryTree ℕ),
+      _root_.SplayDeque.Direct.ForallTree P T ↔ ∀ x ∈ inorderNat T, P x := by
     intro P T
     induction T with
-    | empty =>
+    | nil =>
       simp only [inorderNat, List.not_mem_nil, false_implies, implies_true, iff_true]
-      exact _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree.left
-    | node l k r ihl ihr =>
+      exact _root_.SplayDeque.Direct.ForallTree.left
+    | node k l r ihl ihr =>
       constructor
       · intro hft x hx
         cases hft with
@@ -33464,28 +33466,28 @@ by
           · exact hk
           · exact (ihr.mp hr) x hx
       · intro hall
-        refine _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree.node l k r (ihl.mpr ?_) (hall k ?_) (ihr.mpr ?_)
+        refine _root_.SplayDeque.Direct.ForallTree.node l k r (ihl.mpr ?_) (hall k ?_) (ihr.mpr ?_)
         · intro x hx
           exact hall x (by simp [inorderNat, hx])
         · simp [inorderNat]
         · intro x hx
           exact hall x (by simp [inorderNat, hx])
 
-  have h_rightmost_spec : ∀ (r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (cur : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => cur < x) r →
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST r →
+  have h_rightmost_spec : ∀ (r : _root_.BinaryTree ℕ) (cur : ℕ),
+      _root_.SplayDeque.Direct.ForallTree (fun x => cur < x) r →
+      _root_.BinaryTree.IsBST r →
       rightmostKeyNat cur r ∈ cur :: inorderNat r ∧
         ∀ z ∈ cur :: inorderNat r, z ≤ rightmostKeyNat cur r := by
     intro r
     induction r with
-    | empty =>
+    | nil =>
       intro cur _ _
       simp [rightmostKeyNat, inorderNat]
-    | node rl rk rr _ ihrr =>
+    | node rk rl rr _ ihrr =>
       intro cur hgt hbst
       cases hgt with
       | node _ _ _ _ hcur_rk _ =>
-        cases hbst with
+        cases hbst using isBSTCases with
         | node _ _ _ hrl_lt hrr_gt _ hrr_bst =>
           obtain ⟨hmem, hle⟩ := ihrr rk hrr_gt hrr_bst
           have hrk_le : rk ≤ rightmostKeyNat rk rr := hle rk (by simp)
@@ -33504,17 +33506,17 @@ by
             · exact hrk_le
             · exact hle z (List.mem_cons_of_mem rk hz)
 
-  have h_smax_spec : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (v : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T → v ∈ inorderNat T →
+  have h_smax_spec : ∀ (T : _root_.BinaryTree ℕ) (v : ℕ),
+      _root_.BinaryTree.IsBST T → v ∈ inorderNat T →
       v ≤ subtreeMaxNat T v ∧ subtreeMaxNat T v ∈ inorderNat T := by
     intro T
     induction T with
-    | empty =>
+    | nil =>
       intro v _ hv
       simp [inorderNat] at hv
-    | node l k r ihl ihr =>
+    | node k l r ihl ihr =>
       intro v hbst hv
-      cases hbst with
+      cases hbst using isBSTCases with
       | node _ _ _ hl_lt hr_gt hl_bst hr_bst =>
         simp only [inorderNat, List.mem_append, List.mem_singleton] at hv
         by_cases hvk : v < k
@@ -33547,29 +33549,29 @@ by
             · simp [inorderNat, hmem]
             · simp [inorderNat, hmem]
 
-  have h_rot_props : ∀ (a b c : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (x y : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node (.node a x b) y c) →
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node a x (.node b y c)) ∧
-        inorderNat (.node a x (.node b y c)) = inorderNat (.node (.node a x b) y c) ∧
-        ∀ v : ℕ, subtreeMaxNat (.node a x (.node b y c)) v =
-          if v = x then rightmostKeyNat y c else subtreeMaxNat (.node (.node a x b) y c) v := by
+  have h_rot_props : ∀ (a b c : _root_.BinaryTree ℕ) (x y : ℕ),
+      _root_.BinaryTree.IsBST (.node y (.node x a b) c) →
+      _root_.BinaryTree.IsBST (.node x a (.node y b c)) ∧
+        inorderNat (.node x a (.node y b c)) = inorderNat (.node y (.node x a b) c) ∧
+        ∀ v : ℕ, subtreeMaxNat (.node x a (.node y b c)) v =
+          if v = x then rightmostKeyNat y c else subtreeMaxNat (.node y (.node x a b) c) v := by
     intro a b c x y hbst
-    cases hbst with
+    cases hbst using isBSTCases with
     | node _ _ _ hab_lt hc_gt hab_bst hc_bst =>
       cases hab_lt with
       | node _ _ _ _ hxy hb_lt_y =>
-        cases hab_bst with
+        cases hab_bst using isBSTCases with
         | node _ _ _ ha_lt_x hb_gt_x ha_bst hb_bst =>
-          have hc_gt_x : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun k => x < k) c := by
+          have hc_gt_x : _root_.SplayDeque.Direct.ForallTree (fun k => x < k) c := by
             rw [h_forall_inorder] at hc_gt ⊢
             intro z hz
             have := hc_gt z hz
             omega
-          have hbst' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node a x (.node b y c)) :=
-            _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST.node x a (.node b y c) ha_lt_x
-              (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree.node b y c hb_gt_x hxy hc_gt_x)
+          have hbst' : _root_.BinaryTree.IsBST (.node x a (.node y b c)) :=
+            _root_.BinaryTree.IsBST.node x a (.node y b c) ha_lt_x
+              (_root_.SplayDeque.Direct.ForallTree.node b y c hb_gt_x hxy hc_gt_x)
               ha_bst
-              (_root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST.node y b c hb_lt_y hc_gt hb_bst hc_bst)
+              (_root_.BinaryTree.IsBST.node y b c hb_lt_y hc_gt hb_bst hc_bst)
           refine ⟨hbst', by simp [inorderNat, List.append_assoc], ?_⟩
           intro v
           by_cases hvx : v < x
@@ -33589,25 +33591,25 @@ by
               subst hveqx
               simp [subtreeMaxNat, rightmostKeyNat]
 
-  have h_liftToRoot : ∀ (Δ' k : ℕ) (S : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (target : ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST S →
+  have h_liftToRoot : ∀ (Δ' k : ℕ) (S : _root_.BinaryTree ℕ) (target : ℕ),
+      _root_.BinaryTree.IsBST S →
       target ∈ inorderNat S →
       (∀ z ∈ inorderNat S, z < target → subtreeMaxNat S z < target) →
-      ∃ (A B : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (ops : List RightRotOp),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node A target B) ∧
-        inorderNat (.node A target B) = inorderNat S ∧
-        (∀ v, v ≠ target → subtreeMaxNat (.node A target B) v = subtreeMaxNat S v) ∧
+      ∃ (A B : _root_.BinaryTree ℕ) (ops : List RightRotOp),
+        _root_.BinaryTree.IsBST (.node target A B) ∧
+        inorderNat (.node target A B) = inorderNat S ∧
+        (∀ v, v ≠ target → subtreeMaxNat (.node target A B) v = subtreeMaxNat S v) ∧
         ValidRightRotSeq Δ' k (eraseNatKeys S) ops ∧
-        execRightRotSeq (eraseNatKeys S) ops = eraseNatKeys (.node A target B) ∧
+        execRightRotSeq (eraseNatKeys S) ops = eraseNatKeys (.node target A B) ∧
         countGappedCascades ops = 0 := by
     intro Δ' k S
     induction S with
-    | empty =>
+    | nil =>
       intro target _ hmem _
       simp [inorderNat] at hmem
-    | node l r1 R1 ihl _ =>
+    | node r1 l R1 ihl _ =>
       intro target hbst hmem hdom
-      cases hbst with
+      cases hbst using isBSTCases with
       | node _ _ _ hl_lt hr_gt hl_bst hr_bst =>
         by_cases htr : target < r1
         · have hmem_l : target ∈ inorderNat l := by
@@ -33620,23 +33622,23 @@ by
           have hdom_l : ∀ z ∈ inorderNat l, z < target → subtreeMaxNat l z < target := by
             intro z hz hzt
             have hzr1 : z < r1 := by omega
-            have hzS : z ∈ inorderNat (.node l r1 R1) := by simp [inorderNat, hz]
+            have hzS : z ∈ inorderNat (.node r1 l R1) := by simp [inorderNat, hz]
             have h1 := hdom z hzS hzt
             simpa [subtreeMaxNat, hzr1] using h1
           obtain ⟨A0, B0, l_ops, hbst0, hin0, hmax0, hval0, hexec0, hcnt0⟩ :=
             ihl target hl_bst hmem_l hdom_l
-          have hmid_lt : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => x < r1) (.node A0 target B0) := by
+          have hmid_lt : _root_.SplayDeque.Direct.ForallTree (fun x => x < r1) (.node target A0 B0) := by
             rw [h_forall_inorder, hin0, ← h_forall_inorder]
             exact hl_lt
-          have hmid_bst : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node (.node A0 target B0) r1 R1) :=
-            _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST.node r1 (.node A0 target B0) R1 hmid_lt hr_gt hbst0 hr_bst
+          have hmid_bst : _root_.BinaryTree.IsBST (.node r1 (.node target A0 B0) R1) :=
+            _root_.BinaryTree.IsBST.node r1 (.node target A0 B0) R1 hmid_lt hr_gt hbst0 hr_bst
           obtain ⟨hbst_rot, hin_rot, hmax_rot⟩ := h_rot_props A0 B0 R1 target r1 hmid_bst
           obtain ⟨hvalL, hexecL, hcntL⟩ :=
             h_shift_L Δ' k (eraseNatKeys l) (eraseNatKeys R1) l_ops hval0
-          set t_mid := execRightRotSeq (eraseNatKeys (.node l r1 R1))
+          set t_mid := execRightRotSeq (eraseNatKeys (.node r1 l R1))
             (l_ops.map (tocShiftDir .L))
           have ht_mid_eq : t_mid =
-              .node (.node (eraseNatKeys A0) () (eraseNatKeys B0)) () (eraseNatKeys R1) := by
+              .node () (.node () (eraseNatKeys A0) (eraseNatKeys B0)) (eraseNatKeys R1) := by
             simpa [t_mid, eraseNatKeys, hexec0] using hexecL
           have hsingle_val : ValidRightRotSeq Δ' k t_mid [.single []] := by
             rw [ht_mid_eq]
@@ -33644,18 +33646,18 @@ by
             simp only [validRightRotOp, subtreeAtPos, leftSpineLen]
             omega
           obtain ⟨hval_tot, hexec_tot, hcnt_tot⟩ :=
-            h_seq_append Δ' k (eraseNatKeys (.node l r1 R1))
+            h_seq_append Δ' k (eraseNatKeys (.node r1 l R1))
               (l_ops.map (tocShiftDir .L)) [.single []] hvalL hsingle_val
-          refine ⟨A0, .node B0 r1 R1, l_ops.map (tocShiftDir .L) ++ [.single []],
+          refine ⟨A0, .node r1 B0 R1, l_ops.map (tocShiftDir .L) ++ [.single []],
             hbst_rot, ?_, ?_, hval_tot, ?_, ?_⟩
           · rw [hin_rot]
-            change inorderNat (.node A0 target B0) ++ [r1] ++ inorderNat R1 =
+            change inorderNat (.node target A0 B0) ++ [r1] ++ inorderNat R1 =
               inorderNat l ++ [r1] ++ inorderNat R1
             rw [hin0]
           · intro v hvne
             rw [hmax_rot v, if_neg hvne]
             by_cases hvr1 : v < r1
-            · change (if v < r1 then subtreeMaxNat (.node A0 target B0) v else _) =
+            · change (if v < r1 then subtreeMaxNat (.node target A0 B0) v else _) =
                 (if v < r1 then subtreeMaxNat l v else _)
               simp only [hvr1, ↓reduceIte]
               exact hmax0 v hvne
@@ -33676,14 +33678,14 @@ by
               · exact hmem
             obtain ⟨_, hle⟩ := h_rightmost_spec R1 r1 hr_gt hr_bst
             have h1 : target ≤ rightmostKeyNat r1 R1 := hle target (List.mem_cons_of_mem r1 hmem_R1)
-            have hr1_mem : r1 ∈ inorderNat (.node l r1 R1) := by simp [inorderNat]
+            have hr1_mem : r1 ∈ inorderNat (.node r1 l R1) := by simp [inorderNat]
             have h2 := hdom r1 hr1_mem hrt
             simp only [subtreeMaxNat, lt_irrefl, ↓reduceIte] at h2
             omega
           · have h_eq : target = r1 := by omega
             subst h_eq
             refine ⟨l, R1, [],
-              _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST.node target l R1 hl_lt hr_gt hl_bst hr_bst,
+              _root_.BinaryTree.IsBST.node target l R1 hl_lt hr_gt hl_bst hr_bst,
               rfl, (fun _ _ => rfl), trivial, rfl, rfl⟩
 
   have h_split_unique : ∀ (r : ℕ) (xs1 ys1 xs2 ys2 : List ℕ),
@@ -33712,8 +33714,8 @@ by
           (fun h => hnot2 (List.mem_cons_of_mem a h)) hrest
         exact ⟨congrArg (List.cons a) h1, h2⟩
 
-  have h_tamari : ∀ (Δ' k : ℕ) (T1 T2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T1 → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T2 →
+  have h_tamari : ∀ (Δ' k : ℕ) (T1 T2 : _root_.BinaryTree ℕ),
+      _root_.BinaryTree.IsBST T1 → _root_.BinaryTree.IsBST T2 →
       inorderNat T1 = inorderNat T2 →
       (∀ c ∈ inorderNat T1, subtreeMaxNat T1 c ≤ subtreeMaxNat T2 c) →
       ∃ seq : List RightRotOp,
@@ -33722,22 +33724,22 @@ by
         countGappedCascades seq = 0 := by
     intro Δ' k T1 T2 hbst1 hbst2 hin hdom
     induction T2 generalizing T1 with
-    | empty =>
-      rcases T1 with _ | ⟨l1, k1, r1⟩
+    | nil =>
+      rcases T1 with _ | ⟨k1, l1, r1⟩
       · exact ⟨[], trivial, rfl, rfl⟩
       · exfalso
-        have hk1 : k1 ∈ inorderNat (.node l1 k1 r1) := by simp [inorderNat]
+        have hk1 : k1 ∈ inorderNat (.node k1 l1 r1) := by simp [inorderNat]
         rw [hin] at hk1
         simp [inorderNat] at hk1
-    | node L2 r2 R2 ihL ihR =>
-      cases hbst2 with
+    | node r2 L2 R2 ihL ihR =>
+      cases hbst2 using isBSTCases with
       | node _ _ _ hL2_lt hR2_gt hL2_bst hR2_bst =>
         have hr2_mem : r2 ∈ inorderNat T1 := by
           rw [hin]
           simp [inorderNat]
         have hr2_dom : ∀ z ∈ inorderNat T1, z < r2 → subtreeMaxNat T1 z < r2 := by
           intro z hz1 hzr2
-          have hz2 : z ∈ inorderNat (.node L2 r2 R2) := hin ▸ hz1
+          have hz2 : z ∈ inorderNat (.node r2 L2 R2) := hin ▸ hz1
           have hz_L2 : z ∈ inorderNat L2 := by
             simp only [inorderNat, List.mem_append, List.mem_singleton] at hz2
             rcases hz2 with (hz2 | rfl) | hz2
@@ -33753,7 +33755,7 @@ by
           omega
         obtain ⟨A, B, up_ops, hbstAB, hinAB, hmaxAB, hval_up, hexec_up, hcnt_up⟩ :=
           h_liftToRoot Δ' k T1 r2 hbst1 hr2_mem hr2_dom
-        cases hbstAB with
+        cases hbstAB using isBSTCases with
         | node _ _ _ hA_lt hB_gt hA_bst hB_bst =>
           have hr2_not_A : r2 ∉ inorderNat A := by
             intro h
@@ -33805,7 +33807,7 @@ by
             up_ops (seqL.map (tocShiftDir .L)) hval_up hv12_mid
           have he12_val : execRightRotSeq (eraseNatKeys T1)
               (up_ops ++ seqL.map (tocShiftDir .L)) =
-              .node (eraseNatKeys L2) () (eraseNatKeys B) := by
+              .node () (eraseNatKeys L2) (eraseNatKeys B) := by
             rw [he12, hexec_up]
             simpa only [eraseNatKeys, hexecL] using heL
           have hv123_mid : ValidRightRotSeq Δ' k
@@ -33821,15 +33823,15 @@ by
             rfl
           · omega
 
-  have h_restrict_id : ∀ (lo hi : ℕ) (r : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => lo ≤ x ∧ x < hi) r →
+  have h_restrict_id : ∀ (lo hi : ℕ) (r : _root_.BinaryTree ℕ),
+      _root_.SplayDeque.Direct.ForallTree (fun x => lo ≤ x ∧ x < hi) r →
       restrictRangeNat lo hi r = r := by
     intro lo hi r
     induction r with
-    | empty =>
+    | nil =>
       intro _
       rfl
-    | node rl rk rr ihl ihr =>
+    | node rk rl rr ihl ihr =>
       intro hft
       cases hft with
       | node _ _ _ hl hmid hr =>
@@ -33837,16 +33839,16 @@ by
         have h2 : ¬(hi ≤ rk) := by omega
         simp [restrictRangeNat, h1, h2, ihl hl, ihr hr]
 
-  have h_smax_restrict : ∀ (lo hi c : ℕ) (S : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST S →
-      _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => x < hi) S →
+  have h_smax_restrict : ∀ (lo hi c : ℕ) (S : _root_.BinaryTree ℕ),
+      _root_.BinaryTree.IsBST S →
+      _root_.SplayDeque.Direct.ForallTree (fun x => x < hi) S →
       lo ≤ c →
       subtreeMaxNat (restrictRangeNat lo hi S) c = subtreeMaxNat S c := by
     intro lo hi c S hbst hhi hloc
     induction S with
-    | empty => rfl
-    | node l k r ihl ihr =>
-      cases hbst with
+    | nil => rfl
+    | node k l r ihl ihr =>
+      cases hbst using isBSTCases with
       | node _ _ _ hl_lt hr_gt hl_bst hr_bst =>
         cases hhi with
         | node _ _ _ hl_hi hk_hi hr_hi =>
@@ -33862,7 +33864,7 @@ by
               · simp [subtreeMaxNat, hck, hkc, ihr hr_bst hr_hi]
               · have h_eq : c = k := by omega
                 subst h_eq
-                have hr_both : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => lo ≤ x ∧ x < hi) r := by
+                have hr_both : _root_.SplayDeque.Direct.ForallTree (fun x => lo ≤ x ∧ x < hi) r := by
                   rw [h_forall_inorder]
                   intro x hx
                   have h1 := (h_forall_inorder _ r).mp hr_gt x hx
@@ -33870,15 +33872,15 @@ by
                   omega
                 simp [subtreeMaxNat, h_restrict_id lo hi r hr_both]
 
-  have h_phase_step : ∀ (Δ' k p N_X : ℕ) (T_end T_next : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-      p + 1 < N_X → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T_end → _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T_next →
+  have h_phase_step : ∀ (Δ' k p N_X : ℕ) (T_end T_next : _root_.BinaryTree ℕ),
+      p + 1 < N_X → _root_.BinaryTree.IsBST T_end → _root_.BinaryTree.IsBST T_next →
       inorderNat T_end = List.Ico (p + 1) (N_X + 1) →
       inorderNat T_next = List.Ico (p + 2) (N_X + 1) →
       (∀ c, p + 2 ≤ c → c ≤ N_X →
         subtreeMaxNat (restrictRangeNat (p + 2) (N_X + 1) T_end) c ≤ subtreeMaxNat T_next c) →
       ∃ seq : List RightRotOp,
         ValidRightRotSeq Δ' k (eraseNatKeys T_end) seq ∧
-        execRightRotSeq (eraseNatKeys T_end) seq = .node .empty () (eraseNatKeys T_next) ∧
+        execRightRotSeq (eraseNatKeys T_end) seq = .node () .nil (eraseNatKeys T_next) ∧
         countGappedCascades seq = 0 := by
     intro Δ' k p N_X T_end T_next hp hbst_end hbst_next hin_end hin_next hdom
     have hp_mem : p + 1 ∈ inorderNat T_end := by
@@ -33890,15 +33892,15 @@ by
       omega
     obtain ⟨A, B, up_ops, hbstAB, hinAB, hmaxAB, hval_up, hexec_up, hcnt_up⟩ :=
       h_liftToRoot Δ' k T_end (p + 1) hbst_end hp_mem hp_dom
-    cases hbstAB with
+    cases hbstAB using isBSTCases with
     | node _ _ _ hA_lt _ _ hB_bst =>
-      have hA_empty : A = .empty := by
-        rcases A with _ | ⟨al, ak, ar⟩
+      have hA_empty : A = .nil := by
+        rcases A with _ | ⟨ak, al, ar⟩
         · rfl
         · exfalso
-          have hak_A : ak ∈ inorderNat (.node al ak ar) := by simp [inorderNat]
+          have hak_A : ak ∈ inorderNat (.node ak al ar) := by simp [inorderNat]
           have hak_lt : ak < p + 1 := (h_forall_inorder _ _).mp hA_lt ak hak_A
-          have hak_AB : ak ∈ inorderNat (.node (.node al ak ar) (p + 1) B) := by
+          have hak_AB : ak ∈ inorderNat (.node (p + 1) (.node ak al ar) B) := by
             simp [inorderNat]
           rw [hinAB, hin_end, List.Ico.mem] at hak_AB
           omega
@@ -33910,7 +33912,7 @@ by
           simpa [inorderNat, hcons] using hinAB.trans hin_end
         have h2 : inorderNat B = List.Ico (p + 2) (N_X + 1) := (List.cons.injEq _ _ _ _).mp h1 |>.2
         exact h2.trans hin_next.symm
-      have hhi_end : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun x => x < N_X + 1) T_end := by
+      have hhi_end : _root_.SplayDeque.Direct.ForallTree (fun x => x < N_X + 1) T_end := by
         rw [h_forall_inorder, hin_end]
         intro x hx
         rw [List.Ico.mem] at hx
@@ -33929,7 +33931,7 @@ by
         omega
       obtain ⟨rem_ops, hval_rem, hexec_rem, hcnt_rem⟩ :=
         h_tamari Δ' k B T_next hB_bst hbst_next hinB hdomB
-      obtain ⟨hvR, heR, hcR⟩ := h_shift_R Δ' k .empty (eraseNatKeys B) rem_ops hval_rem
+      obtain ⟨hvR, heR, hcR⟩ := h_shift_R Δ' k .nil (eraseNatKeys B) rem_ops hval_rem
       have hv_mid : ValidRightRotSeq Δ' k
           (execRightRotSeq (eraseNatKeys T_end) up_ops) (rem_ops.map (tocShiftDir .R)) := by
         simpa only [hexec_up, eraseNatKeys] using hvR
@@ -33940,25 +33942,25 @@ by
       rw [he_tot, hexec_up]
       simpa only [eraseNatKeys, hexec_rem] using heR
 
-  have h_erase_nodes : ∀ T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ,
+  have h_erase_nodes : ∀ T : _root_.BinaryTree ℕ,
       (eraseNatKeys T).num_nodes = (inorderNat T).length := by
     intro T
     induction T with
-    | empty => rfl
-    | node l k r ihl ihr =>
-      simp only [eraseNatKeys, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.num_nodes, inorderNat, List.length_append,
+    | nil => rfl
+    | node k l r ihl ihr =>
+      simp only [eraseNatKeys, _root_.BinaryTree.num_nodes, inorderNat, List.length_append,
         List.length_singleton, ihl, ihr]
       omega
 
   have h_phase_chain : ∀ (h_cascade : GappedCascadeBoundProp) (i Δ' N_X : ℕ)
-       (G_init : ℕ → _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (c : ℕ → ℕ),
+       (G_init : ℕ → _root_.BinaryTree ℕ) (c : ℕ → ℕ),
       2 ≤ i → 1 ≤ N_X → N_X ≤ ackermann i 1 →
       inorderNat (G_init 0) = List.Ico 1 (N_X + 1) →
       (∀ p, p + 1 < N_X →
         ∃ seq_p : List RightRotOp,
           ValidRightRotSeq Δ' (2 * i) (eraseNatKeys (G_init p)) seq_p ∧
           execRightRotSeq (eraseNatKeys (G_init p)) seq_p =
-            .node .empty () (eraseNatKeys (G_init (p + 1))) ∧
+            .node () .nil (eraseNatKeys (G_init (p + 1))) ∧
           countGappedCascades seq_p = c p) →
       (∃ seq_last : List RightRotOp,
         ValidRightRotSeq Δ' (2 * i) (eraseNatKeys (G_init (N_X - 1))) seq_last ∧
@@ -33991,7 +33993,7 @@ by
         obtain ⟨seq_rest, hval_rest, hcnt_rest⟩ := ih (by omega)
         rw [hp1_eq] at hval_rest hcnt_rest
         obtain ⟨hvR, _, hcR⟩ :=
-          h_shift_R Δ' (2 * i) .empty (eraseNatKeys (G_init (p + 1))) seq_rest hval_rest
+          h_shift_R Δ' (2 * i) .nil (eraseNatKeys (G_init (p + 1))) seq_rest hval_rest
         have hv_mid : ValidRightRotSeq Δ' (2 * i)
             (execRightRotSeq (eraseNatKeys (G_init p)) seq_p)
             (seq_rest.map (tocShiftDir .R)) := by
@@ -34011,8 +34013,8 @@ by
     omega
 
   have h_mod2 : ∀ (i Δ : ℕ), 2 ≤ i → 100 * i + 2 ≤ Δ →
-      ∀ (T_init T_end : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T_init →
+      ∀ (T_init T_end : _root_.BinaryTree ℕ),
+        _root_.BinaryTree.IsBST T_init →
         inorderNat T_init = inorderNat T_end →
         (∀ c ∈ inorderNat T_init, subtreeMaxNat T_init c ≤ subtreeMaxNat T_end c) →
         ∀ (F U : List ℕ),
@@ -34024,15 +34026,15 @@ by
           U.length = F.length - 1 →
           (∀ r, r + 1 < F.length →
             F.getD (r + 1) 0 - F.getD r 0 - 1 ≤ 3 + U.getD r 0) →
-          ∃ (G_odd : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (seq_odd : List RightRotOp),
-            _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G_odd ∧
+          ∃ (G_odd : _root_.BinaryTree ℕ) (seq_odd : List RightRotOp),
+            _root_.BinaryTree.IsBST G_odd ∧
             inorderNat G_odd = inorderNat T_end ∧
             (∀ c ∈ inorderNat G_odd, subtreeMaxNat G_odd c ≤ subtreeMaxNat T_end c) ∧
             ValidRightRotSeq (2 * Δ) (2 * i) (eraseNatKeys T_init) seq_odd ∧
             execRightRotSeq (eraseNatKeys T_init) seq_odd = eraseNatKeys G_odd ∧
             25 * F.length ≤ 100 * i * countGappedCascades seq_odd + 100 * i + U.sum := by
     intro i Δ hi hΔ T_init T_end hbst_init hin_eq hreach_mono F U hF_mono hF_lt hrun_dom hU_len hgap_b
-    have h_seq_split : ∀ (Δ' k : ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (s1 s2 : List RightRotOp),
+    have h_seq_split : ∀ (Δ' k : ℕ) (t : _root_.BinaryTree Unit) (s1 s2 : List RightRotOp),
         ValidRightRotSeq Δ' k t (s1 ++ s2) →
         ValidRightRotSeq Δ' k t s1 ∧
           ValidRightRotSeq Δ' k (execRightRotSeq t s1) s2 ∧
@@ -34047,12 +34049,12 @@ by
         obtain ⟨hv1, hv2, he⟩ := ih (execRightRotOp t op) hrest
         exact ⟨⟨hop, hv1⟩, hv2, he⟩
 
-    have h_spine_aux : ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (acc : List ℕ),
+    have h_spine_aux : ∀ (t : _root_.BinaryTree ℕ) (acc : List ℕ),
         leftSpineBottomUpAux t acc = leftSpineBottomUpNat t ++ acc := by
       intro t
       induction t with
-      | empty => intro acc; rfl
-      | node l k r ihl =>
+      | nil => intro acc; rfl
+      | node k l r ihl =>
         intro acc
         simp only [leftSpineBottomUpNat, leftSpineBottomUpAux]
         rw [ihl (k :: acc), ihl [k]]
@@ -34081,18 +34083,18 @@ by
         simp only [List.cons_append, List.getD, List.getElem?_cons_succ]
         exact ih
 
-    have h_agree_refl : ∀ (T : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+    have h_agree_refl : ∀ (T : _root_.BinaryTree ℕ),
         tocAgreeAboveLeftDepth (leftSpineBottomUpNat T).length T T := by
       intro T
       induction T with
-      | empty => trivial
-      | node l k r ihl =>
-        have hsp : leftSpineBottomUpNat (.node l k r) = leftSpineBottomUpNat l ++ [k] :=
+      | nil => trivial
+      | node k l r ihl =>
+        have hsp : leftSpineBottomUpNat (.node k l r) = leftSpineBottomUpNat l ++ [k] :=
           h_spine_aux l [k]
         rw [hsp, List.length_append, List.length_singleton]
         exact ⟨rfl, rfl, ihl⟩
 
-    have h_agree_mono : ∀ (m1 m2 : ℕ) (T G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
+    have h_agree_mono : ∀ (m1 m2 : ℕ) (T G : _root_.BinaryTree ℕ),
         m1 ≤ m2 → tocAgreeAboveLeftDepth m2 T G → tocAgreeAboveLeftDepth m1 T G := by
       intro m1
       induction m1 with
@@ -34101,22 +34103,22 @@ by
         intro m2 T G hle hagree
         rcases m2 with _ | m2'
         · omega
-        · rcases T with _ | ⟨l1, k1, r1⟩
+        · rcases T with _ | ⟨k1, l1, r1⟩
           · exact False.elim hagree
-          · rcases G with _ | ⟨l2, k2, r2⟩
+          · rcases G with _ | ⟨k2, l2, r2⟩
             · exact False.elim hagree
             · obtain ⟨hk, hr, hsub⟩ := hagree
               exact ⟨hk, hr, ih m2' l1 l2 (by omega) hsub⟩
 
-    have h_rot_at_depth : ∀ (Δ' k d idx : ℕ) (T_init G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ),
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST T_init →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G →
+    have h_rot_at_depth : ∀ (Δ' k d idx : ℕ) (T_init G : _root_.BinaryTree ℕ),
+        _root_.BinaryTree.IsBST T_init →
+        _root_.BinaryTree.IsBST G →
         idx + 2 + d = (leftSpineBottomUpNat T_init).length →
         tocAgreeAboveLeftDepth (d + 2) T_init G →
-        let G' := applyAtLeftDepthGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight G d
+        let G' := applyAtLeftDepthGen _root_.BinaryTree.rotateRight G d
         let x := (leftSpineBottomUpNat T_init).getD idx 0
         let y := (leftSpineBottomUpNat T_init).getD (idx + 1) 0
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G' ∧
+        _root_.BinaryTree.IsBST G' ∧
           inorderNat G' = inorderNat G ∧
           tocAgreeAboveLeftDepth d T_init G' ∧
           validRightRotOp Δ' k (eraseNatKeys G) (.single (List.replicate d Dir.L)) ∧
@@ -34129,41 +34131,41 @@ by
       induction d with
       | zero =>
         intro idx T_init G hbst_init hbst_G hidx hagree
-        rcases T_init with _ | ⟨l1, y, c0⟩
+        rcases T_init with _ | ⟨y, l1, c0⟩
         · exact False.elim hagree
-        · rcases G with _ | ⟨l2, y2, c2⟩
+        · rcases G with _ | ⟨y2, l2, c2⟩
           · exact False.elim hagree
           · obtain ⟨rfl, rfl, hagree1⟩ := hagree
-            rcases l1 with _ | ⟨a0, x, b0⟩
+            rcases l1 with _ | ⟨x, a0, b0⟩
             · exact False.elim hagree1
-            · rcases l2 with _ | ⟨a, x2, b2⟩
+            · rcases l2 with _ | ⟨x2, a, b2⟩
               · exact False.elim hagree1
               · obtain ⟨rfl, rfl, _⟩ := hagree1
-                have hsp : leftSpineBottomUpNat (.node (.node a0 x b0) y c0) =
+                have hsp : leftSpineBottomUpNat (.node y (.node x a0 b0) c0) =
                     leftSpineBottomUpNat a0 ++ [x, y] := by
-                  have h1 : leftSpineBottomUpNat (.node (.node a0 x b0) y c0) =
-                      leftSpineBottomUpNat (.node a0 x b0) ++ [y] := h_spine_aux _ [y]
-                  have h2 : leftSpineBottomUpNat (.node a0 x b0) =
+                  have h1 : leftSpineBottomUpNat (.node y (.node x a0 b0) c0) =
+                      leftSpineBottomUpNat (.node x a0 b0) ++ [y] := h_spine_aux _ [y]
+                  have h2 : leftSpineBottomUpNat (.node x a0 b0) =
                       leftSpineBottomUpNat a0 ++ [x] := h_spine_aux a0 [x]
                   rw [h1, h2, List.append_assoc]
                   rfl
-                have hlen : (leftSpineBottomUpNat (.node (.node a0 x b0) y c0)).length =
+                have hlen : (leftSpineBottomUpNat (.node y (.node x a0 b0) c0)).length =
                     (leftSpineBottomUpNat a0).length + 2 := by
                   rw [hsp, List.length_append]
                   rfl
                 have hidx_eq : idx = (leftSpineBottomUpNat a0).length := by omega
-                have hx_eq : (leftSpineBottomUpNat (.node (.node a0 x b0) y c0)).getD idx 0 = x := by
+                have hx_eq : (leftSpineBottomUpNat (.node y (.node x a0 b0) c0)).getD idx 0 = x := by
                   rw [hsp, hidx_eq]
                   exact h_getD_append_right (leftSpineBottomUpNat a0) [x, y] 0
                 have hy_eq :
-                    (leftSpineBottomUpNat (.node (.node a0 x b0) y c0)).getD (idx + 1) 0 = y := by
+                    (leftSpineBottomUpNat (.node y (.node x a0 b0) c0)).getD (idx + 1) 0 = y := by
                   rw [hsp, hidx_eq]
                   exact h_getD_append_right (leftSpineBottomUpNat a0) [x, y] 1
                 obtain ⟨hbst', hin', hmax'⟩ := h_rot_props a b0 c0 x y hbst_G
-                have hy_max : subtreeMaxNat (.node (.node a0 x b0) y c0) y =
+                have hy_max : subtreeMaxNat (.node y (.node x a0 b0) c0) y =
                     rightmostKeyNat y c0 := by
                   simp [subtreeMaxNat]
-                dsimp (config := { failIfUnchanged := false }) only [applyAtLeftDepthGen, _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight]
+                dsimp (config := { failIfUnchanged := false }) only [applyAtLeftDepthGen, _root_.BinaryTree.rotateRight]
                 refine ⟨hbst', hin', trivial, ?_, rfl, ?_, ?_, ?_⟩
                 · simp only [List.replicate, validRightRotOp, subtreeAtPos, eraseNatKeys,
                     leftSpineLen]
@@ -34177,37 +34179,37 @@ by
                   exact hmax' v
       | succ d' ih =>
         intro idx T_init G hbst_init hbst_G hidx hagree
-        rcases T_init with _ | ⟨l1, k1, r1⟩
+        rcases T_init with _ | ⟨k1, l1, r1⟩
         · exact False.elim hagree
-        · rcases G with _ | ⟨l2, k2, r2⟩
+        · rcases G with _ | ⟨k2, l2, r2⟩
           · exact False.elim hagree
           · obtain ⟨rfl, rfl, hagree'⟩ := hagree
-            cases hbst_init with
+            cases hbst_init using isBSTCases with
             | node _ _ _ hl1_lt hr1_gt hl1_bst hr1_bst =>
-              cases hbst_G with
+              cases hbst_G using isBSTCases with
               | node _ _ _ hl2_lt hr2_gt hl2_bst hr2_bst =>
-                have hsp1 : leftSpineBottomUpNat (.node l1 k1 r1) =
+                have hsp1 : leftSpineBottomUpNat (.node k1 l1 r1) =
                     leftSpineBottomUpNat l1 ++ [k1] := h_spine_aux l1 [k1]
-                have hlen1 : (leftSpineBottomUpNat (.node l1 k1 r1)).length =
+                have hlen1 : (leftSpineBottomUpNat (.node k1 l1 r1)).length =
                     (leftSpineBottomUpNat l1).length + 1 := by
                   rw [hsp1, List.length_append, List.length_singleton]
                 have hidx' : idx + 2 + d' = (leftSpineBottomUpNat l1).length := by omega
-                have hx_get : (leftSpineBottomUpNat (.node l1 k1 r1)).getD idx 0 =
+                have hx_get : (leftSpineBottomUpNat (.node k1 l1 r1)).getD idx 0 =
                     (leftSpineBottomUpNat l1).getD idx 0 := by
                   rw [hsp1]
                   exact h_getD_append_left _ _ idx (by omega)
-                have hy_get : (leftSpineBottomUpNat (.node l1 k1 r1)).getD (idx + 1) 0 =
+                have hy_get : (leftSpineBottomUpNat (.node k1 l1 r1)).getD (idx + 1) 0 =
                     (leftSpineBottomUpNat l1).getD (idx + 1) 0 := by
                   rw [hsp1]
                   exact h_getD_append_left _ _ (idx + 1) (by omega)
                 obtain ⟨hbst_l2', hin_l2', hagree_l2', hval_l2', hexec_l2', hx_mem, hy_mem,
                   hmax_l2'⟩ := ih idx l1 l2 hl1_bst hl2_bst hidx' hagree'
-                let l2' := applyAtLeftDepthGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight l2 d'
-                have hl2'_lt : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.ForallTree (fun z => z < k1) l2' := by
+                let l2' := applyAtLeftDepthGen _root_.BinaryTree.rotateRight l2 d'
+                have hl2'_lt : _root_.SplayDeque.Direct.ForallTree (fun z => z < k1) l2' := by
                   rw [h_forall_inorder, hin_l2', ← h_forall_inorder]
                   exact hl2_lt
-                have hbst_G' : _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST (.node l2' k1 r1) :=
-                  _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST.node k1 l2' r1 hl2'_lt hr2_gt hbst_l2' hr2_bst
+                have hbst_G' : _root_.BinaryTree.IsBST (.node k1 l2' r1) :=
+                  _root_.BinaryTree.IsBST.node k1 l2' r1 hl2'_lt hr2_gt hbst_l2' hr2_bst
                 have hx_lt_k1 : (leftSpineBottomUpNat l1).getD idx 0 < k1 :=
                   (h_forall_inorder _ l1).mp hl1_lt _ hx_mem
                 have hy_lt_k1 : (leftSpineBottomUpNat l1).getD (idx + 1) 0 < k1 :=
@@ -34218,7 +34220,7 @@ by
                   rw [hin_l2']
                 · simpa [List.replicate, validRightRotOp, subtreeAtPos, eraseNatKeys] using hval_l2'
                 · simp only [List.replicate, execRightRotOp, eraseNatKeys, applyAtPos]
-                  exact congrArg (fun s => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node s () (eraseNatKeys r1)) hexec_l2'
+                  exact congrArg (fun s => _root_.BinaryTree.node () s (eraseNatKeys r1)) hexec_l2'
                 · rw [hx_get]
                   simp only [inorderNat, List.mem_append]
                   exact Or.inl (Or.inl hx_mem)
@@ -34234,17 +34236,17 @@ by
                     simp only [subtreeMaxNat, hvk1, ↓reduceIte]
                     rw [if_neg hvne]
 
-    have h_run_singles : ∀ (Δ' k : ℕ) (O : List ℕ) (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (m : ℕ),
+    have h_run_singles : ∀ (Δ' k : ℕ) (O : List ℕ) (G : _root_.BinaryTree ℕ) (m : ℕ),
         O ≠ [] →
         List.IsChain (fun u w => u + 2 ≤ w) O →
         (∀ idx ∈ O, idx ∈ F) →
-        _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G →
+        _root_.BinaryTree.IsBST G →
         inorderNat G = inorderNat T_init →
         (∀ c ∈ inorderNat G, subtreeMaxNat G c ≤ subtreeMaxNat T_end c) →
         tocAgreeAboveLeftDepth m T_init G →
         (leftSpineBottomUpNat T_init).length - O.headD 0 ≤ m →
-        ∃ G_mid : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ,
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G_mid ∧
+        ∃ G_mid : _root_.BinaryTree ℕ,
+          _root_.BinaryTree.IsBST G_mid ∧
           inorderNat G_mid = inorderNat T_init ∧
           (∀ c ∈ inorderNat G_mid, subtreeMaxNat G_mid c ≤ subtreeMaxNat T_end c) ∧
           tocAgreeAboveLeftDepth
@@ -34272,7 +34274,7 @@ by
         have hidx_d : idx + 2 + d = h_0 := by omega
         obtain ⟨hbst_G', hin_G', hagree_d, hval_op, hexec_op, _, _, hmax_G'⟩ :=
           h_rot_at_depth Δ' k d idx T_init G hbst_init hbst_G hidx_d hagree_d2
-        let G' := applyAtLeftDepthGen _root_.SplayDeque.Legacy.SplayTree.BinaryTree.rotateRight G d
+        let G' := applyAtLeftDepthGen _root_.BinaryTree.rotateRight G d
         have hin_G'_init : inorderNat G' = inorderNat T_init := hin_G'.trans hin_G
         have hdom_G' : ∀ c ∈ inorderNat G', subtreeMaxNat G' c ≤ subtreeMaxNat T_end c := by
           intro c hc
@@ -34310,64 +34312,64 @@ by
                 (tocSingleSeq h_0 (idx2 :: rest')) = eraseNatKeys G_mid
               rwa [hexec_op]
 
-    have h_sub_pos_rep : ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (d : ℕ),
+    have h_sub_pos_rep : ∀ (t : _root_.BinaryTree Unit) (d : ℕ),
         subtreeAtPos t (List.replicate d Dir.L) = subtreeAtLeftDepth t d := by
       intro t d
       induction d generalizing t with
       | zero => cases t <;> rfl
       | succ d' ih =>
-        rcases t with _ | ⟨l, u, r⟩
+        rcases t with _ | ⟨u, l, r⟩
         · rfl
         · exact ih l
 
-    have h_app_pos_rep : ∀ (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (d : ℕ),
+    have h_app_pos_rep : ∀ (f : _root_.BinaryTree Unit → _root_.BinaryTree Unit) (t : _root_.BinaryTree Unit) (d : ℕ),
         applyAtPos f t (List.replicate d Dir.L) = applyAtLeftDepth f t d := by
       intro f t d
       induction d generalizing t with
       | zero => cases t <;> rfl
       | succ d' ih =>
-        rcases t with _ | ⟨l, u, r⟩
+        rcases t with _ | ⟨u, l, r⟩
         · rfl
-        · exact congrArg (fun s => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node s u r) (ih l)
+        · exact congrArg (fun s => _root_.BinaryTree.node u s r) (ih l)
 
-    have h_spine_sub : ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (d : ℕ),
+    have h_spine_sub : ∀ (t : _root_.BinaryTree Unit) (d : ℕ),
         leftSpineLen (subtreeAtLeftDepth t d) = leftSpineLen t - d := by
       intro t d
       induction d generalizing t with
       | zero => cases t <;> simp [subtreeAtLeftDepth]
       | succ d' ih =>
-        rcases t with _ | ⟨l, u, r⟩
+        rcases t with _ | ⟨u, l, r⟩
         · simp [subtreeAtLeftDepth, leftSpineLen]
         · simp only [subtreeAtLeftDepth, leftSpineLen, ih l]
           omega
 
-    have h_app_id : ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (d : ℕ),
+    have h_app_id : ∀ (t : _root_.BinaryTree Unit) (d : ℕ),
         applyAtLeftDepth (fun s => s) t d = t := by
       intro t d
       induction d generalizing t with
       | zero => cases t <;> rfl
       | succ d' ih =>
-        rcases t with _ | ⟨l, u, r⟩
+        rcases t with _ | ⟨u, l, r⟩
         · rfl
-        · exact congrArg (fun s => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node s u r) (ih l)
+        · exact congrArg (fun s => _root_.BinaryTree.node u s r) (ih l)
 
-    have h_app_zero : ∀ (f : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+    have h_app_zero : ∀ (f : _root_.BinaryTree Unit → _root_.BinaryTree Unit) (t : _root_.BinaryTree Unit),
         applyAtLeftDepth f t 0 = f t := by
       intro f t
       cases t <;> rfl
 
-    have h_app_comp : ∀ (f1 f2 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit → _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (d : ℕ),
+    have h_app_comp : ∀ (f1 f2 : _root_.BinaryTree Unit → _root_.BinaryTree Unit) (t : _root_.BinaryTree Unit) (d : ℕ),
         applyAtLeftDepth f2 (applyAtLeftDepth f1 t d) d =
           applyAtLeftDepth (fun s => f2 (f1 s)) t d := by
       intro f1 f2 t d
       induction d generalizing t with
       | zero => simp only [h_app_zero]
       | succ d' ih =>
-        rcases t with _ | ⟨l, u, r⟩
+        rcases t with _ | ⟨u, l, r⟩
         · rfl
-        · exact congrArg (fun s => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node s u r) (ih l)
+        · exact congrArg (fun s => _root_.BinaryTree.node u s r) (ih l)
 
-    have h_exec_shiftLeft_op : ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (d : ℕ) (op : RightRotOp),
+    have h_exec_shiftLeft_op : ∀ (t : _root_.BinaryTree Unit) (d : ℕ) (op : RightRotOp),
         execRightRotOp t (tocShiftLeft d op) =
           applyAtLeftDepth (fun s => execRightRotOp s op) t d := by
       intro t d op
@@ -34375,15 +34377,15 @@ by
       | zero =>
         rcases op with pos | ⟨pos, gaps⟩ <;> cases t <;> rfl
       | succ d' ih =>
-        rcases t with _ | ⟨l, u, r⟩
+        rcases t with _ | ⟨u, l, r⟩
         · rcases op with pos | ⟨pos, gaps⟩ <;> rfl
-        · have hstep : execRightRotOp (.node l u r) (tocShiftLeft (d' + 1) op) =
-              .node (execRightRotOp l (tocShiftLeft d' op)) u r := by
+        · have hstep : execRightRotOp (.node u l r) (tocShiftLeft (d' + 1) op) =
+              .node u (execRightRotOp l (tocShiftLeft d' op)) r := by
             rcases op with pos | ⟨pos, gaps⟩ <;> rfl
           rw [hstep, ih l]
           rfl
 
-    have h_exec_shiftLeft_seq : ∀ (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (d : ℕ) (ops : List RightRotOp),
+    have h_exec_shiftLeft_seq : ∀ (t : _root_.BinaryTree Unit) (d : ℕ) (ops : List RightRotOp),
         execRightRotSeq t (ops.map (tocShiftLeft d)) =
           applyAtLeftDepth (fun s => execRightRotSeq s ops) t d := by
       intro t d ops
@@ -34402,7 +34404,7 @@ by
         simp only [tocCascadeSpan]
         omega
 
-    have h_cascade_valid : ∀ (Δ' : ℕ) (gaps : List ℕ) (s : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+    have h_cascade_valid : ∀ (Δ' : ℕ) (gaps : List ℕ) (s : _root_.BinaryTree Unit),
         (∀ g ∈ gaps, g ≤ Δ') →
         tocCascadeSpan gaps ≤ leftSpineLen s →
         validGappedCascadeAtRoot Δ' s gaps := by
@@ -34415,9 +34417,9 @@ by
         intro s hg_le hspan
         have hge2 := h_span_ge2 rest
         simp only [tocCascadeSpan] at hspan
-        rcases s with _ | ⟨l, u2, c⟩
+        rcases s with _ | ⟨u2, l, c⟩
         · simp [leftSpineLen] at hspan
-        · rcases l with _ | ⟨a, u1, b⟩
+        · rcases l with _ | ⟨u1, a, b⟩
           · simp [leftSpineLen] at hspan; omega
           · simp only [leftSpineLen] at hspan
             refine ⟨hg_le g (by simp), ih (subtreeAtLeftDepth a g) ?_ ?_⟩
@@ -34426,7 +34428,7 @@ by
             · rw [h_spine_sub]
               omega
 
-    have h_cascade_eq : ∀ (Δ' : ℕ) (gaps : List ℕ) (s : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+    have h_cascade_eq : ∀ (Δ' : ℕ) (gaps : List ℕ) (s : _root_.BinaryTree Unit),
         validGappedCascadeAtRoot Δ' s gaps →
         execGappedCascadeAtRoot s gaps = execRightRotSeq s (tocCascadeAsSingles gaps) := by
       intro Δ' gaps
@@ -34436,12 +34438,12 @@ by
         cases s <;> rfl
       | cons g rest ih =>
         intro s hval
-        rcases s with _ | ⟨l, u2, c⟩
+        rcases s with _ | ⟨u2, l, c⟩
         · exact False.elim hval
-        · rcases l with _ | ⟨a, u1, b⟩
+        · rcases l with _ | ⟨u1, a, b⟩
           · exact False.elim hval
           · obtain ⟨_, hval_rest⟩ := hval
-            have h_app_eq : ∀ (g0 : ℕ) (a0 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+            have h_app_eq : ∀ (g0 : ℕ) (a0 : _root_.BinaryTree Unit),
                 validGappedCascadeAtRoot Δ' (subtreeAtLeftDepth a0 g0) rest →
                 applyAtLeftDepth (fun sub => execGappedCascadeAtRoot sub rest) a0 g0 =
                   applyAtLeftDepth (fun sub => execRightRotSeq sub (tocCascadeAsSingles rest))
@@ -34453,22 +34455,22 @@ by
                 cases a0 <;> exact ih _ hv0
               | succ g' ihg =>
                 intro a0 hv0
-                rcases a0 with _ | ⟨al, au, ar⟩
+                rcases a0 with _ | ⟨au, al, ar⟩
                 · rfl
-                · exact congrArg (fun sub => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node sub au ar) (ihg al hv0)
+                · exact congrArg (fun sub => _root_.BinaryTree.node au sub ar) (ihg al hv0)
             simp only [execGappedCascadeAtRoot, tocCascadeAsSingles]
-            have h_seq_split_exec : ∀ (t0 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit) (xs ys : List RightRotOp),
+            have h_seq_split_exec : ∀ (t0 : _root_.BinaryTree Unit) (xs ys : List RightRotOp),
                 execRightRotSeq t0 (xs ++ ys) = execRightRotSeq (execRightRotSeq t0 xs) ys := by
               intro t0 xs ys
               induction xs generalizing t0 with
               | nil => rfl
               | cons x xs' ihx => exact ihx (execRightRotOp t0 x)
             rw [h_seq_split_exec, h_exec_shiftLeft_seq]
-            change .node (applyAtLeftDepth (fun s => execGappedCascadeAtRoot s rest) a g) u1
-                (.node b u2 c) =
+            change .node u1 (applyAtLeftDepth (fun s => execGappedCascadeAtRoot s rest) a g)
+                (.node u2 b c) =
               execRightRotSeq
-                (.node (.node (applyAtLeftDepth
-                  (fun s => execRightRotSeq s (tocCascadeAsSingles rest)) a g) u1 b) u2 c)
+                (.node u2 (.node u1 (applyAtLeftDepth
+                  (fun s => execRightRotSeq s (tocCascadeAsSingles rest)) a g) b) c)
                 [.single []]
             rw [h_app_eq g a hval_rest]
             rfl
@@ -34601,7 +34603,7 @@ by
       | nil => rfl
       | cons _ _ ih => exact ih
 
-    have h_app_cascade_eq : ∀ (Δ' : ℕ) (gaps : List ℕ) (d0 : ℕ) (t0 : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+    have h_app_cascade_eq : ∀ (Δ' : ℕ) (gaps : List ℕ) (d0 : ℕ) (t0 : _root_.BinaryTree Unit),
         validGappedCascadeAtRoot Δ' (subtreeAtLeftDepth t0 d0) gaps →
         applyAtLeftDepth (fun s => execGappedCascadeAtRoot s gaps) t0 d0 =
           applyAtLeftDepth (fun s => execRightRotSeq s (tocCascadeAsSingles gaps)) t0 d0 := by
@@ -34612,13 +34614,13 @@ by
         cases t0 <;> exact h_cascade_eq Δ' gaps _ hv0
       | succ d' ihd =>
         intro t0 hv0
-        rcases t0 with _ | ⟨tl, tu, tr⟩
+        rcases t0 with _ | ⟨tu, tl, tr⟩
         · rfl
-        · exact congrArg (fun sub => _root_.SplayDeque.Legacy.SplayTree.BinaryTree.node sub tu tr) (ihd tl hv0)
+        · exact congrArg (fun sub => _root_.BinaryTree.node tu sub tr) (ihd tl hv0)
 
     have h_compress_piece : ∀ (Δ' k h_0 n : ℕ),
         1 ≤ k →
-        ∀ (O : List ℕ) (t : _root_.SplayDeque.Legacy.SplayTree.BinaryTree Unit),
+        ∀ (O : List ℕ) (t : _root_.BinaryTree Unit),
           O.length ≤ n →
           List.IsChain (fun u w => u + 2 ≤ w ∧ w - u - 2 ≤ Δ') O →
           (∀ idx ∈ O, idx + 2 ≤ h_0) →
@@ -34955,19 +34957,19 @@ by
                   · intro P hP; exact hintra_L P (List.mem_cons_of_mem P1 hP)
           exact h_inter_map Ps hPs_ne hPs_intra hPs_inter
 
-      have h_run_pieces : ∀ (L : List (List ℕ)) (G : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (m : ℕ),
+      have h_run_pieces : ∀ (L : List (List ℕ)) (G : _root_.BinaryTree ℕ) (m : ℕ),
           (∀ O ∈ L, O ≠ [] ∧
             (∀ z ∈ O, z ∈ a :: rest_F) ∧
             List.IsChain (fun u w => u + 2 ≤ w ∧ w - u - 2 ≤ 2 * Δ) O) →
           List.IsChain (fun o1 o2 => o1.getLastD 0 + 2 ≤ o2.headD 0) L →
-          _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G →
+          _root_.BinaryTree.IsBST G →
           inorderNat G = inorderNat T_init →
           (∀ c ∈ inorderNat G, subtreeMaxNat G c ≤ subtreeMaxNat T_end c) →
           tocAgreeAboveLeftDepth m T_init G →
           (∀ O rest_L, L = O :: rest_L →
             (leftSpineBottomUpNat T_init).length - O.headD 0 ≤ m) →
-          ∃ (G_out : _root_.SplayDeque.Legacy.SplayTree.BinaryTree ℕ) (seq_out : List RightRotOp),
-            _root_.SplayDeque.Legacy.SplayTree.BinaryTree.IsBST G_out ∧
+          ∃ (G_out : _root_.BinaryTree ℕ) (seq_out : List RightRotOp),
+            _root_.BinaryTree.IsBST G_out ∧
             inorderNat G_out = inorderNat T_init ∧
             (∀ c ∈ inorderNat G_out, subtreeMaxNat G_out c ≤ subtreeMaxNat T_end c) ∧
             ValidRightRotSeq (2 * Δ) (2 * i) (eraseNatKeys G) seq_out ∧
@@ -35143,7 +35145,7 @@ by
         ∃ seq_p : List RightRotOp,
           ValidRightRotSeq (2 * Δ_ℓ) (2 * i_ℓ) (eraseNatKeys (pkg.G_init p)) seq_p ∧
           execRightRotSeq (eraseNatKeys (pkg.G_init p)) seq_p =
-            .node .empty () (eraseNatKeys (pkg.G_init (p + 1))) ∧
+            .node () .nil (eraseNatKeys (pkg.G_init (p + 1))) ∧
           countGappedCascades seq_p = c_fn p := by
       intro p hp1
       have hp : p < N_X := by omega
@@ -35616,4 +35618,4 @@ theorem deque_ordinal_omega_ackermann_bound :
   ⟨5757, by positivity, deque_ordinal_omega_explicit_bound⟩
 
 
-end SplayDeque.Legacy
+end SplayDeque.Direct

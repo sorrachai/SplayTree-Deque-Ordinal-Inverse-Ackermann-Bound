@@ -1,6 +1,6 @@
 name = "splay-deque-challenge"
 version = "0.1.0"
-defaultTargets = ["Challenge"]
+defaultTargets = ["Challenge", "Solution"]
 
 [[require]]
 name = "AlgoLib"

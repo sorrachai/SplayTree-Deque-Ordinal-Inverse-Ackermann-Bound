@@ -1,12 +1,13 @@
 module
 
-public import Solution
+public import Challenge.Definitions
 
 /-!
 # Ordinal-`ω` inverse-Ackermann deque challenge
 
-The definitions are in `Challenge.Definitions`. `Solution` proves the bound for
-those AlgoLib-based definitions, and this file retains the original target statement.
+This is the independent reference statement for `lake comparator`. The `sorry`
+marks the challenge's proof hole. The completed proof is in `Solution.lean`, which
+shares `Challenge.Definitions` but does not import this reference module.
 -/
 
 public section
@@ -24,5 +25,5 @@ theorem deque_ordinal_omega_ackermann_bound :
         init.tree.num_nodes = n →
         ValidDequeSeq init.tree ops →
         dequeSequenceCost init.tree ops ≤
-          C * ((m : ℝ) + (n : ℝ)) * (ordinalOmegaInvAckermann (m + n) : ℝ) :=
-  Solution.deque_ordinal_omega_ackermann_bound
+          C * ((m : ℝ) + (n : ℝ)) * (ordinalOmegaInvAckermann (m + n) : ℝ) := by
+  sorry
