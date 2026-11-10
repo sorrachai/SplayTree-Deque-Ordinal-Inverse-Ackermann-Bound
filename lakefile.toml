@@ -1,0 +1,12 @@
+name = "splay-deque-challenge"
+version = "0.1.0"
+defaultTargets = ["Challenge"]
+
+[[require]]
+name = "AlgoLib"
+git = "https://github.com/cslib-community/AlgoLib"
+rev = "v4.35.0"
+
+[[lean_lib]]
+name = "Challenge"
+requiresModuleSystem = true
