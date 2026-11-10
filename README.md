@@ -7,7 +7,7 @@ using the existing binary-tree and splay definitions from
 ## Build
 
 Install [Lean and its editor support](https://lean-lang.org/install/), then clone
-this private repository using a GitHub account with access:
+this repository using a GitHub account with access:
 
 ```sh
 git clone https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound.git
