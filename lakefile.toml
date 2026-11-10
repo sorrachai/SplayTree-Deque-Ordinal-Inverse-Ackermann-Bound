@@ -10,3 +10,7 @@ rev = "v4.35.0"
 [[lean_lib]]
 name = "Challenge"
 requiresModuleSystem = true
+
+[[lean_lib]]
+name = "Solution"
+requiresModuleSystem = true

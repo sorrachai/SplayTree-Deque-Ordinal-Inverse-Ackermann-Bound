@@ -22,16 +22,37 @@ The project uses Lean **4.35.0** and AlgoLib's **v4.35.0** release. The committe
 builds using that manifest, run `lake exe cache get` followed by `lake build`.
 Open the repository folder in VS Code to work on `Challenge.lean`.
 
-## Challenge status
+## Solution
 
-`deque_ordinal_omega_ackermann_bound` is the supplied target theorem. Its proof
-still contains the original `sorry`. A successful build checks that the file
-elaborates; it does not prove the bound or the asymptotic comparisons described
-in the challenge.
+`Challenge.lean` retains the supplied target theorem statement and obtains its
+proof from `Solution.lean`. The solution gives the explicit constant **5757**
+using the AlgoLib-based definitions.
+
+The supplied long proof is preserved in `Solution/LegacyProof.lean`, under the
+`SplayDeque.Legacy` namespace. Its original tree model is kept in
+`Solution/LegacyDefinitions.lean`. `Solution/Bridge.lean` proves that converting
+AlgoLib trees to that model preserves the BST invariant, deque operations,
+sequence validity, rotation costs, and the inverse-Ackermann function. The public
+theorem is therefore about AlgoLib's types and operations.
+
+The legacy proof explicitly qualifies its `BinaryTree` references to avoid a
+name collision with Mathlib. It also enables Lean's backward compatibility
+options for elaboration and simplification; the proof terms are still checked
+by Lean's kernel. Its `dsimp` steps tolerate already-normalized goals, and a few
+rewrites now explicitly unfold definitions or normalize successor expressions.
+
+After building, check the theorem's full axiom dependency closure with:
+
+```sh
+lake env lean CheckSolution.lean
+```
+
+This check rejects `sorryAx` and any axiom other than Lean's standard
+`propext`, `Classical.choice`, and `Quot.sound`.
 
 ## Reused definitions
 
-`Challenge.lean` imports `AlgoLib.DataStructures.SplayTree.Complexity`, which
+`Challenge/Definitions.lean` imports `AlgoLib.DataStructures.SplayTree.Complexity`, which
 provides the existing binary tree, BST invariant, bottom-up splay operation and
 rotation cost. It keeps the challenge's deque operations, operation sequences,
 Ackermann hierarchy and theorem statement.
