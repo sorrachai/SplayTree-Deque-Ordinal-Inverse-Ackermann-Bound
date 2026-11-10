@@ -1,4 +1,4 @@
-# Splay deque challenge
+# Splay-tree deque ordinal inverse-Ackermann bound
 
 A Lean formulation of the ordinal-ω inverse-Ackermann deque-bound challenge,
 using the existing binary-tree and splay definitions from
@@ -6,10 +6,12 @@ using the existing binary-tree and splay definitions from
 
 ## Build
 
-Install [Lean and its editor support](https://lean-lang.org/install/), then run
-these commands from the repository root:
+Install [Lean and its editor support](https://lean-lang.org/install/), then clone
+this private repository using a GitHub account with access:
 
 ```sh
+git clone https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound.git
+cd SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound
 lake update
 lake exe cache get
 lake build
@@ -37,5 +39,3 @@ Ackermann hierarchy and theorem statement.
 The adaptation uses AlgoLib's `.nil` empty constructor and `.node key left right`
 argument order. Deque insertion preconditions use `∀ k ∈ t, ...` over AlgoLib's
 tree membership relation. The BST invariant comes from AlgoLib's `BST` type.
-
-No scheduled updater or GitHub Actions workflow is included.
