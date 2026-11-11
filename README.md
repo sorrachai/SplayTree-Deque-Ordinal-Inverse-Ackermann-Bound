@@ -25,22 +25,37 @@ Open the repository folder in VS Code to work on `Solution.lean`.
 ## Project layout
 
 ```text
-Challenge.lean                 Independent reference statement (intentional sorry)
+Challenge.lean                 Reference blueprint (30 theorems, intentional sorrys)
 Challenge/
   Definitions.lean             Shared definitions using AlgoLib
-Solution.lean                  Completed theorem and explicit bound
+Solution.lean                  Completed modular wiring of all 30 theorems
 Solution/
+  Ackermann.lean               Ackermann hierarchy, α_ω, and Löb–Wainer comparison
+  BSTProjections.lean          Subtree/key-set BST projections and cascade simulation
+  FoldedLaws.lean              Folded POP process invariants and rotation laws
+  TamariPreorder.lean          Right-rotation reachability and preorder monotonicity
+  Contraction.lean             Scale-tree construction and ordinal-ω contraction
+  ScaleWeights.lean            Scale-tree path weights and dyadic collapse
+  Cascades.lean                Gapped cascades and cascade potentials
+  KeyAssignmentSpine.lean      Nested extreme-key assignment and spine accounting
+  EmptyingMod1.lean            Emptying simulation and Module 1 folded-POP reduction
+  BucketLeafB1.lean            Leaf, intra-block B1, and intra-superblock B3 bounds
+  BucketB3PostEscape.lean      Post-rotation, escape, and Cartesian quotient lemmas
+  BucketB3GapsExit.lean        Quotient gap decomposition and B3 exit bound
+  BucketB2Pass.lean            Child-boundary B2 bound and Module 3 pass decomposition
+  TopAssembly.lean             Top-level deletion-sensitive and (m + n) α_ω assembly
   TreeFacts.lean               Structural induction facts for AlgoLib trees/BSTs
-  DirectProof.lean             Full proof directly over the shared definitions
-CheckSolution.lean             Axiom audit of the completed theorem
-comparator.json                Comparator modules, theorem, and allowed axioms
+  DirectProof.lean             Auxiliary BST and cascade lemmas over AlgoLib trees
+CheckSolution.lean             Axiom and import audit of all 30 completed theorems
+comparator.json                Comparator modules, theorems, and allowed axioms
 ```
 
-`Challenge` and `Solution` are separate environments with the same theorem name,
-`deque_ordinal_omega_ackermann_bound`. They both use `Challenge.Definitions`;
-the solution never imports the reference theorem. Import **`Solution`** when
-using the proved result. Do not import both root modules in one Lean file,
-because they intentionally declare the same name.
+`Challenge` and `Solution` are separate environments declaring the same 30 root
+theorem names (`deque_ordinal_omega_ackermann_bound` plus all 29 numbered
+propositions, lemmas, and theorems of the paper). Both use
+`Challenge.Definitions`; the solution never imports `Challenge`. Import
+**`Solution`** when using the proved results. Do not import both root modules in
+one Lean file, because they intentionally declare the same names.
 
 ## Comparator check
 
@@ -73,16 +88,14 @@ For additional checking with all external kernels bundled with Lean, add
 
 ## Solution
 
-`Challenge.lean` retains the supplied target theorem statement as an independent
-reference. `Solution.lean` proves that same statement and gives the explicit
-constant **5757** using the AlgoLib-based definitions.
-
-`Solution/DirectProof.lean` carries out the combinatorial argument directly on
-AlgoLib's `BinaryTree`, `BST`, splay operation and rotation cost, using the shared
-deque and inverse-Ackermann definitions from `Challenge/Definitions.lean`.
+`Challenge.lean` states the target `deque_ordinal_omega_ackermann_bound` theorem
+together with all 29 numbered propositions, lemmas, and theorems of the paper as
+an independent reference blueprint. `Solution.lean` wires the modular proofs in
+`Solution/*.lean` through the paper's dependency DAG to prove all 30 statements
+directly over AlgoLib's `BinaryTree`, `BST`, bottom-up splay operation, and
+rotation cost, using the shared definitions from `Challenge/Definitions.lean`.
 It introduces no replacement tree datatype and does not convert the input tree
-to a legacy model. The proof retains the reductions to core operation sequences,
-the cascade estimates, and the ordinal-ω contraction argument.
+to a legacy model.
 
 `Solution/TreeFacts.lean` supplies structural induction lemmas for AlgoLib's
 bounded BST invariant and an auxiliary `ForallTree` predicate equivalent to
