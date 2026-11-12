@@ -1,6 +1,6 @@
 name = "splay-deque-challenge"
 version = "0.1.0"
-defaultTargets = ["Challenge", "Solution"]
+defaultTargets = ["ChallengeMain", "ChallengeHelpers", "SolutionMain", "SolutionHelpers"]
 
 [[require]]
 name = "AlgoLib"
@@ -9,8 +9,30 @@ rev = "v4.35.0"
 
 [[lean_lib]]
 name = "Challenge"
+globs = ["Challenge.+"]
+requiresModuleSystem = true
+
+[[lean_lib]]
+name = "ChallengeMain"
+globs = ["ChallengeMain"]
+requiresModuleSystem = true
+
+[[lean_lib]]
+name = "ChallengeHelpers"
+globs = ["ChallengeHelpers"]
 requiresModuleSystem = true
 
 [[lean_lib]]
 name = "Solution"
+globs = ["Solution.+"]
+requiresModuleSystem = true
+
+[[lean_lib]]
+name = "SolutionMain"
+globs = ["SolutionMain"]
+requiresModuleSystem = true
+
+[[lean_lib]]
+name = "SolutionHelpers"
+globs = ["SolutionHelpers"]
 requiresModuleSystem = true

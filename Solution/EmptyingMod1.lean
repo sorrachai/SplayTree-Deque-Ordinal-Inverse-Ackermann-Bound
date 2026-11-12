@@ -4,15 +4,15 @@ public import Challenge.Definitions
 public import Solution.TreeFacts
 
 /-!
-# Section 3.3 & Theorem 2.2: Emptying One-Sided Simulation, Spine-Folding Bijection, and Module 1 Reduction
+# Section 2.4 & Theorem 2.2: Emptying One-Sided Simulation, Spine-Folding Bijection, and Section 2 Reduction
 
 This module proves:
-- `lem_3_5_emptying_sim` (`main_v1.tex` Lemma 3.5 + `eq:cpop-folded`):
+- `lem_2_7_emptying_sim` (`main_v2.tex` Lemma 2.7 + `eq:cpop-folded`):
   (1) reverse-spine initialization of any BST on `{1, ..., P}`,
   (2) emptying one-sided `POP` simulation of the left interval projection `U_t`, and
   (3) spine-folding bijection `spineFoldTree` / `spineUnfoldTree` and dynamic reduction from
       `OneSidedPopExec P` to `FoldedPopProcess P` with `C_POP(H) ≤ P + J(H̃)` and `K_L ≤ 2P - 2`.
-- `thm_2_2_mod1_reduction` (`main_v1.tex` Theorem 2.2):
+- `thm_2_2_mod1_reduction` (`main_v2.tex` Theorem 2.2):
   reduction from any valid two-sided deque execution `(init, ops)` to folded `POP` processes
   `HL : FoldedPopProcess (popCount ops)` and `HR : FoldedPopProcess (ejectCount ops)` via
   order-dual tree mirroring (`OrderDual α`, `flipTree`, `x ↦ -x` on `ℝ`).

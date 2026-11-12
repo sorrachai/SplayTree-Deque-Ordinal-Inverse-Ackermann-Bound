@@ -5,12 +5,12 @@ public import Solution.TreeFacts
 public import Mathlib
 
 /-!
-# Section 5.2–5.4: Leaf Subprocess Projection, `LCA_𝒯` Routing of `ℬ_1`, and `ℬ_{3,intra}`
+# Section 4.4–4.5: Leaf Subprocess Projection, `LCA_𝒯` Routing of `ℬ_1`, and `ℬ_{3,intra}`
 
-Formalization of `main_v1.tex`:
-- **Lemma 5.2** (`lem_5_2_bucket_leaf`): Intra-leaf rotations and leaf subprocess projection.
-- **Lemma 5.3** (`lem_5_3_bucket_b1`): `LCA_𝒯` routing of `ℬ_1` and cascade-path sink counting.
-- **Lemma 5.4** (`lem_5_4_bucket_b3_intra`): Height-independent potential bound on `ℬ_{3,intra}`.
+Formalization of `main_v2.tex`:
+- **Lemma 4.4** (`lem_4_4_bucket_leaf`): Intra-leaf rotations and leaf subprocess projection.
+- **Lemma 4.5** (`lem_4_5_bucket_b1`): `LCA_𝒯` routing of `ℬ_1` and cascade-path sink counting.
+- **Lemma 4.6** (`lem_4_6_bucket_b3_intra`): Height-independent potential bound on `ℬ_{3,intra}`.
 -/
 
 @[expose] public section

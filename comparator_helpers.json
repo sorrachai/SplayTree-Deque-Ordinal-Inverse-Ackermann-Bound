@@ -1,0 +1,41 @@
+{
+  "challenge_module": "ChallengeHelpers",
+  "solution_module": "SolutionHelpers",
+  "theorem_names": [
+    "prop_1_3_omega_properties",
+    "thm_2_2_mod1_reduction",
+    "lem_2_3_bst_projection",
+    "lem_2_4_cascade_equiv",
+    "lem_2_5_nested_keys",
+    "lem_2_6_spine_accounting",
+    "lem_2_7_emptying_sim",
+    "lem_2_8_folded_laws",
+    "lem_2_8_folded_laws._proof_2",
+    "thm_3_1_mod2_cascade",
+    "prop_3_2_right_reach",
+    "lem_3_3_preorder_global",
+    "lem_3_4_cascade_potentials",
+    "lem_3_4_cascade_potentials._proof_2",
+    "thm_4_2_mod3_pass",
+    "lem_4_3_tree_weights",
+    "lem_4_4_bucket_leaf",
+    "lem_4_5_bucket_b1",
+    "lem_4_6_bucket_b3_intra",
+    "lem_4_7_b3_post",
+    "lem_4_8_b3_escape",
+    "lem_4_9_b3_quotient",
+    "lem_4_10_b3_gaps",
+    "lem_4_11_bucket_b3_exit",
+    "lem_4_12_bucket_b2",
+    "thm_5_1_mod4_contraction",
+    "lem_5_2_build_scale_tree",
+    "prop_6_1_dyadic_collapse",
+    "lem_A_1_ack_basic",
+    "prop_A_2_lob_wainer"
+  ],
+  "permitted_axioms": [
+    "propext",
+    "Quot.sound",
+    "Classical.choice"
+  ]
+}

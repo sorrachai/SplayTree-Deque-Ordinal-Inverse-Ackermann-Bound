@@ -7,12 +7,12 @@ public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 public import Mathlib.Data.List.Pairwise
 
 /-!
-# Section 5.5 (Steps 1–3): Post-Depletion Exits, Escape Reduction, and Quotient BST
+# Section 4.6 (Steps 1–3): Post-Depletion Exits, Escape Reduction, and Quotient BST
 
-Formalization of `main_v1.tex`:
-- **Lemma 5.5** (`lem_5_5_b3_post`): Post-depletion exits `|ℬ_{3,exit,post}| ≤ K_L < 2 P`.
-- **Lemma 5.6** (`lem_5_6_b3_escape`): Unique scale per promoted key and secondary-exit reduction.
-- **Lemma 5.7** (`lem_5_7_b3_quotient`): Insertion-time Cartesian extension and block-root summary BST `Ĝ_X`.
+Formalization of `main_v2.tex`:
+- **Lemma 4.7** (`lem_4_7_b3_post`): Post-depletion exits `|ℬ_{3,exit,post}| ≤ K_L < 2 P`.
+- **Lemma 4.8** (`lem_4_8_b3_escape`): Unique scale per promoted key and secondary-exit reduction.
+- **Lemma 4.9** (`lem_4_9_b3_quotient`): Insertion-time Cartesian extension and block-root summary BST `Ĝ_X`.
 -/
 
 @[expose] public section

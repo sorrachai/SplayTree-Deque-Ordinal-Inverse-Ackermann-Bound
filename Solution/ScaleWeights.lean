@@ -8,11 +8,11 @@ public import Mathlib.Tactic.Ring
 public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
-# Scale-Tree Weight Convergence (Lemma 5.1) and Dyadic Collapse (Proposition 7.1)
+# Scale-Tree Weight Convergence (Lemma 4.3) and Dyadic Collapse (Proposition 6.1)
 
 This module proves:
-1. `lem_5_1_tree_weights` (`main_v1.tex` Lemma 5.1)
-2. `prop_7_1_dyadic_collapse` (`main_v1.tex` Proposition 7.1)
+1. `lem_4_3_tree_weights` (`main_v2.tex` Lemma 4.3)
+2. `prop_6_1_dyadic_collapse` (`main_v2.tex` Proposition 6.1)
 unconditionally (`0` upstream hypotheses) from `Challenge.Definitions`.
 -/
 

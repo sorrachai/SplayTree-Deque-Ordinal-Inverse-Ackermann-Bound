@@ -1,13 +1,29 @@
 # Splay-tree deque ordinal inverse-Ackermann bound
 
-A Lean formulation of the ordinal-ω inverse-Ackermann deque-bound challenge,
-using the existing binary-tree and splay definitions from
+A Lean 4 formalization of *Breaking All Iterated Inverse-Ackermann Bounds for the
+Deque Conjecture on Splay Trees*, built directly on the binary-tree, BST, and
+bottom-up splay definitions from
 [AlgoLib](https://github.com/cslib-community/AlgoLib).
+
+The specification is split into two independent challenge blueprints:
+
+1. **`ChallengeMain.lean`** (importing only minimal `Challenge/MainDefinitions.lean`):
+   states the main deletion-sensitive bound (`thm_1_4_main`, Theorem 1.4) over any
+   `LinearOrder α` and the standalone `BST ℤ` benchmark theorem
+   (`deque_ordinal_omega_ackermann_bound`), with zero helper proof machinery.
+2. **`ChallengeHelpers.lean`** (importing `Challenge/HelperDefinitions.lean`):
+   states all **28** intermediate Propositions, Lemmas, and reduction Theorems across
+   Sections 1–6 and Appendix A (`prop_1_3_omega_properties`, `thm_2_2_mod1_reduction`,
+   `lem_2_3_bst_projection`–`lem_2_8_folded_laws`, `thm_3_1_mod2_cascade`,
+   `prop_3_2_right_reach`–`lem_3_4_cascade_potentials`, `thm_4_2_mod3_pass`,
+   `lem_4_3_tree_weights`–`lem_4_12_bucket_b2`, `thm_5_1_mod4_contraction`,
+   `lem_5_2_build_scale_tree`, `prop_6_1_dyadic_collapse`, `lem_A_1_ack_basic`,
+   `prop_A_2_lob_wainer`).
 
 ## Build
 
 Install [Lean and its editor support](https://lean-lang.org/install/), then clone
-this repository using a GitHub account with access:
+this repository:
 
 ```sh
 git clone https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound.git
@@ -17,108 +33,59 @@ lake exe cache get
 lake build
 ```
 
-The project uses Lean **4.35.0** and AlgoLib's **v4.35.0** release. The committed
-`lake-manifest.json` records the resolved dependency commits. For subsequent
-builds using that manifest, run `lake exe cache get` followed by `lake build`.
-Open the repository folder in VS Code to work on `Solution.lean`.
+The project uses Lean **4.35.0** and AlgoLib **v4.35.0**.
 
 ## Project layout
 
 ```text
-Challenge.lean                 Reference blueprint (30 theorems, intentional sorrys)
+ChallengeMain.lean             Minimal main challenge (Theorem 1.4 + benchmark bound)
+ChallengeHelpers.lean          Helper blueprint (all 28 propositions, lemmas, theorems)
 Challenge/
-  Definitions.lean             Shared definitions using AlgoLib
-Solution.lean                  Completed modular wiring of all 30 theorems
+  MainDefinitions.lean         Minimal splay-deque & α_ω definitions using AlgoLib
+  HelperDefinitions.lean       Intermediate helper structures & predicates (Secs 1–6, App A)
+  Definitions.lean             4-line re-export of MainDefinitions + HelperDefinitions
+SolutionMain.lean              Proves both main theorems in ChallengeMain
+SolutionHelpers.lean           Proves all 28 helper theorems in ChallengeHelpers
 Solution/
-  Ackermann.lean               Ackermann hierarchy, α_ω, and Löb–Wainer comparison
-  BSTProjections.lean          Subtree/key-set BST projections and cascade simulation
-  FoldedLaws.lean              Folded POP process invariants and rotation laws
-  TamariPreorder.lean          Right-rotation reachability and preorder monotonicity
-  Contraction.lean             Scale-tree construction and ordinal-ω contraction
-  ScaleWeights.lean            Scale-tree path weights and dyadic collapse
-  Cascades.lean                Gapped cascades and cascade potentials
-  KeyAssignmentSpine.lean      Nested extreme-key assignment and spine accounting
-  EmptyingMod1.lean            Emptying simulation and Module 1 folded-POP reduction
-  BucketLeafB1.lean            Leaf, intra-block B1, and intra-superblock B3 bounds
-  BucketB3PostEscape.lean      Post-rotation, escape, and Cartesian quotient lemmas
-  BucketB3GapsExit.lean        Quotient gap decomposition and B3 exit bound
-  BucketB2Pass.lean            Child-boundary B2 bound and Module 3 pass decomposition
-  TopAssembly.lean             Top-level deletion-sensitive and (m + n) α_ω assembly
+  Ackermann.lean               Ackermann hierarchy, α_ω, and Löb–Wainer comparison (Sec 1, App A)
+  BSTProjections.lean          Subtree/key-set BST projections and cascade simulation (Sec 2.2)
+  KeyAssignmentSpine.lean      Offline three-way key partition and spine accounting (Sec 2.3)
+  EmptyingMod1.lean            Emptying simulation, spine folding, and Theorem 2.2 (Sec 2.1, 2.4)
+  FoldedLaws.lean              Folded POP process invariants and rotation laws (Sec 2.4)
+  TamariPreorder.lean          Right-reach characterization and preorder-D summaries (Sec 3.2)
+  Cascades.lean                Bounded-gap right cascades and left-depth potentials (Sec 3.1, 3.3)
+  ScaleWeights.lean            Height-r scale-tree weights and dyadic collapse (Sec 4.2, Sec 6)
+  BucketLeafB1.lean            Intra-leaf, coarse-trigger B1, and intra-block B3 bounds (Sec 4.3–4.5)
+  BucketB3PostEscape.lean      Post-depletion exits, lead exits, and phase summaries (Sec 4.6)
+  BucketB3GapsExit.lean        Spine-run gap witnesses and B3 exit bound (Sec 4.6)
+  BucketB2Pass.lean            Fine-trigger B2 routing and scale-tree pass Theorem 4.2 (Sec 4.7)
+  Contraction.lean             BuildScaleTree and degree-6 contraction Theorem 5.1 (Sec 5.1–5.3)
+  TopAssembly.lean             Three-pass proof of Theorem 1.4 and (m + n) α_ω bound (Sec 5.4)
   TreeFacts.lean               Structural induction facts for AlgoLib trees/BSTs
   DirectProof.lean             Auxiliary BST and cascade lemmas over AlgoLib trees
-CheckSolution.lean             Axiom and import audit of all 30 completed theorems
-comparator.json                Comparator modules, theorems, and allowed axioms
+CheckSolution.lean             Axiom and import audit of all 30 proved theorems
+comparator.json                Main comparator config (ChallengeMain vs SolutionMain)
+comparator_helpers.json        Helper comparator config (ChallengeHelpers vs SolutionHelpers)
 ```
 
-`Challenge` and `Solution` are separate environments declaring the same 30 root
-theorem names (`deque_ordinal_omega_ackermann_bound` plus all 29 numbered
-propositions, lemmas, and theorems of the paper). Both use
-`Challenge.Definitions`; the solution never imports `Challenge`. Import
-**`Solution`** when using the proved results. Do not import both root modules in
-one Lean file, because they intentionally declare the same names.
+Neither `SolutionMain` nor `SolutionHelpers` imports `ChallengeMain` or `ChallengeHelpers`.
 
-## Comparator check
+## Verification with Comparator and `CheckSolution`
 
-Run from the repository root. On this Mac, for this trusted local project:
+Run from the repository root (with Linux `bubblewrap` installed; pass
+`--inadvisably-no-sandbox` on macOS for trusted local builds):
 
 ```sh
-lake comparator --inadvisably-no-sandbox
-```
-
-The flag disables Comparator's Linux-only `bubblewrap` sandbox. Use it only for
-code you trust. On Linux with `bubblewrap` installed and configured, use the
-sandboxed command:
-
-```sh
+# Verify the minimal main challenge (ChallengeMain vs SolutionMain):
 lake comparator
+
+# Verify all 28 helper theorems (ChallengeHelpers vs SolutionHelpers):
+lake comparator --config=comparator_helpers.json
+
+# Verify standard axioms and zero blueprint imports across all 30 theorems:
+lake env lean -DwarningAsError=true CheckSolution.lean
 ```
 
-Both commands read `comparator.json` and build the required modules. Comparator
-compares the theorem statements and their referenced definitions, rejects
-solution axioms outside `propext`, `Quot.sound`, and `Classical.choice`, and
-rechecks the exported proof with Lean's kernel. Exit code **0** means accepted.
-See Lean's [proof validation documentation](https://lean-lang.org/doc/reference/latest/ValidatingProofs/).
-
-The `sorry` warning from `Challenge.lean` is intentional: it is the reference
-proof hole, not part of the solution. `sorryAx` is **not** permitted in the
-solution. A successful `lake build` alone is not a comparator verdict.
-
-For additional checking with all external kernels bundled with Lean, add
-`--paranoid` to the applicable command above; this can take longer.
-
-## Solution
-
-`Challenge.lean` states the target `deque_ordinal_omega_ackermann_bound` theorem
-together with all 29 numbered propositions, lemmas, and theorems of the paper as
-an independent reference blueprint. `Solution.lean` wires the modular proofs in
-`Solution/*.lean` through the paper's dependency DAG to prove all 30 statements
-directly over AlgoLib's `BinaryTree`, `BST`, bottom-up splay operation, and
-rotation cost, using the shared definitions from `Challenge/Definitions.lean`.
-It introduces no replacement tree datatype and does not convert the input tree
-to a legacy model.
-
-`Solution/TreeFacts.lean` supplies structural induction lemmas for AlgoLib's
-bounded BST invariant and an auxiliary `ForallTree` predicate equivalent to
-quantification over tree membership. All these facts concern the existing tree
-type. The proof uses Lean's backward compatibility options for tactic
-elaboration; the resulting proof terms are checked by Lean's kernel.
-
-After building, check the theorem's full axiom dependency closure with:
-
-```sh
-lake env lean CheckSolution.lean
-```
-
-This check rejects legacy proof/conversion imports, `sorryAx`, and any axiom
-other than Lean's standard `propext`, `Classical.choice`, and `Quot.sound`.
-
-## Reused definitions
-
-`Challenge/Definitions.lean` imports `AlgoLib.DataStructures.SplayTree.Complexity`, which
-provides the existing binary tree, BST invariant, bottom-up splay operation and
-rotation cost. It defines the challenge's deque operations, operation sequences,
-and Ackermann hierarchy.
-
-The adaptation uses AlgoLib's `.nil` empty constructor and `.node key left right`
-argument order. Deque insertion preconditions use `∀ k ∈ t, ...` over AlgoLib's
-tree membership relation. The BST invariant comes from AlgoLib's `BST` type.
+Comparator checks statement and transitive definition identity, enforces standard
+axioms (`propext`, `Quot.sound`, `Classical.choice`), and replays the exported
+proofs in Lean's external kernel (`leanchecker`). Exit code **0** means accepted.
