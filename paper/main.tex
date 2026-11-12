@@ -18,6 +18,7 @@
 \newtheorem{proposition}[theorem]{Proposition}
 \theoremstyle{definition}
 \newtheorem{definition}[theorem]{Definition}
+\newtheorem*{definition*}{Definition}
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
 
@@ -797,16 +798,24 @@ Restricting $T_t$ to $V_L, V_M, V_R$ via $\LCA$-closed projection (Lemma~\ref{le
 
 For any rooted BST $T$ with distinct real keys in symmetric order (in-order), we write $V(T)$ for its vertex (key) set, $T_v$ for the subtree rooted at $v \in V(T)$, and $u(A, B)$ for the BST rooted at $u$ with left subtree $A = \mathrm{left}_T(u)$ and right subtree $B = \mathrm{right}_T(u)$. Recall that $\LS(T)$ and $\RS(T)$ denote the left and right spines of $T$ (visited from $\mathrm{root}(T)$ by following left or right child pointers, respectively, with $\LS(\emptyset) = \RS(\emptyset) = \emptyset$). Following Sundar~\cite[Section~1.2]{Sundar1992}, define the \emph{left depth} $\ld_T(v)$ of $v \in V(T)$ to be the number of left-child edges on the root-to-$v$ path in $T$ (so $\ld_T(v) = 0$ if and only if $v \in \RS(T)$). Under any right single rotation $[u, v]$ replacing $v\big(u(A, M), R\big)$ with $u\big(A, v(M, R)\big)$, $\ld(w)$ decreases by~$1$ for every $w \in \{u\} \cup V(A)$ and remains unchanged for every $w \in \{v\} \cup V(M) \cup V(R) \cup (V(T) \setminus V(T_v))$; moreover, $|\LS(T)|$ decreases by~$1$ if $v \in \LS(T)$ (removing $v$ from $\LS(T)$ while keeping $u$ and $\LS(A)$) and by~$0$ otherwise. Symmetrically, any left single rotation $[v, u]$ decreases $|\RS(T)|$ by~$1$ if $u \in \RS(T)$ and by~$0$ otherwise.
 
-To track how a subset of keys $\mathcal{S} \subseteq \mathbb{R}$ evolves inside a larger dynamic BST $T$---both for contiguous key intervals (as in~\cite{Tarjan1985} and~\cite[Section~2.1]{Sundar1992}) and for non-contiguous summary subsets in Section~\ref{sec:cascades}---we restrict $T$ to $V(T) \cap \mathcal{S}$ whenever $\mathcal{S}$ has no branching conflicts in $T$. Write $\LCA_T(x, y)$ for the lowest common ancestor of $x, y \in V(T)$ in $T$. We say $\mathcal{S} \subseteq \mathbb{R}$ is \emph{$\LCA$-closed} in $T$ if for every pair of vertices $x, y \in V(T) \cap \mathcal{S}$, their lowest common ancestor $\LCA_T(x, y)$ also belongs to $\mathcal{S}$ (for instance, every contiguous interval $I \subseteq \mathbb{R}$ is $\LCA$-closed in every BST $T$, since $x \le \LCA_T(x, y) \le y$ whenever $x \le y$). When $\mathcal{S}$ is $\LCA$-closed in $T$, any vertex $u \in V(T) \setminus \mathcal{S}$ can have elements of $\mathcal{S}$ in at most one of its two child subtrees (otherwise $a \in V(\mathrm{left}_T(u)) \cap \mathcal{S}$ and $b \in V(\mathrm{right}_T(u)) \cap \mathcal{S}$ would force $\LCA_T(a, b) = u \notin \mathcal{S}$). Contracting away every vertex outside $\mathcal{S}$ therefore defines a unique \emph{induced BST} $T|_{\mathcal{S}}$ on $V(T) \cap \mathcal{S}$ via $\emptyset|_{\mathcal{S}} := \emptyset$ and
-\[
-u(A, B)\big|_{\mathcal{S}} \;:=\;
-\begin{cases}
-u\big(A|_{\mathcal{S}},\, B|_{\mathcal{S}}\big) & \text{if } u \in \mathcal{S},\\
-A|_{\mathcal{S}} & \text{if } u \notin \mathcal{S} \text{ and } V(B) \cap \mathcal{S} = \emptyset,\\
-B|_{\mathcal{S}} & \text{if } u \notin \mathcal{S} \text{ and } V(B) \cap \mathcal{S} \ne \emptyset.
-\end{cases}
-\]
-By structural induction, $T|_{\mathcal{S}}$ is a valid BST with $V(T|_{\mathcal{S}}) = V(T) \cap \mathcal{S}$ that preserves exact ancestor-descendant and left/right-subtree relations on $V(T) \cap \mathcal{S}$.
+To follow how a subset of keys $\mathcal{S} \subseteq \mathbb{R}$ evolves inside a larger dynamic BST $T$---both for contiguous key intervals (as in~\cite{Tarjan1985} and~\cite[Section~2.1]{Sundar1992}) and for non-contiguous summary subsets in Section~\ref{sec:cascades}---we would like to delete every vertex outside $\mathcal{S}$ and reconnect the remaining vertices into a valid BST on $V(T) \cap \mathcal{S}$. Bypassing a vertex $u \notin \mathcal{S}$ is unambiguous whenever at most one of $u$'s two child subtrees contains keys from $\mathcal{S}$, which holds simultaneously at every $u \notin \mathcal{S}$ precisely when $\mathcal{S}$ is closed under lowest common ancestors.
+
+\begin{definition*}[$\LCA$-Closed Subsets and Induced BSTs]
+Let $T$ be a BST with real keys and let $\mathcal{S} \subseteq \mathbb{R}$ be any subset of keys; write $\LCA_T(x, y)$ for the lowest common ancestor of $x, y \in V(T)$ in $T$.
+\begin{enumerate}[label=(\arabic*), leftmargin=2em, itemsep=2pt]
+  \item \emph{$\LCA$-closure.} We say $\mathcal{S}$ is \emph{$\LCA$-closed} in $T$ if for every pair of vertices $x, y \in V(T) \cap \mathcal{S}$, their lowest common ancestor $\LCA_T(x, y)$ also belongs to $\mathcal{S}$. (For instance, every contiguous interval $I \subseteq \mathbb{R}$ is $\LCA$-closed in every BST $T$, since symmetric order forces $x \le \LCA_T(x, y) \le y$ whenever $x \le y$.)
+  \item \emph{Induced BST $T|_{\mathcal{S}}$.} Whenever $\mathcal{S}$ is $\LCA$-closed in $T$, any vertex $u \in V(T) \setminus \mathcal{S}$ can have elements of $\mathcal{S}$ in at most one of its two child subtrees (otherwise $a \in V(\mathrm{left}_T(u)) \cap \mathcal{S}$ and $b \in V(\mathrm{right}_T(u)) \cap \mathcal{S}$ would force $\LCA_T(a, b) = u \notin \mathcal{S}$). Contracting away every vertex outside $\mathcal{S}$ defines the \emph{induced BST} $T|_{\mathcal{S}}$ on $V(T) \cap \mathcal{S}$ recursively by $\emptyset|_{\mathcal{S}} := \emptyset$ and
+  \[
+  u(A, B)\big|_{\mathcal{S}} \;:=\;
+  \begin{cases}
+  u\big(A|_{\mathcal{S}},\, B|_{\mathcal{S}}\big) & \text{if } u \in \mathcal{S},\\
+  A|_{\mathcal{S}} & \text{if } u \notin \mathcal{S} \text{ and } V(B) \cap \mathcal{S} = \emptyset,\\
+  B|_{\mathcal{S}} & \text{if } u \notin \mathcal{S} \text{ and } V(B) \cap \mathcal{S} \ne \emptyset.
+  \end{cases}
+  \]
+\end{enumerate}
+By structural induction, $T|_{\mathcal{S}}$ is a valid BST with $V(T|_{\mathcal{S}}) = V(T) \cap \mathcal{S}$ that preserves exact ancestor--descendant and left/right-subtree relations on $V(T) \cap \mathcal{S}$.
+\end{definition*}
 
 \begin{lemma}[BST Projection Under Rotations and Extremum Splicing]
 \label{lem:projection-stub}
@@ -969,7 +978,15 @@ Let $\widetilde{H}$ be any folded $\POP$ process of size $P \ge 1$ (Definition~\
 \subsection{The Static-BST Cascade Problem and Main Bound}
 \label{subsec:overview-mod2}
 
-Before analyzing multi-scale partitions of a folded $\POP$ process in Section~\ref{sec:scale-tree}, we isolate a static-BST extremal question: if an $N$-node BST evolves \emph{only by right single rotations}, how many times can $k$ nearly consecutive pairs along a single left-child path rotate simultaneously? Formally, consider an $N$-node BST $B$ on $\{1, \dots, N\}$ undergoing only right single rotations (advancing in the \emph{right-rotation order}\footnote{Right-rotation reachability on $N$-node binary trees is the classical Tamari partial order~\cite{Tamari1962,FriedmanTamari1967,HuangTamari1972,Pallo1986,BjornerWachs1997,Knuth2011Vol4A} (cf.~\cite{SleatorTarjanThurston1988} for undirected rotation distance); we refer to it simply as the right-rotation order since no lattice operations are needed.}). For integers $k \ge 1$ and $\Delta' \ge 0$, a \emph{$\Delta'$-gapped right $k$-cascade} on $B$ is a batch of $k$ simultaneous (vertex-disjoint) right single rotations $[x_1, y_1], \dots, [x_k, y_k]$ ($x_1 < y_1 < \dots < x_k < y_k$, with $x_r = \mathrm{left}_B(y_r)$) along a single left-child subpath of $B$ such that at most $\Delta'$ unrotated gap vertices lie strictly between $y_r$ and $x_{r+1}$ along that subpath for each $1 \le r < k$ (so $\Delta' = 0$ requires adjacent disjoint pairs, while $\Delta' > 0$ permits bounded gaps). Let $C^{\Delta'}_k(N)$ denote the maximum number of $\Delta'$-gapped right $k$-cascades in any right-rotation sequence on an $N$-node BST.
+Before analyzing multi-scale partitions of a folded $\POP$ process in Section~\ref{sec:scale-tree}, we isolate a purely static extremal question on an $N$-node BST with no insertions or deletions: if the tree evolves \emph{only by right single rotations} (advancing in the \emph{right-rotation order}\footnote{Right-rotation reachability on $N$-node binary trees is the classical Tamari partial order~\cite{Tamari1962,FriedmanTamari1967,HuangTamari1972,Pallo1986,BjornerWachs1997,Knuth2011Vol4A} (cf.~\cite{SleatorTarjanThurston1988} for undirected rotation distance); we refer to it simply as the right-rotation order since no lattice operations are needed.}), how many times can $k$ nearly consecutive pairs along a single left-child path rotate together?
+
+\begin{definition*}[Bounded-Gap Right Cascades and $C^{\Delta'}_k(N)$]
+Fix integers $N \ge 1$, $k \ge 1$, and $\Delta' \ge 0$.
+\begin{enumerate}[label=(\arabic*), leftmargin=2em, itemsep=2pt]
+  \item \emph{$\Delta'$-gapped right $k$-cascade.} On an $N$-node BST $B$ with key set $\{1, \dots, N\}$, a \emph{$\Delta'$-gapped right $k$-cascade} is a batch of $k$ simultaneous (vertex-disjoint) right single rotations $[x_1, y_1], \dots, [x_k, y_k]$ along a single left-child subpath of $B$---ordered from bottom to top as $x_1 < y_1 < \dots < x_k < y_k$ with $x_r = \mathrm{left}_B(y_r)$ for each $1 \le r \le k$---such that at most $\Delta'$ unrotated gap vertices lie strictly between $y_r$ and $x_{r+1}$ along that subpath for every $1 \le r < k$. (Thus $\Delta' = 0$ requires adjacent disjoint pairs along the subpath, whereas $\Delta' > 0$ allows up to $\Delta'$ skipped vertices between consecutive rotated pairs.)
+  \item \emph{Extremal cascade count $C^{\Delta'}_k(N)$.} Along any sequence of right single rotations starting from any $N$-node BST on $\{1, \dots, N\}$ (in which designated $\Delta'$-gapped right $k$-cascade batches execute their $k$ disjoint right rotations together, possibly interleaved with arbitrary single right rotations), $C^{\Delta'}_k(N)$ denotes the maximum number of $\Delta'$-gapped right $k$-cascades that can occur.
+\end{enumerate}
+\end{definition*}
 
 \begin{theorem}[Bounded-Gap Right-Cascade Bound]
 \label{thm:mod2-cascade}
@@ -1294,34 +1311,40 @@ Summing over $\nu \in \mathcal{T}_{\mathrm{int}}$ via $\sum_{\nu \in \mathcal{T}
 \subsection{Separating Scales, Rotation Classification, and Leaf Subprocess Projection}
 \label{subsec:bucket-defs}
 
-Let $\mathcal{P}_0 \succ \mathcal{P}_1 \succ \dots \succ \mathcal{P}_M$ ($M \ge 1$) be \emph{any} nested chain of contiguous-interval partitions of $\{1, \dots, P\}$ starting from $\mathcal{P}_0 = \{\{1, \dots, P\}\}$ (no numerical scale condition on block sizes is needed for the definitions below or for Lemma~\ref{lem:bucket-leaf}, allowing Section~\ref{sec:frontiers} and Theorem~\ref{thm:mod3-pass}(2) to invoke them directly on dyadic and bisection partitions). For $u \in \{1, \dots, P\}$ and $0 \le \ell \le M$, let $B_\ell(u) \in \mathcal{P}_\ell$ denote the unique block of $\mathcal{P}_\ell$ containing $u$; for a block $Q \in \mathcal{P}_{\ell'}$ at a finer level $\ell' \ge \ell$, write $B_\ell(Q) := B_\ell(\min Q)$ for its enclosing block in $\mathcal{P}_\ell$.
+To amortize internal $\POP$ rotations across a hierarchy of nested key partitions $\mathcal{P}_0 \succ \mathcal{P}_1 \succ \dots \succ \mathcal{P}_M$ of $\{1, \dots, P\}$, we assign every pair of keys the first scale at which they split into different blocks, and then sort each internal $\POP(s)$ rotation $e = (x, y, z)$ ($s < x < y < z$) according to whether the deleted key $s$ separates from $x$ at a coarser, finer, or identical scale compared to where $x$ separates from $y$. No numerical condition on block sizes is needed for this classification or for Lemma~\ref{lem:bucket-leaf}, allowing Theorem~\ref{thm:mod3-pass}(2) and Section~\ref{sec:frontiers} to invoke them directly on bisection and dyadic partitions.
 
-For keys $u, v \in \{1, \dots, P\}$, the \emph{separating scale} $\sep(u, v) \in \{1, \dots, M + 1\}$ records the first (coarsest) scale $\ell$ at which $u$ and $v$ fall into different blocks (or $M + 1$ if they remain together down to the finest leaf partition $\mathcal{P}_M$):
-\[
-\sep(u, v) \;:=\;
-\begin{cases}
-M + 1 & \text{if } B_M(u) = B_M(v),\\
-\min\big\{\ell \in \{1, \dots, M\} : B_\ell(u) \ne B_\ell(v)\big\} & \text{otherwise.}
-\end{cases}
-\]
-Because $\mathcal{P}_0 = \{\{1, \dots, P\}\}$, a \emph{smaller} value of $\sep(u, v)$ means $u$ and $v$ separate at a \emph{coarser} scale, whereas a \emph{larger} value means they stay in the same block down to a \emph{finer} scale; whenever $\sep(u, v) = \ell \in \{1, \dots, M\}$, we have $B_{\ell-1}(u) = B_{\ell-1}(v)$ and $B_\ell(u) \ne B_\ell(v)$. Moreover, for any $1 \le a < b < c \le P$ and any $0 \le \ell \le M$, interval contiguity of $B_\ell(a)$ gives $B_\ell(a) = B_\ell(c) \iff B_\ell(a) = B_\ell(b) = B_\ell(c)$; taking the minimum $\ell$ where equality fails yields the \emph{ultrametric identity}
+\begin{definition*}[Separating Scale and Four-Way Rotation Classification]
+Let $\widetilde{H}$ be a folded $\POP$ process of size $P \ge 1$, and let $\mathcal{P}_0 \succ \mathcal{P}_1 \succ \dots \succ \mathcal{P}_M$ ($M \ge 1$) be any nested chain of contiguous-interval partitions of $\{1, \dots, P\}$ starting from $\mathcal{P}_0 = \{\{1, \dots, P\}\}$. For $u \in \{1, \dots, P\}$ and $0 \le \ell \le M$, let $B_\ell(u) \in \mathcal{P}_\ell$ denote the unique block of $\mathcal{P}_\ell$ containing $u$; for a block $Q \in \mathcal{P}_{\ell'}$ at a finer level $\ell' \ge \ell$, write $B_\ell(Q) := B_\ell(\min Q)$ for its enclosing block in $\mathcal{P}_\ell$.
+\begin{enumerate}[label=(\arabic*), leftmargin=2em, itemsep=3pt]
+  \item \emph{Separating scale $\sep(u, v)$.} For $u, v \in \{1, \dots, P\}$, the \emph{separating scale} $\sep(u, v) \in \{1, \dots, M + 1\}$ is the first (coarsest) scale $\ell$ at which $u$ and $v$ fall into different blocks (or $M + 1$ if they remain together down to the finest leaf partition $\mathcal{P}_M$):
+  \[
+  \sep(u, v) \;:=\;
+  \begin{cases}
+  M + 1 & \text{if } B_M(u) = B_M(v),\\
+  \min\big\{\ell \in \{1, \dots, M\} : B_\ell(u) \ne B_\ell(v)\big\} & \text{otherwise.}
+  \end{cases}
+  \]
+  Because $\mathcal{P}_0 = \{\{1, \dots, P\}\}$, a \emph{smaller} value of $\sep(u, v)$ means $u$ and $v$ separate at a \emph{coarser} scale, whereas a \emph{larger} value means they stay in the same block down to a \emph{finer} scale; whenever $\sep(u, v) = \ell \in \{1, \dots, M\}$, we have $B_{\ell-1}(u) = B_{\ell-1}(v)$ and $B_\ell(u) \ne B_\ell(v)$.
+  \item \emph{Four-way rotation classification.} Every internal $\POP$ rotation $e = (x, y, z) = (v_{2j-1}, v_{2j}, v_{2j+1}) \in \mathcal{R}_{\mathrm{int}}(\widetilde{H})$ ($1 \le j \le h$) during $\POP(s)$ satisfies $s < x < y < z$, rotating the \emph{promoted key} $x$ above the \emph{displaced key} $y$ strictly below parent $z$. Comparing the \emph{trigger scale} $\sep(s, x)$ (the scale separating the deleted key $s$ from $x$) against the \emph{rotation scale} $\ell := \sep(x, y) \in \{1, \dots, M + 1\}$ (the scale separating the rotated pair $x, y$) partitions $\mathcal{R}_{\mathrm{int}}(\widetilde{H}) = \mathcal{B}_{\mathrm{leaf}} \sqcup \mathcal{B}_1 \sqcup \mathcal{B}_2 \sqcup \mathcal{B}_3$ into four disjoint classes:
+  \begin{itemize}[leftmargin=1.6em, itemsep=2pt, topsep=2pt]
+    \item \emph{Intra-leaf rotations} $\mathcal{B}_{\mathrm{leaf}}$ ($\ell = M + 1$, where $x$ and $y$ lie in the same leaf block $Q \in \mathcal{P}_M$), partitioned further according to whether $Q$ has begun deleting and whether $z$ stays inside $Q$:
+    \begin{itemize}[leftmargin=1.4em, itemsep=1pt, topsep=1pt]
+      \item $\mathcal{B}_{\mathrm{leaf,pre}}$ (\emph{pre-activation}, $s < \min Q$): triggered before any key of $Q$ is popped;
+      \item $\mathcal{B}_{\mathrm{leaf,exit}}$ (\emph{leaf-exit}, $s \in Q$ and $z > \max Q$): triggered inside $Q$, with parent $z$ strictly above $Q$;
+      \item $\mathcal{B}_{\mathrm{leaf,act}}$ (\emph{active intra-leaf}, $s, x, y, z \in Q$): occurring entirely within $Q$.
+    \end{itemize}
+    \item \emph{Coarse-trigger split-scale rotations} $\mathcal{B}_1$ ($1 \le \sep(s, x) < \ell \le M$): $s$ separates from $x$ at a coarser scale than $x$ separates from $y$ (so $x$ and $y$ still share a block at scale $\sep(s, x)$ while $s$ lies in an earlier block).
+    \item \emph{Fine-trigger split-scale rotations} $\mathcal{B}_2$ ($1 \le \ell < \sep(s, x) \le M + 1$): $s$ and $x$ still share a scale-$\ell$ block while $y$ lies in a later scale-$\ell$ block.
+    \item \emph{Same-scale (three-block) rotations} $\mathcal{B}_3 = \mathcal{B}_{3,\mathrm{intra}} \sqcup \mathcal{B}_{3,\mathrm{exit}}$ ($1 \le \sep(s, x) = \ell \le M$): $s < x < y$ lie in three distinct sibling sub-blocks $S_p < S_b < S_q$ of the same parent block $X := B_{\ell-1}(s) \in \mathcal{P}_{\ell-1}$, split into $\mathcal{B}_{3,\mathrm{intra}}$ ($z \in S_q$, parent $z$ stays inside $y$'s sub-block) and $\mathcal{B}_{3,\mathrm{exit}}$ ($z > \max S_q$, parent $z$ lies strictly above $S_q$).
+  \end{itemize}
+\end{enumerate}
+\end{definition*}
+
+Because every block $B_\ell(a)$ ($0 \le \ell \le M$) is a contiguous key interval, any triple $1 \le a < b < c \le P$ satisfies $B_\ell(a) = B_\ell(c) \iff B_\ell(a) = B_\ell(b) = B_\ell(c)$; taking the minimum $\ell$ where equality fails yields the \emph{ultrametric identity}
 \begin{equation}
 \label{eq:ultrametric}
 \sep(a, c) \;=\; \min\big(\sep(a, b),\; \sep(b, c)\big) \qquad (1 \le a < b < c \le P).
 \end{equation}
-
-Every internal $\POP$ rotation $e = (x, y, z) = (v_{2j-1}, v_{2j}, v_{2j+1}) \in \mathcal{R}_{\mathrm{int}}(\widetilde{H})$ ($1 \le j \le h$) during $\POP(s)$ satisfies $s < x < y < z$, rotating the \emph{promoted key} $x$ above the \emph{displaced key} $y$ strictly below parent $z$. Comparing the \emph{trigger scale} $\sep(s, x)$ (the scale separating the deleted key $s$ from $x$) against the \emph{rotation scale} $\ell := \sep(x, y) \in \{1, \dots, M + 1\}$ (the scale separating the rotated pair $x, y$) partitions $\mathcal{R}_{\mathrm{int}}(\widetilde{H})$ into four disjoint classes:
-\begin{itemize}[leftmargin=2em]
-  \item \emph{Intra-leaf rotations} $\mathcal{B}_{\mathrm{leaf}}$ ($\ell = M + 1$, where $x$ and $y$ lie in the same leaf block $Q \in \mathcal{P}_M$), partitioned further according to whether $Q$ has begun deleting and whether $z$ stays inside $Q$:
-  \begin{itemize}[leftmargin=1.5em]
-    \item $\mathcal{B}_{\mathrm{leaf,pre}}$ (\emph{pre-activation}, $s < \min Q$): triggered before any key of $Q$ is popped;
-    \item $\mathcal{B}_{\mathrm{leaf,exit}}$ (\emph{leaf-exit}, $s \in Q$ and $z > \max Q$): triggered inside $Q$, with parent $z$ strictly above $Q$;
-    \item $\mathcal{B}_{\mathrm{leaf,act}}$ (\emph{active intra-leaf}, $s, x, y, z \in Q$): occurring entirely within $Q$.
-  \end{itemize}
-  \item \emph{Coarse-trigger split-scale rotations} $\mathcal{B}_1$ ($1 \le \sep(s, x) < \ell \le M$): $s$ separates from $x$ at a coarser scale than $x$ separates from $y$ (so $x$ and $y$ still share a block at scale $\sep(s, x)$ while $s$ lies in an earlier block).
-  \item \emph{Fine-trigger split-scale rotations} $\mathcal{B}_2$ ($1 \le \ell < \sep(s, x) \le M + 1$): $s$ and $x$ still share a scale-$\ell$ block while $y$ lies in a later scale-$\ell$ block.
-  \item \emph{Same-scale (three-block) rotations} $\mathcal{B}_3 = \mathcal{B}_{3,\mathrm{intra}} \sqcup \mathcal{B}_{3,\mathrm{exit}}$ ($1 \le \sep(s, x) = \ell \le M$): $s < x < y$ lie in three distinct sibling sub-blocks $S_p < S_b < S_q$ of the same parent block $X := B_{\ell-1}(s) \in \mathcal{P}_{\ell-1}$, split into $\mathcal{B}_{3,\mathrm{intra}}$ ($z \in S_q$, parent $z$ stays inside $y$'s sub-block) and $\mathcal{B}_{3,\mathrm{exit}}$ ($z > \max S_q$, parent $z$ lies strictly above $S_q$).
-\end{itemize}
 
 \begin{lemma}[Intra-Leaf Rotations and Leaf Subprocess Projection]
 \label{lem:bucket-leaf}
