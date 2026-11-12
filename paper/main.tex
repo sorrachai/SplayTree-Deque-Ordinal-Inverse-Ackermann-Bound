@@ -21,6 +21,7 @@
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
 
+\newcommand{\todo}[1]{{\color{red}\textbf{[TODO:} #1\textbf{]}}}
 \newcommand{\LS}{\mathrm{LS}}
 \newcommand{\RS}{\mathrm{RS}}
 \newcommand{\LCA}{\mathrm{LCA}}
@@ -80,12 +81,18 @@ Sleator and Tarjan~\cite{SleatorTarjan1985} introduced \emph{splay trees}, self-
 
 Several landmark special cases of dynamic optimality have been established on splay trees, including the \emph{Sequential Access Theorem}~\cite{Tarjan1985,Elmasry2004}, the \emph{Dynamic Finger Theorem}~\cite{ColeMishraSchmidtSiegel2000,Cole2000}, and splaying preorders and postorders from an empty tree~\cite{LevyTarjan2019}. Alongside sequential access, Tarjan~\cite{Tarjan1985} posed the \emph{Deque Conjecture}: when a splay tree maintains a double-ended queue supporting insertions and deletions at both ends of the key order, any sequence of $m$ operations starting from an $n$-node BST performs $O(m + n)$ single rotations. Tarjan~\cite{Tarjan1985} and Elmasry~\cite{Elmasry2004} proved this $O(m + n)$ bound for \emph{output-restricted} splay deques (where deletions occur at only one end), whereas the general two-sided case has remained open. On other dynamic BST algorithms, Multi-Splay trees~\cite{WangDerryberrySleator2006} (building on Tango trees~\cite{DemaineHarmonIaconoPatrascu2007}) achieve $O(1)$ amortized cost per deque operation starting from an empty tree~\cite{DerryberrySleatorWang2009}, and geometric forbidden-matrix analyses of Greedy BSTs~\cite{DemaineHarmonIaconoKanePatrascu2009} (cf.~\cite{ChalermsookGoswamiKozmaMehlhornSaranurak2015FOCS} for static pattern-avoiding accesses) achieve $O(m + n)$ for output-restricted deques~\cite{ChalermsookGoswamiKozmaMehlhornSaranurak2015WADS} and $O\big((m + n)\,\alpha(m + n)\big)$ for general two-sided deques~\cite{Chalermsook2023}.
 
-Concretely, let $T$ be a rooted BST with distinct real keys in symmetric order (in-order), let $\LS(T)$ and $\RS(T)$ denote the maximal left-child and right-child paths from the root of $T$ (\emph{left} and \emph{right spines}), and let $[x, p]$ denote the single rotation promoting child $x$ above its parent $p$ (a right rotation if $x < p$, and a left rotation if $x > p$). Bottom-up $\mathrm{Splay}(x)$ moves a target vertex $x \in V(T)$ to the root by repeatedly applying: a single rotation $[x, p]$ if $x$'s parent $p$ is the root (\emph{zig}, $1$ single rotation); two single rotations $[p, g]$ then $[x, p]$ if $x$ and $p$ are both left children or both right children of grandparent $g$ (\emph{zig-zig}, $2$ single rotations); or two single rotations $[x, p]$ then $[x, g]$ otherwise (\emph{zig-zag}, $2$ single rotations). The four standard splay-tree deque operations~\cite{Tarjan1985,Sundar1992,Pettie2008} are:
-\begin{itemize}[leftmargin=2em]
-  \item $\PUSH$: insert a new key strictly smaller than $\min V(T)$ as the new root with empty left subtree and right subtree $T_{\mathrm{old}}$ ($0$ rotations).
-  \item $\INJECT$: insert a new key strictly larger than $\max V(T)$ as the new root with left subtree $T_{\mathrm{old}}$ and empty right subtree ($0$ rotations).
-  \item $\POP$ (when $T \ne \emptyset$): splay $x_{\min} = \min V(T)$ to the root (performing $|\LS(T)| - 1$ single rotations along $\LS(T)$) and delete $x_{\min}$, leaving $\mathrm{right}(x_{\min})$.
-  \item $\EJECT$ (when $T \ne \emptyset$): splay $x_{\max} = \max V(T)$ to the root (performing $|\RS(T)| - 1$ single rotations along $\RS(T)$) and delete $x_{\max}$, leaving $\mathrm{left}(x_{\max})$.
+To state the problem precisely, let $T$ be a rooted BST storing distinct real keys in symmetric (in-order) order, so every key in the left subtree of a vertex $u$ is smaller than $u$ and every key in its right subtree is larger than $u$. The \emph{left spine} $\LS(T)$ and \emph{right spine} $\RS(T)$ are the paths obtained by starting at the root of $T$ and repeatedly following left-child or right-child pointers, respectively. A \emph{single rotation} $[x, p]$ promotes a child $x$ one step above its parent $p$ while preserving symmetric key order (a \emph{right rotation} when $x$ is the left child of $p$, i.e., $x < p$, and a \emph{left rotation} when $x > p$). Bottom-up $\mathrm{Splay}(x)$ moves a target vertex $x \in V(T)$ to the root two levels at a time by repeatedly applying:
+\begin{itemize}[leftmargin=2em, itemsep=1pt]
+  \item \emph{zig} ($1$ single rotation): if $x$'s parent $p$ is the root, rotate $[x, p]$;
+  \item \emph{zig-zig} ($2$ single rotations): if $x$ and its parent $p$ are both left children (or both right children) of grandparent $g$, rotate $[p, g]$ first and then $[x, p]$;
+  \item \emph{zig-zag} ($2$ single rotations): if one of $x, p$ is a left child and the other is a right child of $g$, rotate $[x, p]$ first and then $[x, g]$.
+\end{itemize}
+To use a splay tree $T$ as a double-ended queue supporting insertions and deletions at the minimum (left) and maximum (right) ends of the current key set, the four standard splay-tree deque operations~\cite{Tarjan1985,Sundar1992,Pettie2008} are:
+\begin{itemize}[leftmargin=2em, itemsep=1pt]
+  \item $\PUSH$: insert a new key strictly smaller than $\min V(T)$ directly as the new root, with empty left subtree and the old tree $T_{\mathrm{old}}$ as its right subtree ($0$ rotations).
+  \item $\INJECT$: insert a new key strictly larger than $\max V(T)$ directly as the new root, with $T_{\mathrm{old}}$ as its left subtree and empty right subtree ($0$ rotations).
+  \item $\POP$ (when $T \ne \emptyset$): splay the minimum key $x_{\min} = \min V(T)$ to the root (which performs $|\LS(T)| - 1$ single rotations up $\LS(T)$) and delete $x_{\min}$, leaving its right subtree $\mathrm{right}(x_{\min})$.
+  \item $\EJECT$ (when $T \ne \emptyset$): splay the maximum key $x_{\max} = \max V(T)$ to the root (which performs $|\RS(T)| - 1$ single rotations up $\RS(T)$) and delete $x_{\max}$, leaving its left subtree $\mathrm{left}(x_{\max})$.
 \end{itemize}
 Write $\Rot(T_0, S)$ for the total number of single rotations performed across a valid $m$-operation sequence $S$ starting from an $n$-node BST $T_0$. Over four decades, upper bounds on $\Rot(T_0, S)$ have climbed a sequence of functional inverses of the Ackermann hierarchy:
 \begin{itemize}[leftmargin=2em]
@@ -96,27 +103,36 @@ Write $\Rot(T_0, S)$ for the total number of single rotations performed across a
 
 \subsection{Main Result: Breaking All Finite Star-Iterates}
 
-To fix concrete thresholds without base-case ambiguity, we follow Sundar's indexing of the Ackermann hierarchy~\cite[Section~1.2]{Sundar1992}.
+To fix concrete thresholds without base-case ambiguity, we follow Sundar's indexing of the Ackermann hierarchy~\cite[Section~1.2]{Sundar1992}. Each function in the hierarchy below inverts or iterates the previous one, producing progressively slower-growing functions of $n$.
 
 \begin{definition}[Ackermann Hierarchy, Finite Star-Iterates $\alpha_r$, and Level-$\omega$ Star-Iterate $\alpha_\omega$]
 \label{def:ackermann}
-Define $A_i : \mathbb{Z}_{\ge 1} \to \mathbb{Z}_{\ge 1}$ ($i \ge 0$) by $A_0(j) := 2j$, $A_1(j) := 2^j$, and for $i \ge 2$:
-\[
-A_i(1) \;:=\; A_{i-1}(2), \qquad A_i(j) \;:=\; A_{i-1}\big(A_i(j - 1)\big) \quad (j \ge 2).
-\]
-For $n \ge 1$, define the inverse Ackermann function $\alpha_0(n) := \min\{k \ge 1 : A_k(1) \ge n\}$ (written $\bar{\alpha}(n)$ in Sundar~\cite{Sundar1992}). Given any function $f : \mathbb{Z}_{\ge 1} \to \mathbb{Z}_{\ge 1}$ satisfying $f(n) < n$ for all $n > 4$, define its star-iterate $f^* : \mathbb{Z}_{\ge 1} \to \mathbb{Z}_{\ge 1}$ by $f^*(n) := 1$ for $n \le 4$ and $f^*(n) := 1 + f^*(f(n))$ for $n > 4$. For each integer $r \ge 1$, define the $r$-th star-iterated inverse Ackermann function $\alpha_r := (\alpha_{r-1})^* : \mathbb{Z}_{\ge 1} \to \mathbb{Z}_{\ge 1}$, i.e.,
-\begin{equation}
-\label{eq:alpha-r}
-\alpha_r(n) \;:=\;
-\begin{cases}
-1 & \text{if } n \le 4,\\
-1 + \alpha_r\big(\alpha_{r-1}(n)\big) & \text{if } n > 4,
-\end{cases}
-\end{equation}
-so $\alpha_1 = \alpha^*$, $\alpha_2 = (\alpha^*)^* = \alpha^{**}$, $\alpha_3 = ((\alpha^*)^*)^* = \alpha^{***}$, and in general $\alpha_r(n)$ equals $1$ plus the number of applications of $\alpha_{r-1}$ needed to reduce $n$ to at most~$4$. Finally, define the \emph{level-$\omega$ star-iterated inverse Ackermann function}
-\[
-\alpha_\omega(n) \;:=\; \min\big\{r \ge 1 : \alpha_r(n) \le 2\big\}.
-\]
+We define the fast-growing Ackermann table $A_i(j)$ and its functional inverses in four steps:
+\begin{enumerate}[label=(\arabic*), leftmargin=2em, itemsep=2pt]
+  \item \emph{Ackermann table $A_i(j)$.} Each row $A_i : \mathbb{Z}_{\ge 1} \to \mathbb{Z}_{\ge 1}$ ($i \ge 0$) repeatedly composes the previous row, escalating from doubling to exponentiation, power towers, and beyond: set $A_0(j) := 2j$, $A_1(j) := 2^j$, and for $i \ge 2$,
+  \[
+  A_i(1) \;:=\; A_{i-1}(2), \qquad A_i(j) \;:=\; A_{i-1}\big(A_i(j - 1)\big) \quad (j \ge 2).
+  \]
+  (For example, $A_2(j)$ is a tower of $j + 1$ twos, giving $A_1(1) = 2$, $A_2(1) = 4$, $A_3(1) = 16$, and $A_4(1) = A_2(16) > 2^{65536}$.)
+  \item \emph{Inverse Ackermann function $\alpha_0(n)$.} For $n \ge 1$, $\alpha_0(n)$ is the first row whose initial entry $A_k(1)$ reaches $n$ (written $\bar{\alpha}(n)$ in Sundar~\cite{Sundar1992}):
+  \[
+  \alpha_0(n) \;:=\; \min\big\{k \ge 1 : A_k(1) \ge n\big\}.
+  \]
+  \item \emph{Star operator $f^*$ and finite star-iterates $\alpha_r(n)$.} Given any function $f : \mathbb{Z}_{\ge 1} \to \mathbb{Z}_{\ge 1}$ satisfying $f(n) < n$ for all $n > 4$, its \emph{star-iterate} $f^* : \mathbb{Z}_{\ge 1} \to \mathbb{Z}_{\ge 1}$ counts ($1$ plus) how many times $f$ must be applied to reduce $n$ to at most~$4$: $f^*(n) := 1$ for $n \le 4$, and $f^*(n) := 1 + f^*(f(n))$ for $n > 4$. Applying $(\cdot)^*$ repeatedly starting from $\alpha_0$ defines the $r$-th star-iterated inverse Ackermann function $\alpha_r := (\alpha_{r-1})^* : \mathbb{Z}_{\ge 1} \to \mathbb{Z}_{\ge 1}$ for each integer $r \ge 1$:
+  \begin{equation}
+  \label{eq:alpha-r}
+  \alpha_r(n) \;:=\;
+  \begin{cases}
+  1 & \text{if } n \le 4,\\
+  1 + \alpha_r\big(\alpha_{r-1}(n)\big) & \text{if } n > 4,
+  \end{cases}
+  \end{equation}
+  so $\alpha_1 = \alpha^*$, $\alpha_2 = (\alpha^*)^* = \alpha^{**}$, and $\alpha_3 = ((\alpha^*)^*)^* = \alpha^{***}$.
+  \item \emph{Level-$\omega$ star-iterate $\alpha_\omega(n)$.} Rather than fixing the number of stars $r$ in advance, $\alpha_\omega(n)$ counts how many stars must be placed on $\alpha_0$ before the value at $n$ drops to at most~$2$:
+  \[
+  \alpha_\omega(n) \;:=\; \min\big\{r \ge 1 : \alpha_r(n) \le 2\big\}.
+  \]
+\end{enumerate}
 \end{definition}
 
 \begin{remark}[Notation and Why We Write $\alpha_\omega$]
@@ -305,18 +321,231 @@ We structure the proof of Theorem~\ref{thm:main} as four modular sections in bot
 \subsection{The Folded \texorpdfstring{$\POP$}{Pop} Process and Reduction Statement}
 \label{subsec:overview-mod1}
 
-Our first reduction eliminates two-sided splay trees, $\INJECT$, $\EJECT$, and bottom-up splaying altogether, isolating a one-sided dynamic BST execution on $\{1, \dots, P\}$ in which keys are deleted in increasing order $1, 2, \dots, P$ and every structural rotation is a \emph{right single rotation}.
+Our first reduction eliminates two-sided splay trees, $\INJECT$, $\EJECT$, and bottom-up splaying altogether, isolating a one-sided dynamic BST game on $\{1, \dots, P\}$ in which keys are deleted in strict increasing order $1, 2, \dots, P$ and every structural rotation is a \emph{right single rotation}. Throughout, we write $u(A, B)$ for the BST rooted at key $u$ with left subtree $A$ and right subtree $B$.
+
+Why is the reduced process called \emph{folded}? In an ordinary one-sided BST $H$, $\POP$ rotates along the left spine $\LS(H)$ while opposite-end side-effects rotate along the right spine $\RS(H)$. Following Pettie's spine-folding view (illustrated in Figure~\ref{fig:folded-pop}), flipping $\RS(H)$ upside-down onto the top of $\LS(H)$ merges both spines into a \emph{single} left spine $\LS(\widetilde{H})$, split at a marked vertex $b_1 \in \LS(\widetilde{H})$ called the \emph{fold boundary}: the \emph{lower spine} strictly below $b_1$ is where $\PUSH$ inserts new keys and $\POP$ deletes the minimum key via paired right rotations, while the \emph{upper spine} at and above $b_1$ absorbs right-spine side-effects through two simple steps ($\SHIFT$ and $\UPROT$).
 
 \begin{definition}[Folded $\POP$ Process]
 \label{def:folded-pop}
-A \emph{folded $\POP$ process} $\widetilde{H}$ of size $P \ge 1$ is a dynamic BST execution on key universe $\{1, \dots, P\}$ starting from $\widetilde{H} = \emptyset$ (writing $u(A, B)$ for the BST rooted at $u$ with left subtree $A$ and right subtree $B$), maintaining active keys $V_\tau \subseteq \{1, \dots, P\}$ and (whenever $V_\tau \ne \emptyset$) a \emph{fold boundary} $b_1(\tau)$ on $\LS(\widetilde{H}_\tau)$, driven by:
-\begin{enumerate}[label=(\arabic*)]
-  \item $P$ $\PUSH(w)$ steps ($w < \min V_\tau$ when $V_\tau \ne \emptyset$): if $\widetilde{H} = \emptyset$, set $\widetilde{H} := w(\emptyset, \emptyset)$ and $b_1^{\mathrm{new}} := w$; otherwise replace $L_1 := \mathrm{left}_{\widetilde{H}}(b_1^{\mathrm{old}})$ by $\mathrm{left}_{\widetilde{H}}(b_1^{\mathrm{old}}) := w(\emptyset, L_1)$ and set $b_1^{\mathrm{new}} := w$ ($0$ rotations);
-  \item $K_{\SHIFT}$ $\SHIFT$ steps (when $b_1 \ne \mathrm{root}(\widetilde{H})$), moving $b_1$ to its parent on $\LS(\widetilde{H})$ ($0$ rotations), and $K_{\mathrm{rot}}$ $\UPROT$ steps, each performing one upper-spine right single rotation $[u, v]$ on $\LS(\widetilde{H})$ at or above the fold boundary ($b_1 \le u < v < \mathrm{root}(\widetilde{H})$, leaving $b_1$ unchanged), with $K_L := K_{\SHIFT} + K_{\mathrm{rot}} < 2P$ total steps;
-  \item $P$ $\POP$ steps deleting $s = 1, 2, \dots, P$ in order: $\POP(s)$ ($s = \min V_{s^-}$, with subpath $v_0 < v_1 < \dots < v_k$ of $\LS(\widetilde{H}_{s^-})$ from $v_0 = s$ up to $v_k = b_1(s^-)$, $k \ge 0$, and $h := \max(0, \lfloor (k - 1)/2 \rfloor)$) splices out $s$ (replacing $s(\emptyset, R)$ by $R$); if $k = 0$ it performs $0$ rotations and (when $V_{s^+} \ne \emptyset$) updates $b_1(s^+)$ to the parent of $b_1(s^-)$ on $\LS(\widetilde{H}_{s^-})$, while if $k \ge 1$ it executes $h$ disjoint right single rotations $[v_1, v_2], \dots, [v_{2h-1}, v_{2h}]$ strictly below $v_{2h+1}$ in $\widetilde{H}$ (updating $b_1(s^+) := v_{2h+1}$ if $k = 2h + 2$).
+Fix an integer $P \ge 1$. A \emph{folded $\POP$ process} $\widetilde{H}$ of size $P$ is a dynamic BST execution on key universe $\{1, \dots, P\}$ starting from the empty tree $\widetilde{H} = \emptyset$. At each timestamp $\tau$, the state consists of a BST $\widetilde{H}_\tau$ on the currently active key set $V_\tau \subseteq \{1, \dots, P\}$ together with (whenever $V_\tau \ne \emptyset$) a marked vertex $b_1(\tau) \in \LS(\widetilde{H}_\tau)$, called the \emph{fold boundary}, which divides $\LS(\widetilde{H}_\tau)$ into the \emph{lower spine} $\{v \in \LS(\widetilde{H}_\tau) : v < b_1(\tau)\}$ and the \emph{upper spine} $\{v \in \LS(\widetilde{H}_\tau) : v \ge b_1(\tau)\}$.
+
+Across the entire execution, there are $P$ $\PUSH$ steps, $P$ $\POP$ steps (deleting $s = 1, 2, \dots, P$ in increasing order), and some integers $K_{\SHIFT} \ge 0$ of $\SHIFT$ steps and $K_{\mathrm{rot}} \ge 0$ of $\UPROT$ steps satisfying the total upper-spine budget
+\[
+K_L \;:=\; K_{\SHIFT} + K_{\mathrm{rot}} \;<\; 2P,
+\]
+where the four operations act on $(\widetilde{H}, b_1)$ as follows (Figure~\ref{fig:folded-ops}):
+\begin{enumerate}[label=(\arabic*), leftmargin=2em, itemsep=2pt]
+  \item \emph{$\PUSH(w)$ (insert a new minimum below the fold boundary; $0$ rotations):} Inserts a new key $w \in \{1, \dots, P\}$ smaller than all currently active keys ($w < \min V_\tau$ when $V_\tau \ne \emptyset$). If $\widetilde{H} = \emptyset$, set $\widetilde{H} := w(\emptyset, \emptyset)$ and $b_1^{\mathrm{new}} := w$; otherwise let $L_1 := \mathrm{left}_{\widetilde{H}}(b_1^{\mathrm{old}})$, splice $w$ in directly below $b_1^{\mathrm{old}}$ by setting $\mathrm{left}_{\widetilde{H}}(b_1^{\mathrm{old}}) := w(\emptyset, L_1)$, and set $b_1^{\mathrm{new}} := w$.
+  \item \emph{$\SHIFT$ (advance the fold boundary one step up the left spine; $0$ rotations):} Applicable whenever $V_\tau \ne \emptyset$ and $b_1 \ne \mathrm{root}(\widetilde{H})$. The BST $\widetilde{H}$ is unchanged, and $b_1$ moves to its parent on $\LS(\widetilde{H})$.
+  \item \emph{$\UPROT$ (one right rotation on the upper spine; $1$ rotation):} Applicable when the upper spine has at least three vertices. Choose a child-parent pair $(u, v)$ on $\LS(\widetilde{H})$ at or above $b_1$ and strictly below the root ($b_1 \le u < v < \mathrm{root}(\widetilde{H})$, with $u = \mathrm{left}_{\widetilde{H}}(v)$), perform the right single rotation $[u, v]$ on $\widetilde{H}$, and keep $b_1$ on the same key.
+  \item \emph{$\POP(s)$ (delete the minimum key $s$ and pair-rotate up the lower spine):} Deletes $s = 1, 2, \dots, P$ in order, with $s = \min V_{s^-}$ at the bottom of $\LS(\widetilde{H}_{s^-})$. Let $v_0 < v_1 < \dots < v_k$ ($k \ge 0$) be the subpath of $\LS(\widetilde{H}_{s^-})$ from $v_0 = s$ up to $v_k = b_1(s^-)$, and set $h := \max(0, \lfloor (k - 1)/2 \rfloor)$. First splice out $s$ (replacing $s(\emptyset, R)$ by $R := \mathrm{right}_{\widetilde{H}_{s^-}}(s)$):
+  \begin{itemize}[leftmargin=1.5em, itemsep=1pt, topsep=2pt]
+    \item if $k = 0$ (so $s = b_1(s^-)$), perform $0$ rotations and (when $V_{s^+} \ne \emptyset$) update $b_1(s^+)$ to the parent of $b_1(s^-)$ on $\LS(\widetilde{H}_{s^-})$;
+    \item if $k \ge 1$, execute the $h$ vertex-disjoint right single rotations $[v_1, v_2], [v_3, v_4], \dots, [v_{2h-1}, v_{2h}]$ strictly below $v_{2h+1}$ in $\widetilde{H}$, keeping $b_1(s^+) := b_1(s^-)$ when $k = 2h + 1$ is odd (where $v_{2h+1} = b_1(s^-)$) and updating $b_1(s^+) := v_{2h+1}$ when $k = 2h + 2$ is even.
+  \end{itemize}
 \end{enumerate}
-Each right rotation $e = (x, y, z) = (v_{2j-1}, v_{2j}, v_{2j+1})$ ($1 \le j \le h$) in~(3) is an \emph{internal $\POP$ rotation} (or \emph{cascade rotation}); write $\mathcal{R}_{\mathrm{int}}(\widetilde{H})$ for the set of all internal $\POP$ rotations and $J(\widetilde{H}) := |\mathcal{R}_{\mathrm{int}}(\widetilde{H})|$.
+Because $\PUSH$ and $\SHIFT$ perform $0$ rotations and $\UPROT$ performs $K_{\mathrm{rot}} < 2P$ rotations in total, only the rotations inside $\POP$ can be superlinear in $P$. Each right rotation $e = (x, y, z) = (v_{2j-1}, v_{2j}, v_{2j+1})$ ($1 \le j \le h$, rotating $[x, y]$ strictly below $z$) in~(4) is called an \emph{internal $\POP$ rotation} (or \emph{cascade rotation}); we write $\mathcal{R}_{\mathrm{int}}(\widetilde{H})$ for the set of all internal $\POP$ rotations across the execution and define the process cost $J(\widetilde{H}) := |\mathcal{R}_{\mathrm{int}}(\widetilde{H})|$.
 \end{definition}
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[
+  >=Stealth,
+  bstnode/.style={circle, draw=black!80, thick, minimum size=15.5pt, inner sep=0.5pt, font=\scriptsize, fill=white},
+  upnode/.style={bstnode, fill=MidnightBlue!12, draw=MidnightBlue!85},
+  b1node/.style={bstnode, fill=BrickRed!16, draw=BrickRed!85, very thick},
+  delnode/.style={bstnode, dashed, draw=BrickRed!80, text=BrickRed!85, fill=BrickRed!5},
+  edge/.style={thick, draw=black!75},
+  upedge/.style={very thick, draw=MidnightBlue!85},
+  rotarc/.style={->, thick, dashed, draw=BrickRed!85},
+  panelbox/.style={rounded corners=4pt, draw=black!22, fill=black!1.5}
+]
+  % ==================== Panel (a): PUSH(w) ====================
+  \begin{scope}[xshift=0cm, yshift=0cm]
+    \draw[panelbox] (-3.78, -0.42) rectangle (3.78, 3.25);
+    \node[font=\footnotesize\bfseries] at (0, 2.94) {(a) $\PUSH(w)$: insert below $b_1$ ($0$ rotations)};
+
+    % Before
+    \node[b1node] (ab1) at (-2.05, 2.02) {$b$};
+    \node[font=\scriptsize, text=BrickRed!90, anchor=east] at (-2.34, 2.08) {$b_1$};
+    \draw[upedge, dashed] (-1.62, 2.52) -- (ab1);
+    % Left triangle L_1
+    \draw[edge] (ab1) -- (-2.58, 1.34);
+    \draw[thick, draw=black!65, fill=white] (-2.58, 1.34) -- (-2.86, 0.82) -- (-2.30, 0.82) -- cycle;
+    \node[font=\tiny] at (-2.58, 0.96) {$L_1$};
+    % Right triangle R_b
+    \draw[edge] (ab1) -- (-1.52, 1.34);
+    \draw[thick, draw=black!65, fill=white] (-1.52, 1.34) -- (-1.80, 0.82) -- (-1.24, 0.82) -- cycle;
+    \node[font=\tiny] at (-1.52, 0.96) {$R_b$};
+
+    % Arrow
+    \draw[->, very thick, MidnightBlue!85] (-0.82, 1.45) -- node[above, font=\scriptsize\bfseries, text=MidnightBlue!90] {$\PUSH(w)$} (0.42, 1.45);
+
+    % After
+    \node[upnode] (ab2) at (2.15, 2.15) {$b$};
+    \draw[upedge, dashed] (2.55, 2.58) -- (ab2);
+    \node[b1node] (aw) at (1.52, 1.40) {$w$};
+    \node[font=\scriptsize, text=BrickRed!90, anchor=east] at (1.23, 1.44) {$b_1$};
+    \draw[upedge] (ab2) -- (aw);
+    % Right triangle R_b of b
+    \draw[edge] (ab2) -- (2.70, 1.45);
+    \draw[thick, draw=black!65, fill=white] (2.70, 1.45) -- (2.42, 0.93) -- (2.98, 0.93) -- cycle;
+    \node[font=\tiny] at (2.70, 1.07) {$R_b$};
+    % Right triangle L_1 of w
+    \draw[edge] (aw) -- (2.06, 0.76);
+    \draw[thick, draw=black!65, fill=white] (2.06, 0.76) -- (1.78, 0.24) -- (2.34, 0.24) -- cycle;
+    \node[font=\tiny] at (2.06, 0.38) {$L_1$};
+
+    \node[font=\scriptsize, text=black!75] at (0, -0.14) {Splices $w(\emptyset, L_1)$ as $\mathrm{left}(b)$ and sets $b_1 \gets w$.};
+  \end{scope}
+
+  % ==================== Panel (b): SHIFT ====================
+  \begin{scope}[xshift=8.00cm, yshift=0cm]
+    \draw[panelbox] (-3.78, -0.42) rectangle (3.78, 3.25);
+    \node[font=\footnotesize\bfseries] at (0, 2.94) {(b) $\SHIFT$: move $b_1$ up $\LS(\widetilde{H})$ ($0$ rotations)};
+
+    % Before
+    \node[upnode] (bp1) at (-1.78, 2.15) {$p$};
+    \draw[upedge, dashed] (-1.38, 2.58) -- (bp1);
+    \node[b1node] (bb1) at (-2.42, 1.40) {$b$};
+    \node[font=\scriptsize, text=BrickRed!90, anchor=east] at (-2.71, 1.44) {$b_1$};
+    \draw[upedge] (bp1) -- (bb1);
+    \draw[->, thick, dotted, draw=BrickRed!85] (bb1) to[bend left=36] (bp1);
+    % Right triangle R_p
+    \draw[edge] (bp1) -- (-1.24, 1.45);
+    \draw[thick, draw=black!65, fill=white] (-1.24, 1.45) -- (-1.52, 0.93) -- (-0.96, 0.93) -- cycle;
+    \node[font=\tiny] at (-1.24, 1.07) {$R_p$};
+    % Subtrees of b
+    \draw[edge] (bb1) -- (-2.90, 0.76);
+    \draw[thick, draw=black!65, fill=white] (-2.90, 0.76) -- (-3.16, 0.24) -- (-2.64, 0.24) -- cycle;
+    \node[font=\tiny] at (-2.90, 0.38) {$L_1$};
+    \draw[edge] (bb1) -- (-1.94, 0.76);
+    \draw[thick, draw=black!65, fill=white] (-1.94, 0.76) -- (-2.20, 0.24) -- (-1.68, 0.24) -- cycle;
+    \node[font=\tiny] at (-1.94, 0.38) {$R_b$};
+
+    % Arrow
+    \draw[->, very thick, MidnightBlue!85] (-0.68, 1.45) -- node[above, font=\scriptsize\bfseries, text=MidnightBlue!90] {$\SHIFT$} (0.42, 1.45);
+
+    % After
+    \node[b1node] (bp2) at (2.16, 2.15) {$p$};
+    \node[font=\scriptsize, text=BrickRed!90, anchor=east] at (1.86, 2.20) {$b_1$};
+    \draw[upedge, dashed] (2.56, 2.58) -- (bp2);
+    \node[bstnode] (bb2) at (1.52, 1.40) {$b$};
+    \draw[edge] (bp2) -- (bb2);
+    % Right triangle R_p
+    \draw[edge] (bp2) -- (2.70, 1.45);
+    \draw[thick, draw=black!65, fill=white] (2.70, 1.45) -- (2.42, 0.93) -- (2.98, 0.93) -- cycle;
+    \node[font=\tiny] at (2.70, 1.07) {$R_p$};
+    % Subtrees of b
+    \draw[edge] (bb2) -- (1.04, 0.76);
+    \draw[thick, draw=black!65, fill=white] (1.04, 0.76) -- (0.78, 0.24) -- (1.30, 0.24) -- cycle;
+    \node[font=\tiny] at (1.04, 0.38) {$L_1$};
+    \draw[edge] (bb2) -- (2.00, 0.76);
+    \draw[thick, draw=black!65, fill=white] (2.00, 0.76) -- (1.74, 0.24) -- (2.26, 0.24) -- cycle;
+    \node[font=\tiny] at (2.00, 0.38) {$R_b$};
+
+    \node[font=\scriptsize, text=black!75] at (0, -0.14) {Tree $\widetilde{H}$ unchanged; marker moves to $b_1 \gets p$.};
+  \end{scope}
+
+  % ==================== Panel (c): UPPERROT ====================
+  \begin{scope}[xshift=0cm, yshift=-4.28cm]
+    \draw[panelbox] (-3.78, -0.70) rectangle (3.78, 3.40);
+    \node[font=\footnotesize\bfseries] at (0, 3.08) {(c) $\UPROT$: rotate $[u, v]$ on upper spine};
+
+    % Before
+    \node[upnode] (cz1) at (-1.50, 2.45) {$z$};
+    \node[upnode] (cv1) at (-2.05, 1.74) {$v$};
+    \node[upnode] (cu1) at (-2.60, 1.03) {$u$};
+    \draw[upedge] (cz1) -- (cv1);
+    \draw[upedge] (cv1) -- (cu1);
+    \draw[rotarc] (cu1) to[bend left=42] (cv1);
+    % Subtrees A, B, C
+    \draw[edge] (cu1) -- (-3.06, 0.42);
+    \draw[thick, draw=black!65, fill=white] (-3.06, 0.42) -- (-3.32, -0.06) -- (-2.80, -0.06) -- cycle;
+    \node[font=\tiny] at (-3.06, 0.08) {$A$};
+    \draw[edge] (cu1) -- (-2.14, 0.42);
+    \draw[thick, draw=black!65, fill=white] (-2.14, 0.42) -- (-2.40, -0.06) -- (-1.88, -0.06) -- cycle;
+    \node[font=\tiny] at (-2.14, 0.08) {$B$};
+    \draw[edge] (cv1) -- (-1.55, 1.12);
+    \draw[thick, draw=black!65, fill=white] (-1.55, 1.12) -- (-1.81, 0.64) -- (-1.29, 0.64) -- cycle;
+    \node[font=\tiny] at (-1.55, 0.78) {$C$};
+
+    % Arrow
+    \draw[->, very thick, MidnightBlue!85] (-0.76, 1.45) -- node[above, font=\scriptsize\bfseries, text=MidnightBlue!90] {$[u, v]$} (0.42, 1.45);
+
+    % After
+    \node[upnode] (cz2) at (2.02, 2.45) {$z$};
+    \node[upnode] (cu2) at (1.48, 1.74) {$u$};
+    \node[bstnode] (cv2) at (2.22, 1.03) {$v$};
+    \draw[upedge] (cz2) -- (cu2);
+    \draw[edge] (cu2) -- (cv2);
+    % Subtrees A, B, C
+    \draw[edge] (cu2) -- (0.98, 1.12);
+    \draw[thick, draw=black!65, fill=white] (0.98, 1.12) -- (0.72, 0.64) -- (1.24, 0.64) -- cycle;
+    \node[font=\tiny] at (0.98, 0.78) {$A$};
+    \draw[edge] (cv2) -- (1.76, 0.42);
+    \draw[thick, draw=black!65, fill=white] (1.76, 0.42) -- (1.50, -0.06) -- (2.02, -0.06) -- cycle;
+    \node[font=\tiny] at (1.76, 0.08) {$B$};
+    \draw[edge] (cv2) -- (2.68, 0.42);
+    \draw[thick, draw=black!65, fill=white] (2.68, 0.42) -- (2.42, -0.06) -- (2.94, -0.06) -- cycle;
+    \node[font=\tiny] at (2.68, 0.08) {$C$};
+
+    \node[font=\scriptsize, text=black!75] at (0, -0.44) {Right-rotates $[u, v]$ ($b_1 \le u < v < z$); $b_1$ unchanged.};
+  \end{scope}
+
+  % ==================== Panel (d): POP(s) ====================
+  \begin{scope}[xshift=8.00cm, yshift=-4.28cm]
+    \draw[panelbox] (-3.78, -0.70) rectangle (3.78, 3.40);
+    \node[font=\footnotesize\bfseries] at (0, 3.08) {(d) $\POP(s)$: splice out $s$, pair-rotate ($k = 3$)};
+
+    % Before
+    \node[b1node] (dv3) at (-1.38, 2.52) {$v_3$};
+    \node[font=\scriptsize, text=BrickRed!90, anchor=west] at (-1.10, 2.56) {$b_1$};
+    \node[bstnode] (dv2) at (-1.88, 1.92) {$v_2$};
+    \node[bstnode] (dv1) at (-2.38, 1.32) {$v_1$};
+    \node[delnode] (ds)  at (-2.88, 0.72) {$s$};
+    \draw[edge] (dv3) -- (dv2);
+    \draw[edge] (dv2) -- (dv1);
+    \draw[edge, dashed, draw=BrickRed!75] (dv1) -- (ds);
+    \draw[rotarc] (dv1) to[bend left=42] (dv2);
+    % Right triangles R_2, R_1, R_0
+    \draw[edge] (dv2) -- (-1.40, 1.38);
+    \draw[thick, draw=black!65, fill=white] (-1.40, 1.38) -- (-1.65, 0.93) -- (-1.15, 0.93) -- cycle;
+    \node[font=\tiny] at (-1.40, 1.06) {$R_2$};
+    \draw[edge] (dv1) -- (-1.90, 0.78);
+    \draw[thick, draw=black!65, fill=white] (-1.90, 0.78) -- (-2.15, 0.33) -- (-1.65, 0.33) -- cycle;
+    \node[font=\tiny] at (-1.90, 0.46) {$R_1$};
+    \draw[edge] (ds) -- (-2.40, 0.32);
+    \draw[thick, draw=black!65, fill=white] (-2.40, 0.32) -- (-2.65, -0.10) -- (-2.15, -0.10) -- cycle;
+    \node[font=\tiny] at (-2.40, 0.02) {$R_0$};
+
+    % Arrow
+    \draw[->, very thick, MidnightBlue!85] (-0.72, 1.45) -- node[above, font=\scriptsize\bfseries, text=MidnightBlue!90] {$\POP(s)$} (0.42, 1.45);
+
+    % After
+    \node[b1node] (dv3a) at (2.02, 2.45) {$v_3$};
+    \node[font=\scriptsize, text=BrickRed!90, anchor=west] at (2.30, 2.49) {$b_1$};
+    \node[bstnode] (dv1a) at (1.48, 1.74) {$v_1$};
+    \node[bstnode] (dv2a) at (2.22, 1.03) {$v_2$};
+    \draw[edge] (dv3a) -- (dv1a);
+    \draw[edge] (dv1a) -- (dv2a);
+    % Subtrees R_0, R_1, R_2
+    \draw[edge] (dv1a) -- (0.98, 1.12);
+    \draw[thick, draw=black!65, fill=white] (0.98, 1.12) -- (0.72, 0.64) -- (1.24, 0.64) -- cycle;
+    \node[font=\tiny] at (0.98, 0.78) {$R_0$};
+    \draw[edge] (dv2a) -- (1.76, 0.42);
+    \draw[thick, draw=black!65, fill=white] (1.76, 0.42) -- (1.50, -0.06) -- (2.02, -0.06) -- cycle;
+    \node[font=\tiny] at (1.76, 0.08) {$R_1$};
+    \draw[edge] (dv2a) -- (2.68, 0.42);
+    \draw[thick, draw=black!65, fill=white] (2.68, 0.42) -- (2.42, -0.06) -- (2.94, -0.06) -- cycle;
+    \node[font=\tiny] at (2.68, 0.08) {$R_2$};
+
+    \node[font=\scriptsize, text=black!75] at (0, -0.44) {Deletes $s$, rotates $e=(v_1,v_2,v_3)$ (if $k$ even, $b_1 \gets v_{2h+1}$).};
+  \end{scope}
+\end{tikzpicture}
+\caption{The four operations of a folded $\POP$ process $(\widetilde{H}, b_1)$ (Definition~\ref{def:folded-pop}), with upper-spine vertices ($> b_1$) shaded blue and the fold boundary $b_1$ shaded red: (a)~$\PUSH(w)$ splices $w(\emptyset, L_1)$ directly below $b_1^{\mathrm{old}}$ and moves $b_1$ to $w$; (b)~$\SHIFT$ leaves $\widetilde{H}$ unchanged and moves $b_1$ to its parent on $\LS(\widetilde{H})$; (c)~$\UPROT$ performs one right rotation $[u, v]$ on the upper spine ($b_1 \le u < v < \mathrm{root}$) without changing $b_1$; (d)~$\POP(s)$ splices out $s = \min V_{s^-}$ and performs $h = \max(0, \lfloor(k-1)/2\rfloor)$ disjoint right rotations $[v_1, v_2], \dots, [v_{2h-1}, v_{2h}]$ strictly below $v_{2h+1}$.}
+\label{fig:folded-ops}
+\end{figure}
 
 \begin{theorem}[Reduction to the Folded $\POP$ Process]
 \label{thm:mod1-reduction}
@@ -327,21 +556,21 @@ There exists an absolute constant $C_{\mathrm{red}} > 0$ such that for every $n$
 \end{theorem}
 
 \paragraph{Example (spine folding and folded operations on $P = 7$ keys).}
-Figure~\ref{fig:folded-pop} illustrates how a one-sided BST $H$ on $\{1, \dots, 7\}$ with right spine $\RS(H) = (4 < 6 < 7)$ and left subtrees $L_1 = 3\big(2(1, \emptyset), \emptyset\big)$, $L_2 = 5(\emptyset, \emptyset)$, and $L_3 = \emptyset$ folds upside-down into $(\widetilde{H}, b_1 = 4)$ with $\LS(\widetilde{H}) = (1 < 2 < 3 < 4 < 6 < 7)$, together with its first-child/right-sibling general tree $L''$ rooted at $\top = 8$ (Section~\ref{subsec:folded-laws}, where $\mathrm{postorder}(L'') = (1, 2, 3, 4, 5, 6, 7)$):
+Figure~\ref{fig:folded-pop} illustrates how a one-sided BST $H$ on $\{1, \dots, 7\}$ with right spine $\RS(H) = (4 < 6 < 7)$ and left subtrees $L_1 = 3\big(2(1, \emptyset), \emptyset\big)$, $L_2 = 5(\emptyset, \emptyset)$, and $L_3 = \emptyset$ folds upside-down into $(\widetilde{H}, b_1 = 4)$ with a single left spine $\LS(\widetilde{H}) = (1 < 2 < 3 < 4 < 6 < 7)$:
 \begin{itemize}[leftmargin=2em, itemsep=1pt]
-  \item A root left rotation $[6, 4]$ on $\RS(H)$ becomes $\SHIFT$: $\widetilde{H}$ is unchanged and $b_1$ steps up $\LS(\widetilde{H})$ from $4$ to $6$.
-  \item A deeper left rotation $[7, 6]$ on $\RS(H)$ becomes $\UPROT$: it performs the upper-spine right rotation $[4, 6]$ below $7$ on $\widetilde{H}$ (promoting $\pi(4) : 6 \mapsto 7$ in $L''$) while keeping $b_1 = 4$.
-  \item Executing $\POP(1)$ on $(\widetilde{H}, b_1 = 4)$ sees subpath $(v_0, v_1, v_2, v_3) = (1, 2, 3, 4)$ ($k = 3$, $h = 1$): it splices out $1$ and performs the single internal $\POP$ right rotation $e = (2, 3, 4) \in \mathcal{R}_{\mathrm{int}}(\widetilde{H})$ strictly below $b_1 = 4$ (updating $\pi(2) : 3 \mapsto 4$ in $L''$).
+  \item \emph{$\PUSH$:} If key $1$ were not yet present (so $L_1^{\mathrm{old}} = 3(2, \emptyset)$ under $b_1^{\mathrm{old}} = 4$), executing $\PUSH(1)$ would splice $1\big(\emptyset, 3(2, \emptyset)\big)$ directly below $4$ and move the fold boundary to $b_1^{\mathrm{new}} = 1$.
+  \item \emph{$\SHIFT$:} A root left rotation $[6, 4]$ on $\RS(H)$ becomes $\SHIFT$ on $(\widetilde{H}, b_1 = 4)$: the BST $\widetilde{H}$ is unchanged and $b_1$ steps up $\LS(\widetilde{H})$ from $4$ to $6$.
+  \item \emph{$\UPROT$:} A deeper left rotation $[7, 6]$ on $\RS(H)$ becomes $\UPROT$: it performs the upper-spine right rotation $[4, 6]$ strictly below $7$ on $\widetilde{H}$ while keeping $b_1 = 4$.
+  \item \emph{$\POP(1)$:} On the pictured $(\widetilde{H}, b_1 = 4)$, $\POP(1)$ sees lower-spine subpath $(v_0, v_1, v_2, v_3) = (1, 2, 3, 4)$ ($k = 3$, $h = 1$), splices out $1$, performs the single internal $\POP$ right rotation $e = (2, 3, 4) \in \mathcal{R}_{\mathrm{int}}(\widetilde{H})$ strictly below $b_1 = 4$, and keeps $b_1 = 4$.
 \end{itemize}
 
 \begin{figure}[ht]
 \centering
 \begin{tikzpicture}[
   >=Stealth,
-  bstnode/.style={circle, draw=black!80, thick, minimum size=17pt, inner sep=1pt, font=\footnotesize},
+  bstnode/.style={circle, draw=black!80, thick, minimum size=17pt, inner sep=1pt, font=\footnotesize, fill=white},
   rsnode/.style={bstnode, fill=MidnightBlue!12, draw=MidnightBlue!85},
   b1node/.style={bstnode, fill=BrickRed!15, draw=BrickRed!85, very thick},
-  topnode/.style={rectangle, rounded corners=3pt, draw=black!70, fill=black!6, thick, minimum height=16pt, minimum width=24pt, inner sep=2pt, font=\footnotesize},
   edge/.style={thick, draw=black!75},
   rsedge/.style={very thick, draw=MidnightBlue!85},
   rotarc/.style={->, thick, dashed, draw=BrickRed!85}
@@ -365,17 +594,17 @@ Figure~\ref{fig:folded-pop} illustrates how a one-sided BST $H$ on $\{1, \dots, 
     \draw[edge] (h6) -- (h5);
 
     \node[font=\scriptsize, text=MidnightBlue!90, anchor=west] at (1.25, 2.22) {$\RS(H)$};
-    \node[font=\scriptsize, text=BrickRed!90, anchor=south] at (0.0, 2.85) {$b_1$};
+    \node[font=\scriptsize, text=BrickRed!90, anchor=south] at (0.0, 2.85) {$b_1 = \mathrm{root}(H)$};
     \node[font=\scriptsize, text=black!70] at (-1.05, -0.25) {$L_1 = \{1,2,3\}$};
     \node[font=\scriptsize, text=black!70] at (0.35, 0.50) {$L_2$};
   \end{scope}
 
   % Folding arrow
-  \draw[->, thick, MidnightBlue!80] (2.25, 1.60) -- node[above, font=\scriptsize\bfseries, text=MidnightBlue!90] {fold} node[below, font=\scriptsize, text=MidnightBlue!90] {$\RS(H)$} (3.10, 1.60);
+  \draw[->, very thick, MidnightBlue!80] (2.55, 1.60) -- node[above, font=\scriptsize\bfseries, text=MidnightBlue!90] {flip $\RS(H)$} node[below, font=\scriptsize, text=MidnightBlue!90] {upside-down} (3.95, 1.60);
 
   % ---------------- Panel (b): Folded BST H_tilde ----------------
-  \begin{scope}[xshift=6.25cm]
-    \node[font=\footnotesize\bfseries] at (-0.25, 3.45) {(b) Folded BST $(\widetilde{H},\, b_1 = 4)$};
+  \begin{scope}[xshift=7.30cm]
+    \node[font=\footnotesize\bfseries] at (-0.20, 3.45) {(b) Folded BST $(\widetilde{H},\, b_1 = 4)$};
     \node[rsnode] (f7) at (0.65, 2.75) {$7$};
     \node[rsnode] (f6) at (0.10, 2.15) {$6$};
     \node[b1node] (f4) at (-0.45, 1.55) {$4$};
@@ -391,51 +620,27 @@ Figure~\ref{fig:folded-pop} illustrates how a one-sided BST $H$ on $\{1, \dots, 
     \draw[edge] (f3) -- (f2);
     \draw[edge] (f2) -- (f1);
 
-    \node[font=\scriptsize, text=BrickRed!90, anchor=east] at (-0.78, 1.60) {$b_1 = 4$};
+    \node[font=\scriptsize, text=BrickRed!90, anchor=east] at (-0.80, 1.60) {$b_1 = 4$};
+    \node[font=\scriptsize, text=MidnightBlue!90, anchor=west, align=left] at (1.02, 2.22) {upper spine ($\ge b_1$):\\[-1pt]$\SHIFT$, $\UPROT$};
+    \node[font=\scriptsize, text=black!75, anchor=west, align=left] at (-0.55, 0.10) {lower spine ($< b_1$):\\[-1pt]$\PUSH$, $\POP$};
     \draw[rotarc] (f2) to[bend left=42] node[left=2pt, font=\scriptsize, text=BrickRed!90] {$\POP(1): [2,3]$} (f3);
-    \draw[->, thick, dotted, draw=MidnightBlue!90] (f4) to[bend right=36] node[right=2pt, font=\scriptsize, align=left, text=MidnightBlue!90] {$\SHIFT$ /\\[-2pt]$\UPROT$} (f6);
-  \end{scope}
-
-  % Dual tree arrow
-  \draw[<->, thick, black!65] (8.25, 1.60) -- node[above, font=\scriptsize\bfseries] {dual} node[below, font=\scriptsize] {Knuth} (9.10, 1.60);
-
-  % ---------------- Panel (c): General tree L'' ----------------
-  \begin{scope}[xshift=11.10cm]
-    \node[font=\footnotesize\bfseries] at (0.05, 3.45) {(c) Dual tree $L''$ ($\pi$ moves up)};
-    \node[topnode] (g8) at (0.2, 2.75) {$\top = 8$};
-    \node[rsnode] (g7) at (0.2, 2.12) {$7$};
-    \node[rsnode] (g6) at (0.2, 1.49) {$6$};
-    \node[b1node] (g4) at (-0.35, 0.86) {$4$};
-    \node[bstnode] (g5) at (0.75, 0.86) {$5$};
-    \node[bstnode] (g3) at (-0.35, 0.23) {$3$};
-    \node[bstnode] (g2) at (-0.35, -0.40) {$2$};
-    \node[bstnode, dashed] (g1) at (-0.35, -1.03) {$1$};
-
-    \draw[edge] (g8) -- (g7);
-    \draw[edge] (g7) -- (g6);
-    \draw[edge] (g6) -- (g4);
-    \draw[edge] (g6) -- (g5);
-    \draw[edge] (g4) -- (g3);
-    \draw[edge] (g3) -- (g2);
-    \draw[edge, dashed] (g2) -- (g1);
-    \draw[rotarc] (g2) to[bend left=45] node[left=2pt, font=\scriptsize, text=BrickRed!90] {$\pi(2): 3 \mapsto 4$} (g4);
   \end{scope}
 \end{tikzpicture}
-\caption{Spine folding on $P = 7$ keys: (a) right spine $\RS(H) = (4 < 6 < 7)$ folds upside-down onto the top of $\LS(\widetilde{H})$ down to the fold boundary $b_1 = 4$ in~(b); (c) the dual first-child/right-sibling tree $L''$ under $\top = 8$ (at $\POP(1)$, leaf $1$ is spliced out and $\pi(2)$ jumps monotonically from $3$ to $4$).}
+\caption{Spine folding on $P = 7$ keys (Section~\ref{subsec:folded-laws}): flipping the right spine $\RS(H) = (4 < 6 < 7)$ of the unfolded one-sided BST $H$ in~(a) upside-down onto the top of $\LS(\widetilde{H})$ produces the folded BST $(\widetilde{H}, b_1 = 4)$ in~(b), separating $\LS(\widetilde{H})$ at $b_1 = 4$ into the upper spine $\{4, 6, 7\}$ and the lower spine $\{1, 2, 3\}$.}
 \label{fig:folded-pop}
 \end{figure}
 
 \paragraph{Proof overview.}
 In a general two-sided execution $(T_0, S)$, $\POP$s and $\EJECT$s interact across arbitrary interleavings of $\PUSH$ and $\INJECT$. Whereas Sundar~\cite[Section~3, Theorem~7]{Sundar1992} and Pettie~\cite[Section~2]{Pettie2008} reduce two-sided deques to one-sided half-tree subproblems via size-halving epochs, we observe that because insertions occur only at the global extrema, an \emph{offline nested-interval key assignment} (Lemma~\ref{lem:nested-keys}) partitions all at most $n + m$ vertices ever present globally---with \emph{no epochs}---into a \emph{three-way key partition} $V_L < V_M < V_R$: the $d_L$ keys deleted by $\POP$ (in deletion order), the $n + m - 2d$ keys surviving in $T_m$ ($d = d_L + d_R$), and the $d_R$ keys deleted by $\EJECT$ (in reverse deletion order).
 
-Restricting $T_t$ to $V_L, V_M, V_R$ via $\LCA$-closed projection (Lemma~\ref{lem:projection-stub}) gives three induced BSTs $(U_t, M_t, W_t)$. By the path-halving and cascade equivalence of $\POP$ and $\EJECT$ (Lemma~\ref{lem:cascade-equiv}; cf.~\cite{TarjanVanLeeuwen1984,Lucas1990,Lucas1992}, \cite[Section~3, Lemma~10]{Sundar1992}, and~\cite[Section~2, Observation~2.1]{Pettie2008}), each $\POP$ splices out $\min V(T)$ and performs vertex-disjoint paired right rotations $[v_1, v_2], [v_3, v_4], \dots$ up $\LS(T)$. Tracking the joint spine potential $|\LS(M_t)| + |\RS(M_t)| + |\RS(U_t)| + |\LS(W_t)|$ (Lemma~\ref{lem:spine-accounting}) pays $O(n + m)$ for all rotations touching $V_M$, straddling partition boundaries, or rotating $\LS(W_t)$ during $\POP$s, while bounding $\EJECT$-induced left rotations on $\RS(U_t)$ to $\max(0, 2d_L - 2)$. Prepending reverse-spine initialization and a right-spine tail of future $\INJECT$s (Lemma~\ref{lem:emptying-sim}) and applying Pettie's spine-folding bijection~\cite[Section~2, Observation~2.1 and Figure~2]{Pettie2008} in Section~\ref{subsec:folded-laws} then proves Theorem~\ref{thm:mod1-reduction} and establishes three structural laws of $(\widetilde{H}, L'')$ (Lemma~\ref{lem:folded-laws}) used in Section~\ref{sec:scale-tree} (routine verifications of Lemmas~\ref{lem:projection-stub}, \ref{lem:cascade-equiv}, and~\ref{lem:emptying-sim} and the operation-by-operation check of the spine-folding bijection are deferred to Appendix~\ref{app:reduction-proofs}).
+Restricting $T_t$ to $V_L, V_M, V_R$ via $\LCA$-closed projection (Lemma~\ref{lem:projection-stub}) gives three induced BSTs $(U_t, M_t, W_t)$. By the path-halving and cascade equivalence of $\POP$ and $\EJECT$ (Lemma~\ref{lem:cascade-equiv}; cf.~\cite{TarjanVanLeeuwen1984,Lucas1990,Lucas1992}, \cite[Section~3, Lemma~10]{Sundar1992}, and~\cite[Section~2, Observation~2.1]{Pettie2008}), each $\POP$ splices out $\min V(T)$ and performs vertex-disjoint paired right rotations $[v_1, v_2], [v_3, v_4], \dots$ up $\LS(T)$. Tracking the joint spine potential $|\LS(M_t)| + |\RS(M_t)| + |\RS(U_t)| + |\LS(W_t)|$ (Lemma~\ref{lem:spine-accounting}) pays $O(n + m)$ for all rotations touching $V_M$, straddling partition boundaries, or rotating $\LS(W_t)$ during $\POP$s, while bounding $\EJECT$-induced left rotations on $\RS(U_t)$ to $\max(0, 2d_L - 2)$. Prepending reverse-spine initialization and a right-spine tail of future $\INJECT$s (Lemma~\ref{lem:emptying-sim}) and applying Pettie's spine-folding bijection~\cite[Section~2, Observation~2.1 and Figure~2]{Pettie2008} in Section~\ref{subsec:folded-laws} then proves Theorem~\ref{thm:mod1-reduction} and establishes three structural laws of $\widetilde{H}$ (Lemma~\ref{lem:folded-laws}) used in Section~\ref{sec:scale-tree} (routine verifications of Lemmas~\ref{lem:projection-stub}, \ref{lem:cascade-equiv}, and~\ref{lem:emptying-sim} and the operation-by-operation check of the spine-folding bijection are deferred to Appendix~\ref{app:reduction-proofs}).
 
 \subsection{BST Interval Projections and Cascade Equivalence}
 \label{subsec:projections}
 
 For any rooted BST $T$ with distinct real keys in symmetric order (in-order), we write $V(T)$ for its vertex (key) set, $T_v$ for the subtree rooted at $v \in V(T)$, and $u(A, B)$ for the BST rooted at $u$ with left subtree $A = \mathrm{left}_T(u)$ and right subtree $B = \mathrm{right}_T(u)$. Recall that $\LS(T)$ and $\RS(T)$ denote the left and right spines of $T$ (visited from $\mathrm{root}(T)$ by following left or right child pointers, respectively, with $\LS(\emptyset) = \RS(\emptyset) = \emptyset$). Following Sundar~\cite[Section~1.2]{Sundar1992}, define the \emph{left depth} $\ld_T(v)$ of $v \in V(T)$ to be the number of left-child edges on the root-to-$v$ path in $T$ (so $\ld_T(v) = 0$ if and only if $v \in \RS(T)$). Under any right single rotation $[u, v]$ replacing $v\big(u(A, M), R\big)$ with $u\big(A, v(M, R)\big)$, $\ld(w)$ decreases by~$1$ for every $w \in \{u\} \cup V(A)$ and remains unchanged for every $w \in \{v\} \cup V(M) \cup V(R) \cup (V(T) \setminus V(T_v))$; moreover, $|\LS(T)|$ decreases by~$1$ if $v \in \LS(T)$ (removing $v$ from $\LS(T)$ while keeping $u$ and $\LS(A)$) and by~$0$ otherwise. Symmetrically, any left single rotation $[v, u]$ decreases $|\RS(T)|$ by~$1$ if $u \in \RS(T)$ and by~$0$ otherwise.
 
-To project dynamic BSTs simultaneously onto contiguous key intervals (as in~\cite{Tarjan1985} and~\cite[Section~2.1]{Sundar1992}) and onto non-contiguous summary subsets in Section~\ref{sec:cascades}, we work with general $\LCA$-closed sets. Write $\LCA_T(x, y)$ for the lowest common ancestor of $x, y \in V(T)$ in $T$. A subset $\mathcal{S} \subseteq \mathbb{R}$ is \emph{$\LCA$-closed} in $T$ if $x, y \in V(T) \cap \mathcal{S}$ implies $\LCA_T(x, y) \in \mathcal{S}$. Every real interval $I \subseteq \mathbb{R}$ is $\LCA$-closed in every BST $T$, since $x \le \LCA_T(x, y) \le y$ for all $x \le y$ in $V(T)$. Whenever $\mathcal{S}$ is $\LCA$-closed in $T$, for every vertex $u \in V(T) \setminus \mathcal{S}$ at most one of $V(\mathrm{left}_T(u)) \cap \mathcal{S}$ and $V(\mathrm{right}_T(u)) \cap \mathcal{S}$ can be non-empty (otherwise $a \in V(\mathrm{left}_T(u)) \cap \mathcal{S}$ and $b \in V(\mathrm{right}_T(u)) \cap \mathcal{S}$ would have $\LCA_T(a, b) = u \notin \mathcal{S}$). Thus we may define the \emph{induced BST} $T|_{\mathcal{S}}$ on $V(T) \cap \mathcal{S}$ recursively by $\emptyset|_{\mathcal{S}} := \emptyset$ and
+To track how a subset of keys $\mathcal{S} \subseteq \mathbb{R}$ evolves inside a larger dynamic BST $T$---both for contiguous key intervals (as in~\cite{Tarjan1985} and~\cite[Section~2.1]{Sundar1992}) and for non-contiguous summary subsets in Section~\ref{sec:cascades}---we restrict $T$ to $V(T) \cap \mathcal{S}$ whenever $\mathcal{S}$ has no branching conflicts in $T$. Write $\LCA_T(x, y)$ for the lowest common ancestor of $x, y \in V(T)$ in $T$. We say $\mathcal{S} \subseteq \mathbb{R}$ is \emph{$\LCA$-closed} in $T$ if for every pair of vertices $x, y \in V(T) \cap \mathcal{S}$, their lowest common ancestor $\LCA_T(x, y)$ also belongs to $\mathcal{S}$ (for instance, every contiguous interval $I \subseteq \mathbb{R}$ is $\LCA$-closed in every BST $T$, since $x \le \LCA_T(x, y) \le y$ whenever $x \le y$). When $\mathcal{S}$ is $\LCA$-closed in $T$, any vertex $u \in V(T) \setminus \mathcal{S}$ can have elements of $\mathcal{S}$ in at most one of its two child subtrees (otherwise $a \in V(\mathrm{left}_T(u)) \cap \mathcal{S}$ and $b \in V(\mathrm{right}_T(u)) \cap \mathcal{S}$ would force $\LCA_T(a, b) = u \notin \mathcal{S}$). Contracting away every vertex outside $\mathcal{S}$ therefore defines a unique \emph{induced BST} $T|_{\mathcal{S}}$ on $V(T) \cap \mathcal{S}$ via $\emptyset|_{\mathcal{S}} := \emptyset$ and
 \[
 u(A, B)\big|_{\mathcal{S}} \;:=\;
 \begin{cases}
@@ -531,7 +736,13 @@ Since $\Rot(T_0, S) \le d + 2\big(C_{\POP}(U) + C_{\EJECT}(W) + \sum_{t\text{ de
 \subsection{Emptying Simulation, Spine Folding, and Structural Laws of \texorpdfstring{$\widetilde{H}$}{H-tilde}}
 \label{subsec:folded-laws}
 
-Define a \emph{one-sided $\POP$ execution} $H$ of size $P \ge 1$ starting from $\emptyset$ on $\{1, \dots, P\}$ to be a dynamic BST sequence beginning at $H = \emptyset$ and ending at $H = \emptyset$, driven by: (i) $P$ $\PUSH(w)$ steps ($w \in \{1, \dots, P\}$, with $w < \min V(H)$ when $H \ne \emptyset$, setting $H \gets w(\emptyset, H)$); (ii) $P$ $\POP$ steps deleting $s = 1, \dots, P$ in increasing order via the cascade rule of Lemma~\ref{lem:cascade-equiv} (splicing out $s = \min V(H)$ and executing $\lfloor k / 2 \rfloor$ vertex-disjoint right single rotations $[v_1, v_2], \dots$ along $\LS(H) = (v_0 < \dots < v_k)$); and (iii) $K_L$ right-spine left single rotations $[b_{d+1}, b_d]$ along $\RS(H) = (b_1 < \dots < b_\beta)$ for $1 \le d \le \beta - 1$. Write $C_{\POP}(H)$ for the total number of cascade right rotations across the $P$ $\POP$ steps. Notice in three lines that $K_L < 2P$ holds automatically: $|\RS(H)|$ starts at $0$ and ends at $0$; each of the $P$ $\PUSH$es changes $|\RS(H)|$ by $+1$, each of the first $P - 1$ $\POP$s changes $|\RS(H)|$ by at most $+1$, the $P$-th $\POP$ acts on $|V(H)| = 1$ ($|\LS(H)| = 1$) and changes $|\RS(H)|$ by $-1$, and each right-spine left rotation $[b_{d+1}, b_d]$ decreases $|\RS(H)|$ by~$1$, forcing
+Before folding the right spine upside-down, we package the left-end subproblem $U_t$ into a clean unfolded one-sided model that starts and ends at the empty tree. A \emph{one-sided $\POP$ execution} $H$ of size $P \ge 1$ starting from $\emptyset$ on $\{1, \dots, P\}$ is a dynamic BST sequence that begins at $H = \emptyset$, ends at $H = \emptyset$, and consists of:
+\begin{enumerate}[label=(\roman*), leftmargin=2em, itemsep=1pt]
+  \item $P$ $\PUSH(w)$ steps ($w \in \{1, \dots, P\}$, with $w < \min V(H)$ when $H \ne \emptyset$), each attaching $w$ at the root via $H \gets w(\emptyset, H)$;
+  \item $P$ $\POP$ steps deleting $s = 1, \dots, P$ in increasing order via the cascade rule of Lemma~\ref{lem:cascade-equiv} (splicing out $s = \min V(H)$ and executing $\lfloor k / 2 \rfloor$ vertex-disjoint right single rotations $[v_1, v_2], \dots$ along $\LS(H) = (v_0 < \dots < v_k)$); and
+  \item $K_L \ge 0$ right-spine left single rotations $[b_{d+1}, b_d]$ along $\RS(H) = (b_1 < \dots < b_\beta)$ ($1 \le d \le \beta - 1$).
+\end{enumerate}
+Write $C_{\POP}(H)$ for the total number of cascade right rotations across the $P$ $\POP$ steps. Notice in three lines that $K_L < 2P$ holds automatically: $|\RS(H)|$ starts at $0$ and ends at $0$; each of the $P$ $\PUSH$es changes $|\RS(H)|$ by $+1$, each of the first $P - 1$ $\POP$s changes $|\RS(H)|$ by at most $+1$, the $P$-th $\POP$ acts on $|V(H)| = 1$ ($|\LS(H)| = 1$) and changes $|\RS(H)|$ by $-1$, and each right-spine left rotation $[b_{d+1}, b_d]$ decreases $|\RS(H)|$ by~$1$, forcing
 \begin{equation}
 \label{eq:KL-bound}
 K_L \;\le\; P + (P - 1) - 1 \;=\; 2P - 2 \;<\; 2P.
@@ -565,7 +776,7 @@ By Lemma~\ref{lem:spine-accounting}(1), $\Rot(T_0, S) \le 2\,C_{\POP}(U) + 2\,C_
 proving Theorem~\ref{thm:mod1-reduction} with $C_{\mathrm{red}} := 11$.
 \end{proof}
 
-We close Section~\ref{sec:reduction} by recording three structural laws of any folded $\POP$ process $\widetilde{H}$ of size $P \ge 1$ (Definition~\ref{def:folded-pop}). Associate to $\widetilde{H}_\tau$ the standard first-child/right-sibling general ordered tree $L''_\tau$ on $V_\tau \cup \{\top\}$ rooted at a super-root $\top := P + 1$ (Knuth~\cite[Section~2.3.2]{Knuth1997Vol1}): $x$ is the first child of $y \in V_\tau$ if and only if $x = \mathrm{left}_{\widetilde{H}_\tau}(y)$ (with $\mathrm{root}(\widetilde{H}_\tau)$ the first child of $\top$ when $V_\tau \ne \emptyset$), and $w$ is the immediate right sibling of $x$ if and only if $w = \mathrm{right}_{\widetilde{H}_\tau}(x)$, so the children of $y \in V_\tau$ in left-to-right order form $\RS(\mathrm{left}_{\widetilde{H}_\tau}(y))$. Write $\pi_\tau : V_\tau \to V_\tau \cup \{\top\}$ for the parent map of $L''_\tau$. Observe by induction on Definition~\ref{def:folded-pop} that whenever $V_\tau \ne \emptyset$, $\mathrm{right}_{\widetilde{H}_\tau}(\mathrm{root}(\widetilde{H}_\tau)) = \emptyset$ (every $\UPROT$ and internal $\POP$ rotation occurs strictly below $\mathrm{root}(\widetilde{H}_\tau)$), so $\mathrm{root}(\widetilde{H}_\tau)$ is the unique child of $\top$.
+We close Section~\ref{sec:reduction} by recording three structural laws of any folded $\POP$ process $\widetilde{H}$ of size $P \ge 1$ (Definition~\ref{def:folded-pop}). To track how keys move upward across right rotations via a single monotone parent pointer, associate to $\widetilde{H}_\tau$ its standard \emph{first-child/right-sibling general ordered tree} $L''_\tau$ on $V_\tau \cup \{\top\}$ rooted at a sentinel super-root $\top := P + 1$ (Knuth~\cite[Section~2.3.2]{Knuth1997Vol1}): $x$ is the first child of $y \in V_\tau$ if and only if $x = \mathrm{left}_{\widetilde{H}_\tau}(y)$ (with $\mathrm{root}(\widetilde{H}_\tau)$ the first child of $\top$ when $V_\tau \ne \emptyset$), and $w$ is the immediate right sibling of $x$ if and only if $w = \mathrm{right}_{\widetilde{H}_\tau}(x)$, so the children of $y \in V_\tau$ in left-to-right order are precisely the right spine $\RS(\mathrm{left}_{\widetilde{H}_\tau}(y))$. Write $\pi_\tau : V_\tau \to V_\tau \cup \{\top\}$ for the parent map of $L''_\tau$. Directly on the BST $\widetilde{H}_\tau$, observe by induction on Definition~\ref{def:folded-pop} that whenever $V_\tau \ne \emptyset$, $\mathrm{right}_{\widetilde{H}_\tau}(\mathrm{root}(\widetilde{H}_\tau)) = \emptyset$ (every $\UPROT$ and internal $\POP$ rotation occurs strictly below $\mathrm{root}(\widetilde{H}_\tau)$), so $\mathrm{root}(\widetilde{H}_\tau)$ is the unique child of $\top$, and for every $v \in V_\tau$, $\pi_\tau(v)$ is simply the lowest ancestor $a$ of $v$ in $\widetilde{H}_\tau$ whose left subtree contains $v$ (or $\top$ when $v = \mathrm{root}(\widetilde{H}_\tau)$).
 
 \begin{lemma}[Structural Laws of $(\widetilde{H}, L'')$]
 \label{lem:folded-laws}
@@ -601,7 +812,7 @@ Let $\widetilde{H}$ be any folded $\POP$ process of size $P \ge 1$ (Definition~\
 \subsection{The Static-BST Cascade Problem and Main Bound}
 \label{subsec:overview-mod2}
 
-Before analyzing multi-scale partitions of a folded $\POP$ process in Section~\ref{sec:scale-tree}, we isolate a purely static-BST extremal problem. Consider an $N$-node BST $B$ on $\{1, \dots, N\}$ undergoing \emph{only right single rotations} (advancing in the \emph{right-rotation order}\footnote{Right-rotation reachability on $N$-node binary trees is the classical Tamari partial order~\cite{Tamari1962,FriedmanTamari1967,HuangTamari1972,Pallo1986,BjornerWachs1997,Knuth2011Vol4A} (cf.~\cite{SleatorTarjanThurston1988} for undirected rotation distance); we refer to it simply as the right-rotation order since no lattice operations are needed.}). For integers $k \ge 1$ and $\Delta' \ge 0$, a \emph{$\Delta'$-gapped right $k$-cascade} on $B$ is a batch of $k$ simultaneous (vertex-disjoint) right single rotations $[x_1, y_1], \dots, [x_k, y_k]$ ($x_1 < y_1 < \dots < x_k < y_k$) along a single left-child subpath of $B$ with at most $\Delta'$ vertices strictly between $y_r$ and $x_{r+1}$ along that subpath for each $1 \le r < k$. Let $C^{\Delta'}_k(N)$ denote the maximum number of $\Delta'$-gapped right $k$-cascades in any right-rotation sequence on an $N$-node BST.
+Before analyzing multi-scale partitions of a folded $\POP$ process in Section~\ref{sec:scale-tree}, we isolate a static-BST extremal question: if an $N$-node BST evolves \emph{only by right single rotations}, how many times can $k$ nearly consecutive pairs along a single left-child path rotate simultaneously? Formally, consider an $N$-node BST $B$ on $\{1, \dots, N\}$ undergoing only right single rotations (advancing in the \emph{right-rotation order}\footnote{Right-rotation reachability on $N$-node binary trees is the classical Tamari partial order~\cite{Tamari1962,FriedmanTamari1967,HuangTamari1972,Pallo1986,BjornerWachs1997,Knuth2011Vol4A} (cf.~\cite{SleatorTarjanThurston1988} for undirected rotation distance); we refer to it simply as the right-rotation order since no lattice operations are needed.}). For integers $k \ge 1$ and $\Delta' \ge 0$, a \emph{$\Delta'$-gapped right $k$-cascade} on $B$ is a batch of $k$ simultaneous (vertex-disjoint) right single rotations $[x_1, y_1], \dots, [x_k, y_k]$ ($x_1 < y_1 < \dots < x_k < y_k$, with $x_r = \mathrm{left}_B(y_r)$) along a single left-child subpath of $B$ such that at most $\Delta'$ unrotated gap vertices lie strictly between $y_r$ and $x_{r+1}$ along that subpath for each $1 \le r < k$ (so $\Delta' = 0$ requires adjacent disjoint pairs, while $\Delta' > 0$ permits bounded gaps). Let $C^{\Delta'}_k(N)$ denote the maximum number of $\Delta'$-gapped right $k$-cascades in any right-rotation sequence on an $N$-node BST.
 
 \begin{theorem}[Bounded-Gap Right-Cascade Bound]
 \label{thm:mod2-cascade}
@@ -692,7 +903,7 @@ Sundar~\cite[Theorem~3]{Sundar1992} bounded $0$-gapped right $(2i)$-cascades ($\
 \subsection{Right-Reach Characterization and Preorder-\texorpdfstring{$D$}{D} Summary Trees}
 \label{subsec:right-reach}
 
-For any BST $T$ on an ordered finite key set and any vertex $v \in V(T)$, write $T_v$ for the subtree of $T$ rooted at $v$ and define its \emph{right-reach} $R_T(v) := \max V(T_v)$. Any two $n$-node BSTs on possibly different ordered key sets are compared by identifying each key set with $\{1, \dots, n\}$ via in-order rank.
+To test whether one BST can reach another using only right rotations, we track how far to the right each vertex's subtree extends. For any BST $T$ on an ordered finite key set and any vertex $v \in V(T)$, write $T_v$ for the subtree of $T$ rooted at $v$ and define its \emph{right-reach} $R_T(v) := \max V(T_v)$ to be the largest key in $v$'s subtree (any two $n$-node BSTs on possibly different ordered key sets are compared by identifying each key set with $\{1, \dots, n\}$ via in-order rank). Every right rotation $[u, v]$ strictly expands $R(u)$ while leaving $R(x)$ unchanged for all $x \ne u$, and the converse holds as well:
 
 \begin{proposition}[Tamari Right-Reach Characterization]
 \label{prop:right-reach}
@@ -707,7 +918,7 @@ Conversely, suppose $R_{T_1}(v) \le R_{T_2}(v)$ for all $v \in \{1, \dots, n\}$.
 
 On $\{1, \dots, n\}$, in-order ordering gives $V(\mathrm{right}_T(v)) = \{v + 1, \dots, R_T(v)\}$ (empty when $R_T(v) = v$), so $R_T(v) = v + |V(\mathrm{right}_T(v))|$ for all $v \in \{1, \dots, n\}$. Pointwise comparison $R_{T_1}(v) \le R_{T_2}(v)$ is therefore identical to componentwise comparison of the right-subtree size (bracket) vector characterizing the Tamari right-rotation order~\cite{Tamari1962,FriedmanTamari1967} (specifically~\cite{HuangTamari1972,Pallo1986}, \cite[Section~9]{BjornerWachs1997}, and~\cite[Section~7.2.1.6]{Knuth2011Vol4A}, up to left--right reversal in~\cite{Pallo1986}).
 
-For any non-empty BST $T$ and $w \in V(T)$, write $\mathrm{pre}_T(w) \in \{1, \dots, |V(T)|\}$ for the $1$-indexed preorder rank of $w$ in $T$ (visiting $\mathrm{root}(T)$, then $\mathrm{left}_T(\mathrm{root}(T))$, then $\mathrm{right}_T(\mathrm{root}(T))$). Using Proposition~\ref{prop:right-reach} and Lemma~\ref{lem:projection-stub}, we generalize Sundar's global-tree construction~\cite[Section~4.2, Theorem~8]{Sundar1992} uniformly to all blocks $C_1, \dots, C_K$ (including $C_1$) and arbitrary $D \ge 1$.
+Next, when $\{1, \dots, N\}$ is partitioned into $K$ contiguous key blocks $C_1 < \dots < C_K$, we compress $B$ into a smaller \emph{preorder-$D$ summary BST} $G(B)$ of size at most $D K$ by keeping only the top $D$ vertices of each block's induced subtree $B|_{C_q}$ in preorder: for any non-empty BST $T$ and $w \in V(T)$, write $\mathrm{pre}_T(w) \in \{1, \dots, |V(T)|\}$ for the $1$-indexed preorder rank of $w$ in $T$ (visiting $\mathrm{root}(T)$, then $\mathrm{left}_T(\mathrm{root}(T))$, then $\mathrm{right}_T(\mathrm{root}(T))$). Using Proposition~\ref{prop:right-reach} and Lemma~\ref{lem:projection-stub}, we generalize Sundar's global-tree construction~\cite[Section~4.2, Theorem~8]{Sundar1992} uniformly to all blocks $C_1, \dots, C_K$ (including $C_1$) and arbitrary $D \ge 1$.
 
 \begin{lemma}[Preorder-$D$ Summary BST Simulation]
 \label{lem:preorder-global}
@@ -756,18 +967,21 @@ With Lemmas~\ref{lem:preorder-global} and~\ref{lem:cascade-potentials} in hand a
 \subsection{Valid Scale Trees and the Contraction-Pass Reduction}
 \label{subsec:overview-mod3}
 
-Our next reduction acts entirely on folded $\POP$ processes: given \emph{any} valid scale tree $\mathcal{T}$ of height at most $r$, a single multi-scale amortization pass self-reduces a size-$P$ folded $\POP$ process $\widetilde{H}$ to independent leaf folded $\POP$ processes $\{\widetilde{H}^{(Q)}\}_{Q \in \mathcal{P}_M}$ at $+C_{\mathrm{pass}}\,r\,P$ additive cost, with a universal constant $C_{\mathrm{pass}}$ independent of $P, r, M$, and $\mathcal{T}$. This decouples the dynamic BST analysis from the purely arithmetic task of constructing valid scale trees (Section~\ref{sec:contraction}).
+Our next reduction acts entirely on folded $\POP$ processes. To amortize across $M$ nested partitions $\mathcal{P}_0 \succ \mathcal{P}_1 \succ \dots \succ \mathcal{P}_M$ of $\{1, \dots, P\}$ at once without letting scale weights blow up, we organize the scales $\{1, \dots, M\}$ as the leaves of a rooted \emph{scale tree} $\mathcal{T}$ of height at most $r$. Given \emph{any} valid scale tree $\mathcal{T}$ of height at most $r$, a single multi-scale amortization pass self-reduces a size-$P$ folded $\POP$ process $\widetilde{H}$ to independent leaf folded $\POP$ processes $\{\widetilde{H}^{(Q)}\}_{Q \in \mathcal{P}_M}$ at $+C_{\mathrm{pass}}\,r\,P$ additive cost, with a universal constant $C_{\mathrm{pass}}$ independent of $P, r, M$, and $\mathcal{T}$. This decouples the dynamic BST analysis from the purely arithmetic task of constructing valid scale trees (Section~\ref{sec:contraction}).
 
 \begin{definition}[Scale Tree and Nested Block Partitions]
 \label{def:scale-tree}
-For $r \ge 1$ and $M \ge 1$, a \emph{scale tree of height at most $r$} on scales $\{1, \dots, M\}$ is a rooted ordered tree $\mathcal{T}$ whose leaves in left-to-right order are the scales $\{1, \dots, M\}$ (distinct from the keys $\{1, \dots, P\}$), each at depth $\delta(\ell) \in \{1, \dots, r\}$, where the edge from an internal node to its $c$-th child carries factor $4 c^2$ and each node $\xi \in \mathcal{T}$ has path weight $w(\xi) := \prod_{q=1}^{\delta(\xi)} (4 c_q^2)$ (setting $w(\mathrm{root}) := 1$ and writing $w_\ell := w(\ell)$ for leaves).
-
-We say $\mathcal{T}$ \emph{validly partitions} $\{1, \dots, P\}$ if setting $S_0 := P$ and $\mathcal{P}_0 := \{\{1, \dots, P\}\}$, for each $\ell = 1, \dots, M$ we have
-\[
-i_\ell \;:=\; \alpha_0(2 S_{\ell-1}) + 1, \qquad
-S_\ell \;:=\; w_\ell\,i_\ell^2 \;\le\; \frac{1}{2} S_{\ell-1},
-\]
-with nested partitions $\mathcal{P}_0 \succ \mathcal{P}_1 \succ \dots \succ \mathcal{P}_M$ formed by splitting each $X \in \mathcal{P}_{\ell-1}$ ($|X| \in [S_{\ell-1}, 2 S_{\ell-1})$) into $K_X := \lfloor |X| / S_\ell \rfloor \ge 2$ contiguous sub-blocks of size $S_\ell$ (and last sub-block in $[S_\ell, 2 S_\ell)$). Note that $1 \le K_X - 1 < K_X < 2 S_{\ell-1} \le A_{i_\ell - 1}(1) < A_{i_\ell}(1)$, directly matching the hypothesis $N \le A_i(1)$ of Theorem~\ref{thm:mod2-cascade} at $N = K_X - 1$ and $i = i_\ell$.
+Fix integers $P \ge 1$, $r \ge 1$, and $M \ge 1$.
+\begin{enumerate}[label=(\arabic*), leftmargin=2em, itemsep=2pt]
+  \item \emph{Scale tree $\mathcal{T}$ and path weights $w(\xi)$.} A \emph{scale tree of height at most $r$} on scales $\{1, \dots, M\}$ is a rooted ordered tree $\mathcal{T}$ whose leaves in left-to-right order are the partition scales $\{1, \dots, M\}$ (distinct from the keys $\{1, \dots, P\}$), each at depth $\delta(\ell) \in \{1, \dots, r\}$. To keep the reciprocal leaf weights summable ($\sum_{\ell=1}^M w_\ell^{-1} < \frac{1}{2}$) while resetting child counters inside every subtree, the edge from any internal node to its $c$-th child ($c \ge 1$) carries multiplier $4 c^2$, giving each node $\xi \in \mathcal{T}$ path weight $w(\xi) := \prod_{q=1}^{\delta(\xi)} (4 c_q^2)$ along the root-to-$\xi$ path (setting $w(\mathrm{root}) := 1$ and writing $w_\ell := w(\ell)$ for leaves $\ell \in \{1, \dots, M\}$).
+  \item \emph{Valid nested block partitions $\mathcal{P}_0 \succ \dots \succ \mathcal{P}_M$.} Setting $S_0 := P$ and starting from the single-block partition $\mathcal{P}_0 := \{\{1, \dots, P\}\}$, we say $\mathcal{T}$ \emph{validly partitions} $\{1, \dots, P\}$ if at each scale $\ell = 1, \dots, M$ the target block size $S_\ell$ shrinks by at least half according to
+  \[
+  i_\ell \;:=\; \alpha_0(2 S_{\ell-1}) + 1, \qquad
+  S_\ell \;:=\; w_\ell\,i_\ell^2 \;\le\; \frac{1}{2} S_{\ell-1},
+  \]
+  and $\mathcal{P}_0 \succ \mathcal{P}_1 \succ \dots \succ \mathcal{P}_M$ is the chain of nested contiguous-interval partitions obtained by splitting each parent block $X \in \mathcal{P}_{\ell-1}$ (which inductively satisfies $|X| \in [S_{\ell-1}, 2 S_{\ell-1})$) from left to right into $K_X := \lfloor |X| / S_\ell \rfloor \ge 2$ contiguous sub-blocks, where the first $K_X - 1$ sub-blocks have exact size $S_\ell$ and the last sub-block absorbs the remainder $|X| - (K_X - 1) S_\ell \in [S_\ell, 2 S_\ell)$.
+\end{enumerate}
+Note that $1 \le K_X - 1 < K_X < 2 S_{\ell-1} \le A_{i_\ell - 1}(1) < A_{i_\ell}(1)$, directly matching the hypothesis $N \le A_i(1)$ of Theorem~\ref{thm:mod2-cascade} at $N = K_X - 1$ and $i = i_\ell$.
 \end{definition}
 
 \begin{theorem}[Scale-Tree Contraction Pass and Bisection Bound]
@@ -925,7 +1139,7 @@ Summing over $\nu \in \mathcal{T}_{\mathrm{int}}$ via $\sum_{\nu \in \mathcal{T}
 
 Let $\mathcal{P}_0 \succ \mathcal{P}_1 \succ \dots \succ \mathcal{P}_M$ ($M \ge 1$) be \emph{any} nested chain of contiguous-interval partitions of $\{1, \dots, P\}$ starting from $\mathcal{P}_0 = \{\{1, \dots, P\}\}$ (no numerical scale condition on block sizes is needed for the definitions below or for Lemma~\ref{lem:bucket-leaf}, allowing Section~\ref{sec:frontiers} and Theorem~\ref{thm:mod3-pass}(2) to invoke them directly on dyadic and bisection partitions). For $u \in \{1, \dots, P\}$ and $0 \le \ell \le M$, let $B_\ell(u) \in \mathcal{P}_\ell$ denote the unique block of $\mathcal{P}_\ell$ containing $u$; for a block $Q \in \mathcal{P}_{\ell'}$ at a finer level $\ell' \ge \ell$, write $B_\ell(Q) := B_\ell(\min Q)$ for its enclosing block in $\mathcal{P}_\ell$.
 
-For keys $u, v \in \{1, \dots, P\}$, define the \emph{separating scale}
+For keys $u, v \in \{1, \dots, P\}$, the \emph{separating scale} $\sep(u, v) \in \{1, \dots, M + 1\}$ records the first (coarsest) scale $\ell$ at which $u$ and $v$ fall into different blocks (or $M + 1$ if they remain together down to the finest leaf partition $\mathcal{P}_M$):
 \[
 \sep(u, v) \;:=\;
 \begin{cases}
@@ -933,23 +1147,23 @@ M + 1 & \text{if } B_M(u) = B_M(v),\\
 \min\big\{\ell \in \{1, \dots, M\} : B_\ell(u) \ne B_\ell(v)\big\} & \text{otherwise.}
 \end{cases}
 \]
-Because $\mathcal{P}_0 = \{\{1, \dots, P\}\}$, whenever $\sep(u, v) = \ell \in \{1, \dots, M\}$ we have $B_{\ell-1}(u) = B_{\ell-1}(v)$ and $B_\ell(u) \ne B_\ell(v)$. Moreover, for any $1 \le a < b < c \le P$ and any $0 \le \ell \le M$, interval contiguity of $B_\ell(a)$ gives $B_\ell(a) = B_\ell(c) \iff B_\ell(a) = B_\ell(b) = B_\ell(c)$; taking the minimum $\ell$ where equality fails yields the \emph{ultrametric identity}
+Because $\mathcal{P}_0 = \{\{1, \dots, P\}\}$, a \emph{smaller} value of $\sep(u, v)$ means $u$ and $v$ separate at a \emph{coarser} scale, whereas a \emph{larger} value means they stay in the same block down to a \emph{finer} scale; whenever $\sep(u, v) = \ell \in \{1, \dots, M\}$, we have $B_{\ell-1}(u) = B_{\ell-1}(v)$ and $B_\ell(u) \ne B_\ell(v)$. Moreover, for any $1 \le a < b < c \le P$ and any $0 \le \ell \le M$, interval contiguity of $B_\ell(a)$ gives $B_\ell(a) = B_\ell(c) \iff B_\ell(a) = B_\ell(b) = B_\ell(c)$; taking the minimum $\ell$ where equality fails yields the \emph{ultrametric identity}
 \begin{equation}
 \label{eq:ultrametric}
 \sep(a, c) \;=\; \min\big(\sep(a, b),\; \sep(b, c)\big) \qquad (1 \le a < b < c \le P).
 \end{equation}
 
-Every internal $\POP$ rotation $e = (x, y, z) = (v_{2j-1}, v_{2j}, v_{2j+1}) \in \mathcal{R}_{\mathrm{int}}(\widetilde{H})$ ($1 \le j \le h$) during $\POP(s)$ satisfies $s < x < y < z$, where $x$ is the \emph{promoted key} and $y$ is the \emph{displaced key}. Comparing the trigger scale $\sep(s, x)$ against the rotation scale $\ell := \sep(x, y) \in \{1, \dots, M + 1\}$ partitions $\mathcal{R}_{\mathrm{int}}(\widetilde{H})$ into four disjoint classes:
+Every internal $\POP$ rotation $e = (x, y, z) = (v_{2j-1}, v_{2j}, v_{2j+1}) \in \mathcal{R}_{\mathrm{int}}(\widetilde{H})$ ($1 \le j \le h$) during $\POP(s)$ satisfies $s < x < y < z$, rotating the \emph{promoted key} $x$ above the \emph{displaced key} $y$ strictly below parent $z$. Comparing the \emph{trigger scale} $\sep(s, x)$ (the scale separating the deleted key $s$ from $x$) against the \emph{rotation scale} $\ell := \sep(x, y) \in \{1, \dots, M + 1\}$ (the scale separating the rotated pair $x, y$) partitions $\mathcal{R}_{\mathrm{int}}(\widetilde{H})$ into four disjoint classes:
 \begin{itemize}[leftmargin=2em]
-  \item \emph{Intra-leaf rotations} $\mathcal{B}_{\mathrm{leaf}}$ ($\ell = M + 1$, so $x, y \in Q$ for a leaf block $Q \in \mathcal{P}_M$), partitioned further into:
+  \item \emph{Intra-leaf rotations} $\mathcal{B}_{\mathrm{leaf}}$ ($\ell = M + 1$, where $x$ and $y$ lie in the same leaf block $Q \in \mathcal{P}_M$), partitioned further according to whether $Q$ has begun deleting and whether $z$ stays inside $Q$:
   \begin{itemize}[leftmargin=1.5em]
-    \item $\mathcal{B}_{\mathrm{leaf,pre}}$ (\emph{pre-activation}): $s < \min Q$;
-    \item $\mathcal{B}_{\mathrm{leaf,exit}}$ (\emph{leaf-exit}): $s \in Q$ and $z > \max Q$;
-    \item $\mathcal{B}_{\mathrm{leaf,act}}$ (\emph{active intra-leaf}): $s, x, y, z \in Q$.
+    \item $\mathcal{B}_{\mathrm{leaf,pre}}$ (\emph{pre-activation}, $s < \min Q$): triggered before any key of $Q$ is popped;
+    \item $\mathcal{B}_{\mathrm{leaf,exit}}$ (\emph{leaf-exit}, $s \in Q$ and $z > \max Q$): triggered inside $Q$, with parent $z$ strictly above $Q$;
+    \item $\mathcal{B}_{\mathrm{leaf,act}}$ (\emph{active intra-leaf}, $s, x, y, z \in Q$): occurring entirely within $Q$.
   \end{itemize}
-  \item \emph{Coarse-trigger split-scale rotations} $\mathcal{B}_1$: $1 \le \sep(s, x) < \ell \le M$.
-  \item \emph{Fine-trigger split-scale rotations} $\mathcal{B}_2$: $1 \le \ell < \sep(s, x) \le M + 1$.
-  \item \emph{Same-scale (three-block) rotations} $\mathcal{B}_3 = \mathcal{B}_{3,\mathrm{intra}} \sqcup \mathcal{B}_{3,\mathrm{exit}}$: $1 \le \sep(s, x) = \ell \le M$ (so $s < x < y$ lie in three distinct child sub-blocks $S_p < S_b < S_q$ of $X := B_{\ell-1}(s) \in \mathcal{P}_{\ell-1}$), split into $\mathcal{B}_{3,\mathrm{intra}}$ ($z \in S_q$) and $\mathcal{B}_{3,\mathrm{exit}}$ ($z > \max S_q$).
+  \item \emph{Coarse-trigger split-scale rotations} $\mathcal{B}_1$ ($1 \le \sep(s, x) < \ell \le M$): $s$ separates from $x$ at a coarser scale than $x$ separates from $y$ (so $x$ and $y$ still share a block at scale $\sep(s, x)$ while $s$ lies in an earlier block).
+  \item \emph{Fine-trigger split-scale rotations} $\mathcal{B}_2$ ($1 \le \ell < \sep(s, x) \le M + 1$): $s$ and $x$ still share a scale-$\ell$ block while $y$ lies in a later scale-$\ell$ block.
+  \item \emph{Same-scale (three-block) rotations} $\mathcal{B}_3 = \mathcal{B}_{3,\mathrm{intra}} \sqcup \mathcal{B}_{3,\mathrm{exit}}$ ($1 \le \sep(s, x) = \ell \le M$): $s < x < y$ lie in three distinct sibling sub-blocks $S_p < S_b < S_q$ of the same parent block $X := B_{\ell-1}(s) \in \mathcal{P}_{\ell-1}$, split into $\mathcal{B}_{3,\mathrm{intra}}$ ($z \in S_q$, parent $z$ stays inside $y$'s sub-block) and $\mathcal{B}_{3,\mathrm{exit}}$ ($z > \max S_q$, parent $z$ lies strictly above $S_q$).
 \end{itemize}
 
 \begin{lemma}[Intra-Leaf Rotations and Leaf Subprocess Projection]
@@ -1048,7 +1262,7 @@ Partition $\mathcal{B}_{3,\mathrm{intra}}$ into three disjoint subsets (writing 
   \item \emph{Interior confined ($1 \le j < h$ and $w_j \in S_q$):} Here $z_j, w_j \in S_q$ gives $\sep(s, z_j) = \ell < \sep(z_j, w_j)$, so $e_j^+ \in \mathcal{B}_1 \sqcup \mathcal{B}_{\mathrm{leaf,pre}}$ and $e_j \in \mathcal{E}_{\mathrm{enter}}$. Because $\Delta\phi(x_j) \le 0$ on $\mathcal{B}_{3,\mathrm{intra}}$, these rotations are disjoint from all interior $\Delta\phi(x_j) = +1$ rotations (also in $\mathcal{E}_{\mathrm{enter}}$), giving $\#\{\text{type-(2) in }\mathcal{B}_{3,\mathrm{intra}}\} + \#\{\text{interior } \Delta\phi(x_j) = +1\} \le |\mathcal{E}_{\mathrm{enter}}|$.
   \item \emph{Interior escaping ($1 \le j < h$ and $w_j > \max S_q$):} Here $u_j^+ > w_j > \max S_q$ while $z_j \in S_q$, so $\sep(z_j, u_j^+) \le \ell = \sep(x_j, z_j)$, giving $\phi_{s^+}(x_j) = 0$ and $\Delta\phi(x_j) = -1$.
 \end{enumerate}
-Summing $\Delta\Phi_{\mathrm{conf}}$ from $0$ to $0$ gives $0 \le P + K_{\mathrm{rot}} + \#\{\text{topmost } +1\} + \#\{\text{interior } +1\} - \#\{\text{type-(3)}\}$. Adding $\#\{\text{type-(1)}\} + \#\{\text{type-(2)}\}$ to both sides yields $|\mathcal{B}_{3,\mathrm{intra}}| \le 2P + K_{\mathrm{rot}} + |\mathcal{E}_{\mathrm{enter}}| < 2P + 2P + \frac{51}{25} P = \frac{151}{25} P$, by Definition~\ref{def:folded-pop}(2) and Lemma~\ref{lem:bucket-b1}(2).
+Summing $\Delta\Phi_{\mathrm{conf}}$ from $0$ to $0$ gives $0 \le P + K_{\mathrm{rot}} + \#\{\text{topmost } +1\} + \#\{\text{interior } +1\} - \#\{\text{type-(3)}\}$. Adding $\#\{\text{type-(1)}\} + \#\{\text{type-(2)}\}$ to both sides yields $|\mathcal{B}_{3,\mathrm{intra}}| \le 2P + K_{\mathrm{rot}} + |\mathcal{E}_{\mathrm{enter}}| < 2P + 2P + \frac{51}{25} P = \frac{151}{25} P$, by Definition~\ref{def:folded-pop} ($K_{\mathrm{rot}} \le K_L < 2P$) and Lemma~\ref{lem:bucket-b1}(2).
 \end{proof}
 
 
@@ -1312,7 +1526,7 @@ Given $P \ge 1$ and target height $r \ge 1$, our top-down greedy procedure $\Bui
 \subsection{The Recursive Scale-Tree Builder \texorpdfstring{$\BuildScaleTree$}{BuildScaleTree}}
 \label{subsec:build-scale-tree}
 
-Fix integers $r \ge 1$ and $P \ge 1$. Initialize the global scale counter $M := 0$ and coarse block parameters $S_0 := P$ and $\mathcal{P}_0 := \{\{1, \dots, P\}\}$, and call $(\tau_{\mathrm{root}}, S_{\mathrm{out}}) := \BuildScaleTree(0, 1, P)$ at the root. For any depth $\delta \in \{0, \dots, r - 1\}$, node path weight $W \ge 1$, and current block-size bound $S_{\mathrm{in}} \ge 1$, $\BuildScaleTree(\delta, W, S_{\mathrm{in}})$ returns a pair $(\tau, S_{\mathrm{out}})$ consisting of either $\tau = \mathrm{EMPTY}$ or a rooted ordered subtree $\tau$, together with an updated integer size bound $S_{\mathrm{out}} \ge 1$:
+Fix integers $r \ge 1$ and $P \ge 1$. To construct a valid height-$r$ scale tree top-down, we initialize the global scale counter $M := 0$ and coarse block parameters $S_0 := P$ and $\mathcal{P}_0 := \{\{1, \dots, P\}\}$, and call $(\tau_{\mathrm{root}}, S_{\mathrm{out}}) := \BuildScaleTree(0, 1, P)$ at the root. Each recursive call $\BuildScaleTree(\delta, W, S_{\mathrm{in}})$ takes the current tree depth $\delta \in \{0, \dots, r - 1\}$, the accumulated path weight $W \ge 1$ from the root, and the current block-size bound $S_{\mathrm{in}} \ge 1$, and returns a pair $(\tau, S_{\mathrm{out}})$ consisting of either $\tau = \mathrm{EMPTY}$ (when not even one new leaf scale fits under $\frac{1}{2} S_{\mathrm{in}}$) or a non-empty subtree $\tau$, together with the resulting finest block-size bound $S_{\mathrm{out}} \ge 1$. At leaf-parent depth $\delta = r - 1$, it greedily appends leaf scales $c = 1, 2, \dots$ as long as the candidate size $S_{\mathrm{cand}} = 4 c^2 W (\alpha_0(2 S_{\mathrm{curr}}) + 1)^2$ shrinks by at least half; at shallower internal depths $0 \le \delta \le r - 2$ ($q = r - \delta \ge 2$), it sequentially builds up to $2\,\alpha_q(S_{\mathrm{in}})$ child subtrees (each resetting its own child counter from~$1$) until a child stalls:
 
 \begin{center}
 \fbox{%
@@ -1467,7 +1681,7 @@ Since $r \ge 1$, summing gives $J(\widetilde{H}) \le (2 C_{\mathrm{pass}} + 6 C_
 \label{sec:frontiers}
 % ============================================================================
 
-The separating scale $\sep(u, v) \in \{1, \dots, M + 1\}$ and the four-way rotation classification $\mathcal{R}_{\mathrm{int}}(\widetilde{H}) = \mathcal{B}_{\mathrm{leaf}} \sqcup \mathcal{B}_1 \sqcup \mathcal{B}_2 \sqcup \mathcal{B}_3$ of Section~\ref{subsec:bucket-defs} depend only on a nested chain of contiguous-interval partitions $\mathcal{P}_0 \succ \mathcal{P}_1 \succ \dots \succ \mathcal{P}_M$ with $\mathcal{P}_0 = \{\{1, \dots, P\}\}$, and not on the numerical scale law $S_\ell = w_\ell i_\ell^2 \le \frac{1}{2} S_{\ell-1}$ of Definition~\ref{def:scale-tree}. We record how this classification degenerates on the purely combinatorial \emph{dyadic partition}, and explain why the scale-tree pass of Section~\ref{sec:scale-tree} does not extend to it.
+The separating scale $\sep(u, v) \in \{1, \dots, M + 1\}$ and the four-way rotation classification $\mathcal{R}_{\mathrm{int}}(\widetilde{H}) = \mathcal{B}_{\mathrm{leaf}} \sqcup \mathcal{B}_1 \sqcup \mathcal{B}_2 \sqcup \mathcal{B}_3$ of Section~\ref{subsec:bucket-defs} depend only on a nested chain of contiguous-interval partitions $\mathcal{P}_0 \succ \mathcal{P}_1 \succ \dots \succ \mathcal{P}_M$ with $\mathcal{P}_0 = \{\{1, \dots, P\}\}$, and not on the numerical scale law $S_\ell = w_\ell i_\ell^2 \le \frac{1}{2} S_{\ell-1}$ of Definition~\ref{def:scale-tree}. We record how this classification degenerates on the purely combinatorial \emph{dyadic partition}---which repeatedly bisects $\{1, \dots, P\}$ into halves down to singletons---and explain why the scale-tree pass of Section~\ref{sec:scale-tree} does not extend to it.
 
 \begin{proposition}[Degeneration of $\mathcal{B}_{\mathrm{leaf}}$ and $\mathcal{B}_3$ on the Dyadic Partition]
 \label{prop:dyadic-collapse}
@@ -1635,8 +1849,8 @@ Let $(\widetilde{H}_\tau, b_1(\tau))$ be the spine-folded pair of $H_\tau$ defin
 \begin{itemize}[leftmargin=2em]
   \item $\PUSH(w)$: if $H_{\tau^-} = \emptyset$, $H_{\tau^+} = w(\emptyset, \emptyset)$ gives $\widetilde{H}_{\tau^+} = w(\emptyset, \emptyset)$ and $b_1(\tau^+) = w$; if $H_{\tau^-} \ne \emptyset$, $\RS(H_{\tau^+}) = (w < b_1 < \dots < b_\beta)$ has left subtrees $\emptyset, L_1, \dots, L_\beta$, replacing $\mathrm{left}_{\widetilde{H}}(b_1)$ with $w(\emptyset, L_1)$ and setting $b_1(\tau^+) := w$, matching Definition~\ref{def:folded-pop}(1).
   \item Root right-spine left rotation $[b_2, b_1]$ ($d = 1$, $\beta \ge 2$): replaces $b_1(L_1, b_2(L_2, R_2))$ in $H_{\tau^-}$ with $b_2(b_1(L_1, L_2), R_2)$, giving $\RS(H_{\tau^+}) = (b_2 < \dots < b_\beta)$ with new first left subtree $b_1(L_1, L_2) = \widetilde{H}_{\tau^-, b_1}$; hence $\widetilde{H}_{\tau^+} = \widetilde{H}_{\tau^-}$ is unchanged and $b_1(\tau^+) = b_2$ (the parent of $b_1(\tau^-)$ on $\LS(\widetilde{H}_{\tau^-})$), which is a $\SHIFT$ step of Definition~\ref{def:folded-pop}(2).
-  \item Deeper right-spine left rotation $[b_{d+1}, b_d]$ ($2 \le d \le \beta - 1$): replaces $b_d(L_d, b_{d+1}(L_{d+1}, R_{d+1}))$ in $H_{\tau^-}$ with $b_{d+1}(b_d(L_d, L_{d+1}), R_{d+1})$, so $\RS(H_{\tau^+}) = (b_1 < \dots < b_{d-1} < b_{d+1} < \dots < b_\beta)$ keeps $b_1(\tau^+) = b_1(\tau^-)$ while changing $\mathrm{left}_{\widetilde{H}}(b_{d+1})$ from $b_d\big(b_{d-1}(A, L_d), L_{d+1}\big)$ to $b_{d-1}\big(A, b_d(L_d, L_{d+1})\big)$. This is the upper-spine right single rotation $[b_{d-1}, b_d]$ strictly below $b_{d+1} \le b_\beta = \mathrm{root}(\widetilde{H})$ with $b_1 \le b_{d-1} < b_d < \mathrm{root}(\widetilde{H})$, i.e., an $\UPROT$ step of Definition~\ref{def:folded-pop}(2), with $K_L = K_{\SHIFT} + K_{\mathrm{rot}} < 2P$ by~\eqref{eq:KL-bound}.
-  \item $\POP(s)$ ($s = \min V_{s^-}$): $\LS(H_{s^-}) = (v_0 < v_1 < \dots < v_k)$ from $v_0 = s$ to $v_k = \mathrm{root}(H_{s^-}) = b_1(s^-)$ ($k \ge 0$) coincides with the subpath of $\LS(\widetilde{H}_{s^-})$ from $s$ to $b_1(s^-)$; set $h := \max(0, \lfloor (k - 1)/2 \rfloor)$, noting $\lfloor k / 2 \rfloor \le 1 + h$ for all $k \ge 0$. If $k = 0$, $s = b_1(s^-)$ has $L_1 = \emptyset$ and splicing out $s$ in $H_{s^-}$ leaves $\emptyset$ (if $\beta = 1$) or $\RS(H_{s^+}) = (b_2 < \dots < b_\beta)$ with first left subtree $L_2$ (if $\beta \ge 2$), which in $\widetilde{H}_{s^-}$ splices out $s(\emptyset, L_2)$ (or $s(\emptyset, \emptyset)$) with $0$ rotations and updates $b_1(s^+) := b_2$ when $V_{s^+} \ne \emptyset$. If $k = 2h + 1 \ge 1$ is odd ($\lfloor k / 2 \rfloor = h$), splicing out $v_0$ and rotating $[v_1, v_2], \dots, [v_{2h-1}, v_{2h}]$ acts strictly inside $L_1 = \mathrm{left}_{H_{s^-}}(b_1) = \mathrm{left}_{\widetilde{H}_{s^-}}(v_{2h+1})$, keeping $b_1(s^+) = b_1(s^-)$. If $k = 2h + 2 \ge 2$ is even ($\lfloor k / 2 \rfloor = h + 1$), the first $h$ right rotations turn $L_1$ into $v_{2h+1}(T^{(h)}, R_{2h+1})$ and the $(h + 1)$-st right rotation $[v_{2h+1}, b_1]$ in $H_{s^-}$ yields $\RS(H_{s^+}) = (v_{2h+1} < b_1 < b_2 < \dots < b_\beta)$ with left subtrees $T^{(h)}, R_{2h+1}, L_2, \dots, L_\beta$, whose folded tree $\widetilde{H}_{s^+}$ keeps $\mathrm{left}_{\widetilde{H}}(b_1) = v_{2h+1}(T^{(h)}, R_{2h+1})$ (performing only the $h$ right rotations $[v_1, v_2], \dots, [v_{2h-1}, v_{2h}]$ strictly below $v_{2h+1}$ and suppressing $[v_{2h+1}, b_1]$) and updates $b_1(s^+) := v_{2h+1}$, matching Definition~\ref{def:folded-pop}(3).
+  \item Deeper right-spine left rotation $[b_{d+1}, b_d]$ ($2 \le d \le \beta - 1$): replaces $b_d(L_d, b_{d+1}(L_{d+1}, R_{d+1}))$ in $H_{\tau^-}$ with $b_{d+1}(b_d(L_d, L_{d+1}), R_{d+1})$, so $\RS(H_{\tau^+}) = (b_1 < \dots < b_{d-1} < b_{d+1} < \dots < b_\beta)$ keeps $b_1(\tau^+) = b_1(\tau^-)$ while changing $\mathrm{left}_{\widetilde{H}}(b_{d+1})$ from $b_d\big(b_{d-1}(A, L_d), L_{d+1}\big)$ to $b_{d-1}\big(A, b_d(L_d, L_{d+1})\big)$. This is the upper-spine right single rotation $[b_{d-1}, b_d]$ strictly below $b_{d+1} \le b_\beta = \mathrm{root}(\widetilde{H})$ with $b_1 \le b_{d-1} < b_d < \mathrm{root}(\widetilde{H})$, i.e., an $\UPROT$ step of Definition~\ref{def:folded-pop}(3), with $K_L = K_{\SHIFT} + K_{\mathrm{rot}} < 2P$ by~\eqref{eq:KL-bound}.
+  \item $\POP(s)$ ($s = \min V_{s^-}$): $\LS(H_{s^-}) = (v_0 < v_1 < \dots < v_k)$ from $v_0 = s$ to $v_k = \mathrm{root}(H_{s^-}) = b_1(s^-)$ ($k \ge 0$) coincides with the subpath of $\LS(\widetilde{H}_{s^-})$ from $s$ to $b_1(s^-)$; set $h := \max(0, \lfloor (k - 1)/2 \rfloor)$, noting $\lfloor k / 2 \rfloor \le 1 + h$ for all $k \ge 0$. If $k = 0$, $s = b_1(s^-)$ has $L_1 = \emptyset$ and splicing out $s$ in $H_{s^-}$ leaves $\emptyset$ (if $\beta = 1$) or $\RS(H_{s^+}) = (b_2 < \dots < b_\beta)$ with first left subtree $L_2$ (if $\beta \ge 2$), which in $\widetilde{H}_{s^-}$ splices out $s(\emptyset, L_2)$ (or $s(\emptyset, \emptyset)$) with $0$ rotations and updates $b_1(s^+) := b_2$ when $V_{s^+} \ne \emptyset$. If $k = 2h + 1 \ge 1$ is odd ($\lfloor k / 2 \rfloor = h$), splicing out $v_0$ and rotating $[v_1, v_2], \dots, [v_{2h-1}, v_{2h}]$ acts strictly inside $L_1 = \mathrm{left}_{H_{s^-}}(b_1) = \mathrm{left}_{\widetilde{H}_{s^-}}(v_{2h+1})$, keeping $b_1(s^+) = b_1(s^-)$. If $k = 2h + 2 \ge 2$ is even ($\lfloor k / 2 \rfloor = h + 1$), the first $h$ right rotations turn $L_1$ into $v_{2h+1}(T^{(h)}, R_{2h+1})$ and the $(h + 1)$-st right rotation $[v_{2h+1}, b_1]$ in $H_{s^-}$ yields $\RS(H_{s^+}) = (v_{2h+1} < b_1 < b_2 < \dots < b_\beta)$ with left subtrees $T^{(h)}, R_{2h+1}, L_2, \dots, L_\beta$, whose folded tree $\widetilde{H}_{s^+}$ keeps $\mathrm{left}_{\widetilde{H}}(b_1) = v_{2h+1}(T^{(h)}, R_{2h+1})$ (performing only the $h$ right rotations $[v_1, v_2], \dots, [v_{2h-1}, v_{2h}]$ strictly below $v_{2h+1}$ and suppressing $[v_{2h+1}, b_1]$) and updates $b_1(s^+) := v_{2h+1}$, matching Definition~\ref{def:folded-pop}(4).
 \end{itemize}
 Summing $\lfloor k / 2 \rfloor \le 1 + h$ across all $P$ $\POP$ steps shows that $\widetilde{H}$ is a valid folded $\POP$ process of size $P$ satisfying $C_{\POP}(H) \le P + J(\widetilde{H})$, establishing~\eqref{eq:cpop-folded}.
 \end{proof}
