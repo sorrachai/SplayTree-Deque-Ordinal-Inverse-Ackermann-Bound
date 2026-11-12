@@ -27,7 +27,7 @@ Neither `SolutionMain` nor `SolutionHelpers` imports `ChallengeMain` or `Challen
 
 ```text
 paper/
-  paper.pdf                    Compiled manuscript (54 pages)
+  paper.pdf                    Compiled manuscript (62 pages)
   main.tex                     LaTeX source of the manuscript
   references.bib               BibTeX bibliography (47 entries)
 ChallengeMain.lean             Minimal main challenge (Theorem 1.4 + BST ℤ bound)
