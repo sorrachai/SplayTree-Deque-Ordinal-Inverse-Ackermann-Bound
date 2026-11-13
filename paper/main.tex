@@ -116,6 +116,7 @@ We develop a scale-tree method for deriving amortized recurrences by jointly acc
 Our proof is self-contained, holds unconditionally for all $m, n \ge 0$, and is formally verified in Lean~4 together with every intermediate proposition, lemma, and reduction in the paper (\href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound}{\texttt{github.com/\allowbreak sorrachai/\allowbreak SplayTree-\allowbreak Deque-\allowbreak Ordinal-\allowbreak Inverse-\allowbreak Ackermann-\allowbreak Bound}}).
 \end{abstract}
 \newpage
+\setcounter{tocdepth}{2}
 \tableofcontents
 \newpage
 \pagenumbering{arabic}
@@ -216,9 +217,6 @@ There exists an absolute constant $C > 0$ such that for every $n$-node BST $T_0$
 \end{theorem}
 
 Because Theorem~\ref{thm:main} is parameterized by the deletion counts $d_L, d_R$ rather than $m + n$ alone, any execution performing $d = O\big((m + n)/\alpha_\omega(\max(m + n, 1))\big)$ deletions already performs $O(m + n)$ rotations; and because the same universal bound holds for all $m, n \ge 0$ without a separate base-case threshold, $\alpha_\omega\big(\max(m + n, 1)\big) = 1$ gives $\Rot(T_0, S) \le 2C(m + n)$ for all $m + n \le A_2(16)$.
-
-\paragraph{Formal verification in Lean~4.}
-Theorem~\ref{thm:main} and every numbered proposition, lemma, and theorem in Sections~\ref{sec:intro}--\ref{sec:frontiers} and Appendix~\ref{app:ackermann} have been formalized and mechanically verified in Lean~4 (\texttt{v4.35.0}) \cite{MouraUllrich2021} on top of \texttt{AlgoLib}'s BST and bottom-up splay-tree library \cite{AlgoLib2026} (\texttt{AlgoLib.\allowbreak DataStructures.\allowbreak SplayTree.\allowbreak Complexity}), using the exact definitions and threshold conventions of Definitions~\ref{def:ackermann} and~\ref{def:scale-tree}; the complete repository (including the paper and all Lean~4 source files) is available at \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound}{\texttt{https://github.com/\allowbreak sorrachai/\allowbreak SplayTree-\allowbreak Deque-\allowbreak Ordinal-\allowbreak Inverse-\allowbreak Ackermann-\allowbreak Bound}}. It separates a minimal specification of the main result in \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/ChallengeMain.lean}{\texttt{ChallengeMain.lean}} (approximately 250 LOCs including docstrings and shared definitions; see Appendix~\ref{app:lean-statement} for a self-contained $82$-line Lean~4 statement of Theorem~\ref{thm:main}) from a full blueprint of all $28$ intermediate reductions and helper lemmas in \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/ChallengeHelpers.lean}{\texttt{ChallengeHelpers.lean}}; the proof modules \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/SolutionMain.lean}{\texttt{SolutionMain.lean}} and \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/SolutionHelpers.lean}{\texttt{SolutionHelpers.lean}} compile without \texttt{sorry}, use only Lean's standard classical axioms (\texttt{propext}, \texttt{Classical.\allowbreak choice}, \texttt{Quot.sound}), and pass Lean's external kernel check against both specifications via \texttt{lake comparator}.
 
 \subsection{Overview of Techniques and Comparison with Prior Work}
 \label{subsec:techniques}
@@ -498,6 +496,16 @@ On the algorithmic side, Chalermsook, Chuzhoy, and
 Saranurak~\cite{ChalermsookCS20} developed a split-decomposition
 framework and obtained a constant-factor offline approximation
 in subexponential time.
+
+
+\subsection{Formal Verification}
+\label{subsec:formal-verification}
+Theorem~\ref{thm:main} and every numbered proposition, lemma, and theorem in Sections~\ref{sec:intro}--\ref{sec:frontiers} and Appendix~\ref{app:ackermann} have been formalized and mechanically verified in Lean~4 (\texttt{v4.35.0}) \cite{MouraUllrich2021} on top of \texttt{AlgoLib}'s BST and bottom-up splay-tree library \cite{AlgoLib2026} (\texttt{AlgoLib.\allowbreak DataStructures.\allowbreak SplayTree.\allowbreak Complexity}), using the exact definitions and threshold conventions of Definitions~\ref{def:ackermann} and~\ref{def:scale-tree}; the complete repository (including the paper and all Lean~4 source files) is available at \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound}{\texttt{https://github.com/\allowbreak sorrachai/\allowbreak SplayTree-\allowbreak Deque-\allowbreak Ordinal-\allowbreak Inverse-\allowbreak Ackermann-\allowbreak Bound}}. It separates a minimal specification of the main result in \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/ChallengeMain.lean}{\texttt{ChallengeMain.lean}} (approximately 250 LOCs including docstrings and shared definitions; see Appendix~\ref{app:lean-statement} for a self-contained $82$-line Lean~4 statement of Theorem~\ref{thm:main}) from a full blueprint of all $28$ intermediate reductions and helper lemmas in \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/ChallengeHelpers.lean}{\texttt{ChallengeHelpers.lean}}; the proof modules \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/SolutionMain.lean}{\texttt{SolutionMain.lean}} and \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/SolutionHelpers.lean}{\texttt{SolutionHelpers.lean}} compile without \texttt{sorry}, use only Lean's standard classical axioms (\texttt{propext}, \texttt{Classical.\allowbreak choice}, \texttt{Quot.sound}), and pass Lean's external kernel check against both specifications via \texttt{lake comparator}.
+
+
+\subsection{AI Disclosure}
+\label{subsec:ai-disclosure}
+A Gemini~4 Carbon model with harnesses on top discovered the proof with slight human guidance (Goran Zuzic, David P.~Woodruff, and Vahab Mirrokni). Goran Zuzic and Sorrachai Yingchareonthawornchai cleaned up the paper, and Goran Zuzic, David P.~Woodruff, and Vahab Mirrokni prepared the Lean~4 verification.
 
 
 \subsection{Organization of the paper}
@@ -1939,10 +1947,6 @@ Proposition~\ref{prop:dyadic-collapse} is purely a structural observation that $
   \item \emph{Tree-height amplification in $\LCA_{\mathcal{T}}$ chain routing:} At $P = 2^M$ ($M \ge 2$), while a lopsided left-leaning caterpillar tree (placing leaf $M - d$ at depth $d + 1$ for $0 \le d \le M - 3$ and leaves $1, 2$ as siblings at depth $M - 1$) keeps $\Sigma_{\mathcal{T}} < 4P$, it forces tree height $r = M - 1 = \log_2 P - 1$, and the ancestor/descendant chain arguments of Sections~\ref{subsec:b1} and~\ref{subsec:b2-master} multiply the sink bounds $|\mathcal{S}_1|$ and $|\mathcal{S}_2|$ by the height $r$.
 \end{enumerate}
 \end{remark}
-
-
-\section*{AI Disclosure}
-A Gemini~4 Carbon model with harnesses on top discovered the proof with slight human guidance (Goran Zuzic, David P.~Woodruff, and Vahab Mirrokni). Goran Zuzic and Sorrachai Yingchareonthawornchai cleaned up the paper, and Goran Zuzic, David P.~Woodruff, and Vahab Mirrokni prepared the Lean~4 verification.
 
 
 % ============================================================================
