@@ -11,7 +11,56 @@
 \usepackage[dvipsnames]{xcolor}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,calc,backgrounds,fit,decorations.pathreplacing}
+\usepackage{listings}
 \usepackage[colorlinks=true,linkcolor=MidnightBlue,citecolor=MidnightBlue,urlcolor=MidnightBlue]{hyperref}
+
+\lstdefinelanguage{Lean4}{
+  morekeywords=[1]{import,namespace,end,open,variable,inductive,where,def,abbrev,noncomputable,theorem,by,match,with,if,then,else,fun,matches,termination_by},
+  morekeywords=[2]{sorry},
+  morekeywords=[3]{Type,Prop,Bool,Option,Fin,BST,BinaryTree,LinearOrder},
+  sensitive=true,
+  morecomment=[l]{--},
+  morecomment=[n]{/-}{-/},
+  literate=
+    {α}{{$\alpha$}}1
+    {ω}{{$\omega$}}1
+    {ℕ}{{$\mathbb{N}$}}1
+    {ℝ}{{$\mathbb{R}$}}1
+    {→}{{$\to$}}1
+    {≠}{{$\ne$}}1
+    {∀}{{$\forall$}}1
+    {∈}{{$\in$}}1
+    {⟨}{{$\langle$}}1
+    {⟩}{{$\rangle$}}1
+    {∑}{{\scalebox{0.82}{$\textstyle\sum$}}}1
+    {≤}{{$\le$}}1
+    {∧}{{$\land$}}1
+    {∃}{{$\exists$}}1
+}
+
+\lstdefinestyle{leanstyle}{
+  language=Lean4,
+  basicstyle=\fontsize{7.4pt}{7.55pt}\selectfont\ttfamily,
+  keywordstyle=[1]\bfseries\color{MidnightBlue},
+  keywordstyle=[2]\bfseries\color{BrickRed},
+  keywordstyle=[3]\color{TealBlue!75!black},
+  commentstyle=\itshape\color{black!55},
+  numbers=left,
+  numberstyle=\tiny\color{black!40},
+  numbersep=7pt,
+  frame=single,
+  rulecolor=\color{black!20},
+  backgroundcolor=\color{black!2},
+  framesep=4pt,
+  xleftmargin=14pt,
+  xrightmargin=2pt,
+  columns=flexible,
+  keepspaces=true,
+  upquote=true,
+  showstringspaces=false,
+  aboveskip=0pt,
+  belowskip=0pt
+}
 
 \newtheorem{theorem}{Theorem}[section]
 \newtheorem{lemma}[theorem]{Lemma}
@@ -39,16 +88,16 @@
 
 \title{\textbf{Breaking All Iterated Inverse-Ackermann Bounds\\for the Deque Conjecture on Splay Trees}}
 \author{
-  Goran \v{Z}u\v{z}i\'{c}\\[-2pt]
+  Vahab Mirrokni\\[-2pt]
   {\small Google Research}
-  \and
-  Sorrachai Yingchareonthawornchai\\[-2pt]
-  {\small Institute for Theoretical Studies, ETH Zurich}
   \and
   David P. Woodruff\\[-2pt]
   {\small Google Research \& CMU}
   \and
-  Vahab Mirrokni\\[-2pt]
+  Sorrachai Yingchareonthawornchai\\[-2pt]
+  {\small Institute for Theoretical Studies, ETH Zurich}
+  \and
+  Goran Zuzic\\[-2pt]
   {\small Google Research}
 }
 \date{November 2026}
@@ -169,7 +218,7 @@ There exists an absolute constant $C > 0$ such that for every $n$-node BST $T_0$
 Because Theorem~\ref{thm:main} is parameterized by the deletion counts $d_L, d_R$ rather than $m + n$ alone, any execution performing $d = O\big((m + n)/\alpha_\omega(\max(m + n, 1))\big)$ deletions already performs $O(m + n)$ rotations; and because the same universal bound holds for all $m, n \ge 0$ without a separate base-case threshold, $\alpha_\omega\big(\max(m + n, 1)\big) = 1$ gives $\Rot(T_0, S) \le 2C(m + n)$ for all $m + n \le A_2(16)$.
 
 \paragraph{Formal verification in Lean~4.}
-Theorem~\ref{thm:main} and every numbered proposition, lemma, and theorem in Sections~\ref{sec:intro}--\ref{sec:frontiers} and Appendix~\ref{app:ackermann} have been formalized and mechanically verified in Lean~4 (\texttt{v4.35.0}) \cite{MouraUllrich2021} on top of \texttt{AlgoLib}'s BST and bottom-up splay-tree library \cite{AlgoLib2026} (\texttt{AlgoLib.\allowbreak DataStructures.\allowbreak SplayTree.\allowbreak Complexity}), using the exact definitions and threshold conventions of Definitions~\ref{def:ackermann} and~\ref{def:scale-tree}; the complete repository (including the paper and all Lean~4 source files) is available at \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound}{\texttt{https://github.com/\allowbreak sorrachai/\allowbreak SplayTree-\allowbreak Deque-\allowbreak Ordinal-\allowbreak Inverse-\allowbreak Ackermann-\allowbreak Bound}}. It separates a minimal specification of the main result in \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/ChallengeMain.lean}{\texttt{ChallengeMain.lean}} (approximately 250 LOCs) from a full blueprint of all $28$ intermediate reductions and helper lemmas in \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/ChallengeHelpers.lean}{\texttt{ChallengeHelpers.lean}}; the proof modules \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/SolutionMain.lean}{\texttt{SolutionMain.lean}} and \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/SolutionHelpers.lean}{\texttt{SolutionHelpers.lean}} compile without \texttt{sorry}, use only Lean's standard classical axioms (\texttt{propext}, \texttt{Classical.\allowbreak choice}, \texttt{Quot.sound}), and pass Lean's external kernel check against both specifications via \texttt{lake comparator}.
+Theorem~\ref{thm:main} and every numbered proposition, lemma, and theorem in Sections~\ref{sec:intro}--\ref{sec:frontiers} and Appendix~\ref{app:ackermann} have been formalized and mechanically verified in Lean~4 (\texttt{v4.35.0}) \cite{MouraUllrich2021} on top of \texttt{AlgoLib}'s BST and bottom-up splay-tree library \cite{AlgoLib2026} (\texttt{AlgoLib.\allowbreak DataStructures.\allowbreak SplayTree.\allowbreak Complexity}), using the exact definitions and threshold conventions of Definitions~\ref{def:ackermann} and~\ref{def:scale-tree}; the complete repository (including the paper and all Lean~4 source files) is available at \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound}{\texttt{https://github.com/\allowbreak sorrachai/\allowbreak SplayTree-\allowbreak Deque-\allowbreak Ordinal-\allowbreak Inverse-\allowbreak Ackermann-\allowbreak Bound}}. It separates a minimal specification of the main result in \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/ChallengeMain.lean}{\texttt{ChallengeMain.lean}} (approximately 250 LOCs including docstrings and shared definitions; see Appendix~\ref{app:lean-statement} for a self-contained $82$-line Lean~4 statement of Theorem~\ref{thm:main}) from a full blueprint of all $28$ intermediate reductions and helper lemmas in \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/ChallengeHelpers.lean}{\texttt{ChallengeHelpers.lean}}; the proof modules \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/SolutionMain.lean}{\texttt{SolutionMain.lean}} and \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/SolutionHelpers.lean}{\texttt{SolutionHelpers.lean}} compile without \texttt{sorry}, use only Lean's standard classical axioms (\texttt{propext}, \texttt{Classical.\allowbreak choice}, \texttt{Quot.sound}), and pass Lean's external kernel check against both specifications via \texttt{lake comparator}.
 
 \subsection{Overview of Techniques and Comparison with Prior Work}
 \label{subsec:techniques}
@@ -452,7 +501,7 @@ in subexponential time.
 
 
 \subsection{Organization of the paper}
-We structure the proof of Theorem~\ref{thm:main} as four modular sections in bottom-up dependency order (Sections~\ref{sec:reduction}--\ref{sec:contraction}; Table~\ref{tab:modules}), each opening with the standalone reduced problem it solves, an illustrated example, and its main theorem (with routine structural checks for Section~\ref{sec:reduction} and the general-$D$ cascade proofs of Section~\ref{sec:cascades} deferred to Appendices~\ref{app:reduction-proofs} and~\ref{app:cascade-proofs}), followed by our structural discussion of the dyadic partition in Section~\ref{sec:frontiers} and elementary Ackermann estimates in Appendix~\ref{app:ackermann}. Theorem~\ref{thm:main} is deduced in $15$ lines in Section~\ref{subsec:master-assembly} at the end of Section~\ref{sec:contraction} directly from Theorems~\ref{thm:mod1-reduction}, \ref{thm:mod3-pass}, and~\ref{thm:mod4-contraction}.
+We structure the proof of Theorem~\ref{thm:main} as four modular sections in bottom-up dependency order (Sections~\ref{sec:reduction}--\ref{sec:contraction}; Table~\ref{tab:modules}), each opening with the standalone reduced problem it solves, an illustrated example, and its main theorem (with routine structural checks for Section~\ref{sec:reduction} and the general-$D$ cascade proofs of Section~\ref{sec:cascades} deferred to Appendices~\ref{app:reduction-proofs} and~\ref{app:cascade-proofs}), followed by our structural discussion of the dyadic partition in Section~\ref{sec:frontiers}, elementary Ackermann estimates in Appendix~\ref{app:ackermann}, and the complete $82$-line Lean~4 formal statement of Theorem~\ref{thm:main} in Appendix~\ref{app:lean-statement}. Theorem~\ref{thm:main} is deduced in $15$ lines in Section~\ref{subsec:master-assembly} at the end of Section~\ref{sec:contraction} directly from Theorems~\ref{thm:mod1-reduction}, \ref{thm:mod3-pass}, and~\ref{thm:mod4-contraction}.
 
 \begin{table}[ht]
 \centering
@@ -1893,7 +1942,7 @@ Proposition~\ref{prop:dyadic-collapse} is purely a structural observation that $
 
 
 \section*{AI Disclosure}
-A Gemini~4 Carbon model with harnesses on top discovered the proof with slight human guidance (Goran \v{Z}u\v{z}i\'{c}, David P.~Woodruff, and Vahab Mirrokni). Goran \v{Z}u\v{z}i\'{c} and Sorrachai Yingchareonthawornchai cleaned up the paper, and Goran \v{Z}u\v{z}i\'{c}, David P.~Woodruff, and Vahab Mirrokni prepared the Lean~4 verification.
+A Gemini~4 Carbon model with harnesses on top discovered the proof with slight human guidance (Goran Zuzic, David P.~Woodruff, and Vahab Mirrokni). Goran Zuzic and Sorrachai Yingchareonthawornchai cleaned up the paper, and Goran Zuzic, David P.~Woodruff, and Vahab Mirrokni prepared the Lean~4 verification.
 
 
 % ============================================================================
@@ -2115,6 +2164,106 @@ C^{\Delta'}_{2i}(N) \;\le\; \frac{C^{\Delta'}_{2i}(M)}{\lfloor M / N \rfloor} \;
 \]
 proving Theorem~\ref{thm:mod2-cascade} with $C_{\mathrm{casc}} := 18$.
 \end{proof}
+
+
+% ============================================================================
+\section{Formal Theorem Statement in Lean~4}
+\label{app:lean-statement}
+% ============================================================================
+
+{\emergencystretch=1em
+For direct inspection without consulting the repository, Figure~\ref{fig:lean-challenge} prints \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/ChallengeStandalone.lean}{\texttt{ChallengeStandalone.\allowbreak lean}}, a complete, self-contained $82$-line Lean~4 (\texttt{v4.35.0}) challenge file stating Theorem~\ref{thm:main} (\texttt{SplayDeque.\allowbreak thm\_1\_4\_main}) directly on top of \texttt{AlgoLib}'s BST and bottom-up splay-tree module \texttt{AlgoLib.\allowbreak DataStructures.\allowbreak SplayTree.\allowbreak Complexity} (which, through its imports, provides Mathlib's \texttt{BinaryTree} together with \texttt{AlgoLib}'s \texttt{BST}, \texttt{num\_nodes}, bottom-up \texttt{splay}, and single-rotation count \texttt{splay.cost}). It compiles as written, and \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/CheckStandalone.lean}{\texttt{CheckStandalone.\allowbreak lean}} proves that its statement is equivalent to that of \texttt{thm\_1\_4\_main} in \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/ChallengeMain.lean}{\texttt{ChallengeMain.\allowbreak lean}}, which \href{https://github.com/sorrachai/SplayTree-Deque-Ordinal-Inverse-Ackermann-Bound/blob/main/SolutionMain.lean}{\texttt{SolutionMain.\allowbreak lean}} proves without \texttt{sorry}.\par}
+
+\begin{figure}[p]
+\begin{lstlisting}[style=leanstyle]
+import AlgoLib.DataStructures.SplayTree.Complexity
+import Mathlib.Data.Finset.Card
+import Mathlib.Order.Lattice.Nat
+
+namespace SplayDeque
+open SplayTree
+variable {α : Type}
+
+-- 1. Extremal keys and splay-tree deque semantics on BinaryTree / BST
+def minKey? : BinaryTree α → Option α
+  | .nil => none
+  | .node k l _ => match minKey? l with | none => some k | some m => some m
+def maxKey? : BinaryTree α → Option α
+  | .nil => none
+  | .node k _ r => match maxKey? r with | none => some k | some m => some m
+
+inductive DequeOp (α : Type) where
+  | pop | push (key : α) | eject | inject (key : α)
+
+def DequeOp.step [LinearOrder α] (t : BinaryTree α) : DequeOp α → BinaryTree α
+  | .pop => match minKey? t with | none => .nil | some k => (splay t k).right
+  | .eject => match maxKey? t with | none => .nil | some k => (splay t k).left
+  | .push x => .node x .nil t
+  | .inject x => .node x t .nil
+
+noncomputable def DequeOp.cost [LinearOrder α] (t : BinaryTree α) : DequeOp α → ℝ
+  | .pop => match minKey? t with | none => 0 | some k => splay.cost t k
+  | .eject => match maxKey? t with | none => 0 | some k => splay.cost t k
+  | .push _ | .inject _ => 0
+
+def DequeOp.Valid [LinearOrder α] (t : BinaryTree α) : DequeOp α → Prop
+  | .pop | .eject => t ≠ .nil
+  | .push x => ∀ k ∈ t, x < k
+  | .inject x => ∀ k ∈ t, k < x
+
+def dequeSeq [LinearOrder α] {m : ℕ} (init : BinaryTree α)
+    (ops : Fin m → DequeOp α) : Fin (m + 1) → BinaryTree α :=
+  fun i => Nat.recOn i.val init fun j acc =>
+    if h : j < m then (ops ⟨j, h⟩).step acc else acc
+
+def ValidDequeSeq [LinearOrder α] {m : ℕ} (init : BinaryTree α)
+    (ops : Fin m → DequeOp α) : Prop :=
+  ∀ i : Fin m, (ops i).Valid (dequeSeq init ops i.castSucc)
+
+noncomputable def dequeSequenceCost [LinearOrder α] {m : ℕ}
+    (init : BinaryTree α) (ops : Fin m → DequeOp α) : ℝ :=
+  ∑ i : Fin m, (ops i).cost (dequeSeq init ops i.castSucc)
+
+def popCount {m : ℕ} (ops : Fin m → DequeOp α) : ℕ :=
+  (Finset.univ.filter fun i => ops i matches .pop).card
+def ejectCount {m : ℕ} (ops : Fin m → DequeOp α) : ℕ :=
+  (Finset.univ.filter fun i => ops i matches .eject).card
+
+-- 2. Ackermann hierarchy A_i(j), star-iterates α_r, and level-ω inverse α_ω
+def ackermannStep (f : ℕ → ℕ) : ℕ → ℕ
+  | 0 => 1 | 1 => f 2 | j + 2 => f (ackermannStep f (j + 1))
+def ackermann : ℕ → ℕ → ℕ
+  | 0 => fun j => 2 * j | 1 => fun j => 2 ^ j
+  | i + 2 => ackermannStep (ackermann (i + 1))
+
+noncomputable def alpha0 (n : ℕ) : ℕ := sInf {k : ℕ | 1 ≤ k ∧ n ≤ ackermann k 1}
+
+def starIterate (f : ℕ → ℕ) (n : ℕ) : ℕ :=
+  if n ≤ 4 then 1 else if _h : f n < n then 1 + starIterate f (f n) else 1
+termination_by n
+
+noncomputable def alphaHierarchy : ℕ → ℕ → ℕ
+  | 0 => alpha0 | r + 1 => starIterate (alphaHierarchy r)
+noncomputable def alphaOmega (n : ℕ) : ℕ :=
+  sInf {r : ℕ | 1 ≤ r ∧ alphaHierarchy r n ≤ 2}
+
+-- 3. Main Theorem (Theorem 1.4)
+theorem thm_1_4_main :
+    ∃ C : ℝ, 0 < C ∧ ∀ {α : Type} [LinearOrder α] (n m : ℕ)
+        (init : BST α) (ops : Fin m → DequeOp α),
+      init.tree.num_nodes = n → ValidDequeSeq init.tree ops →
+      dequeSequenceCost init.tree ops ≤ C * ((n : ℝ) + (m : ℝ) +
+        (popCount ops : ℝ) * (alphaOmega (max (popCount ops) 1) : ℝ) +
+        (ejectCount ops : ℝ) * (alphaOmega (max (ejectCount ops) 1) : ℝ)) := by
+  sorry
+
+end SplayDeque
+\end{lstlisting}
+\vspace{-2pt}
+\caption{\texttt{ChallengeStandalone.lean}: self-contained $82$-line Lean~4 statement of Theorem~\ref{thm:main}.}
+\label{fig:lean-challenge}
+\end{figure}
+\clearpage
 
 \bibliographystyle{alpha}
 \bibliography{references}

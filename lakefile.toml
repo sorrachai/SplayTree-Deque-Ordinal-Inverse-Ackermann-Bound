@@ -1,6 +1,6 @@
 name = "splay-deque-challenge"
 version = "0.1.0"
-defaultTargets = ["ChallengeMain", "ChallengeHelpers", "SolutionMain", "SolutionHelpers"]
+defaultTargets = ["ChallengeMain", "ChallengeHelpers", "SolutionMain", "SolutionHelpers", "ChallengeStandalone", "CheckStandalone"]
 
 [[require]]
 name = "AlgoLib"
@@ -36,3 +36,13 @@ requiresModuleSystem = true
 name = "SolutionHelpers"
 globs = ["SolutionHelpers"]
 requiresModuleSystem = true
+
+[[lean_lib]]
+name = "ChallengeStandalone"
+globs = ["ChallengeStandalone"]
+allowNonModules = true
+
+[[lean_lib]]
+name = "CheckStandalone"
+globs = ["CheckStandalone"]
+allowNonModules = true

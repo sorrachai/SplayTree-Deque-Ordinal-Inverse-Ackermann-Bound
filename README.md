@@ -1,12 +1,13 @@
 # Breaking All Iterated Inverse-Ackermann Bounds for the Deque Conjecture on Splay Trees
 
-**Authors:** Goran Žužić, Sorrachai Yingchareonthawornchai, David P. Woodruff, and Vahab Mirrokni
+**Authors:** Vahab Mirrokni, David P. Woodruff, Sorrachai Yingchareonthawornchai, and Goran Zuzic
 
 Paper and complete Lean 4 (`v4.35.0`) formal verification of the $O((m + n) \alpha_\omega(m + n))$ rotation upper bound for Tarjan's Deque Conjecture on splay trees, built on [AlgoLib (`v4.35.0`)](https://github.com/cslib-community/AlgoLib).
 
 - **Paper (PDF):** [`paper/paper.pdf`](paper/paper.pdf) (LaTeX source: [`paper/main.tex`](paper/main.tex), [`paper/references.bib`](paper/references.bib))
 - **Minimal Main Specification:** [`ChallengeMain.lean`](ChallengeMain.lean) (definitions: [`Challenge/MainDefinitions.lean`](Challenge/MainDefinitions.lean); proof: [`SolutionMain.lean`](SolutionMain.lean))
 - **Full 28-Helper Blueprint:** [`ChallengeHelpers.lean`](ChallengeHelpers.lean) (definitions: [`Challenge/HelperDefinitions.lean`](Challenge/HelperDefinitions.lean); proof: [`SolutionHelpers.lean`](SolutionHelpers.lean))
+- **Self-Contained 82-Line Statement (paper Appendix D):** [`ChallengeStandalone.lean`](ChallengeStandalone.lean) (equivalence with `ChallengeMain.lean`: [`CheckStandalone.lean`](CheckStandalone.lean))
 
 ## Paper ↔ Lean 4 Correspondence
 
@@ -27,7 +28,7 @@ Neither `SolutionMain` nor `SolutionHelpers` imports `ChallengeMain` or `Challen
 
 ```text
 paper/
-  paper.pdf                    Compiled manuscript (63 pages)
+  paper.pdf                    Compiled manuscript (65 pages)
   main.tex                     LaTeX source of the manuscript
   references.bib               BibTeX bibliography (47 entries)
 ChallengeMain.lean             Minimal main challenge (Theorem 1.4 + BST ℤ bound)
@@ -40,6 +41,8 @@ SolutionMain.lean              Proves both main theorems in ChallengeMain
 SolutionHelpers.lean           Proves all 28 helper theorems in ChallengeHelpers
 Solution/                      Modular proof development (16 modules, ~61.5K LOC)
 CheckSolution.lean             Axiom and import audit across all 30 proved theorems
+ChallengeStandalone.lean       Self-contained 82-line statement of Theorem 1.4 (paper Appendix D)
+CheckStandalone.lean           Proves the ChallengeStandalone statement equivalent to ChallengeMain's
 comparator.json                Comparator config (ChallengeMain vs SolutionMain)
 comparator_helpers.json        Comparator config (ChallengeHelpers vs SolutionHelpers)
 ```
@@ -67,4 +70,7 @@ lake comparator --config=comparator_helpers.json
 
 # Standard axioms (propext, Quot.sound, Classical.choice) and zero blueprint imports:
 lake env lean -DwarningAsError=true CheckSolution.lean
+
+# Appendix D statement (ChallengeStandalone) is equivalent to ChallengeMain's and holds:
+lake build CheckStandalone
 ```
